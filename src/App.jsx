@@ -1745,8 +1745,12 @@ export default function App() {
         {/* FAB */}
           {/* ══ SETTINGS ══ */}
           {tab === "settings" && (
-            <div style={{ padding:"16px 16px 0" }}>
-              <div style={{ fontWeight:900, fontSize:20, color:C.text, marginBottom:20 }}>⚙️ 設定</div>
+            <div style={{ paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
+              {/* 固定標題 */}
+              <div style={{ position:"sticky", top:0, zIndex:10, background:C.bg, padding:"14px 16px 10px", borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ fontWeight:900, fontSize:20, color:C.text }}>⚙️ 設定</div>
+              </div>
+              <div style={{ padding:"16px 16px 0" }}>
 
               {/* Theme */}
               <Card style={{ padding:20, marginBottom:16 }}>
@@ -1794,22 +1798,35 @@ export default function App() {
                 <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
               </Card>
 
-              {/* 使用手冊 */}
+              {/* 使用手冊 - 可收合 */}
               <Card style={{ padding:20, marginBottom:16 }}>
-                <SH title="📖 使用手冊" />
-                {[
-                  { icon:"📊", title:"總覽", desc:"查看本月收支。點右下角 ✏️ 新增記帳。左滑刪除、右滑編輯交易記錄。" },
-                  { icon:"👛", title:"錢包", desc:"管理所有帳戶。點帳戶可編輯餘額和圖示。帳戶轉帳、信用卡繳費都在這裡。" },
-                  { icon:"📋", title:"現有持股", desc:"第一次使用先點「現有持股」登錄你已有的股票，不會產生收支記錄。之後買賣才用「＋買入」和「賣出」。" },
-                  { icon:"📈", title:"投資追蹤", desc:"持股頁顯示各券商帳戶的股票。同一代號在不同券商算同一檔。" },
-                  { icon:"👥", title:"往來帳", desc:"記錄借貸往來。結清時可選帳戶付款，自動更新餘額。" },
-                  { icon:"🗂️", title:"圖表", desc:"查看支出收入圓餅圖和資產成長趨勢。右上角可設定日期範圍。" },
-                  { icon:"⚙️", title:"設定", desc:"切換深色/淺色/紫色/海洋主題。管理類別（可自訂名稱和 emoji）。匯出備份儲存資料。" },
-                  { icon:"💡", title:"小技巧", desc:"資料存在瀏覽器，換裝置前記得匯出備份！訂閱停用後不計入月費但保留記錄。" },
-                ].map((item, i) => (
-                  <div key={i} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:i<7?`1px solid ${C.border}`:"none" }}>
+                <button onClick={() => toggleSection("manual")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                  <SH title="📖 使用手冊" />
+                  <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["manual"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
+                </button>
+                {!collapsed["manual"] && [{
+                  icon:"📊", title:"總覽", desc:"查看本月收支。點右下角 ✏️ 新增記帳。記帳時選帳戶，餘額自動連動。左滑刪除（自動還原餘額）、右滑編輯交易記錄。"
+                },{
+                  icon:"👛", title:"錢包", desc:"管理所有帳戶。分為流動資產（現金/金融卡）、非流動資產（證券）、負債（信用卡）。點帳戶看交易細項；右滑或點 ✏️ 編輯餘額與圖示。帳戶轉帳、信用卡繳費在這裡操作。"
+                },{
+                  icon:"📈", title:"投資追蹤", desc:"首次使用先點「📋 現有持股」登錄已有的股票（填代號、股數、總成本）。之後買賣用「＋買入」「賣出」，系統自動累計股數和成本。市價開 App 時自動更新，點個股可看損益明細。"
+                },{
+                  icon:"👥", title:"往來帳", desc:"記錄借貸往來。可設分期付款（2-48期），每次付款點「收一期／付一期」，自動扣/加帳戶餘額並在總覽記帳。結清時選擇帳戶，款項自動入帳。"
+                },{
+                  icon:"🎯", title:"目標", desc:"在圖表頁新增財務目標。設定目標金額和期限，可指定追蹤哪些帳戶（不選則用總資產）。快到期（30天內）進度條變橘色。總覽頁會顯示目標進度條。"
+                },{
+                  icon:"🗂️", title:"圖表", desc:"查看支出/收入圓餅圖、資產成長趨勢。右上角可切換月份或自訂範圍。圖表下方是目標管理區。"
+                },{
+                  icon:"⚙️", title:"設定", desc:"切換深色/淺色/紫色/海洋四種主題。類別管理可自訂名稱和 emoji。匯出備份儲存 JSON 檔，換裝置或清除資料前記得先備份！"
+                },{
+                  icon:"💡", title:"小技巧", desc:"代墊費用：記支出時開啟「代墊」，系統自動在往來帳建立應收。 類別「往來帳🤝」專門記收款/付款，不影響一般收支統計。投資頁切換「計入未實現損益」可決定總資產的計算方式。"
+                }].map((item, i, arr) => (
+                  <div key={i} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
                     <div style={{ fontSize:22, flexShrink:0, marginTop:2 }}>{item.icon}</div>
-                    <div><div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{item.title}</div><div style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{item.desc}</div></div>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{item.title}</div>
+                      <div style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{item.desc}</div>
+                    </div>
                   </div>
                 ))}
               </Card>
@@ -1823,6 +1840,8 @@ export default function App() {
                   <div style={{ marginTop:8, color:C.muted, fontSize:12 }}>資料僅存在你的裝置，不會上傳到任何伺服器。</div>
                 </div>
               </Card>
+
+              </div>
             </div>
           )}
 
