@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 /* ── Tokens ── */
 const THEMES = {
@@ -594,7 +594,7 @@ export default function App() {
 
   /* ── month / date ── */
   const [month, setMonth] = useState(() => { const d = new Date(); return { y:d.getFullYear(), m:d.getMonth() + 1 }; });
-  const [chartRange, setChartRange] = useState(() => ({ s:`${new Date().getFullYear()}-01-01`, e:TODAY }));
+  const [chartRange, setChartRange] = useState(() => { const now = TODAY.slice(0,7); return { s:`${now}-01`, e:TODAY }; });
   const [healthRange, setHealthRange] = useState(() => { const d = new Date(); return { s:`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`, e:TODAY }; });
   const [showDP, setShowDP] = useState(false);
   const [showHDP, setShowHDP] = useState(false);
@@ -839,6 +839,34 @@ export default function App() {
   const netWorth = totAssets - totDebt - totPay + totRec;
   const allocPie  = useMemo(()=>[{ name:"現金+銀行", value:cashBal }, { name:"股票投資", value:stTotCost }],[cashBal,stTotCost]);
   const holdPie   = useMemo(()=>stSum.filter(x=>x.totalSh>0).map(x=>({name:x.ticker, value:x.totalCost})),[stSum]);
+  // 投資成長：按月累計投入成本 vs 現在市值（用目前市值比例推算歷史市值）
+  const invGrowth = useMemo(() => {
+    // 收集所有買入交易，按月累計成本
+    const moMap = {};
+    stocks.forEach(st => {
+      if (st.manualShares && st.manualTotalCost) {
+        // 初始持股登錄視為第一筆
+        const ym = (st.trades?.[0]?.date || TODAY).slice(0,7);
+        moMap[ym] = (moMap[ym]||0) + st.manualTotalCost;
+      }
+      (st.trades||[]).filter(t=>t.type==="buy").forEach(t => {
+        const ym = t.date.slice(0,7);
+        const cost = t.totalCost || (t.shares*(t.price||0)) + (t.fee||0);
+        moMap[ym] = (moMap[ym]||0) + cost;
+      });
+    });
+    if (!Object.keys(moMap).length) return [];
+    const months = Object.keys(moMap).sort();
+    let cumCost = 0;
+    const mvRatio = stTotCost > 0 ? stTotMv / stTotCost : 1;
+    return months.map(ym => {
+      cumCost += moMap[ym];
+      const [y,m] = ym.split("-");
+      // 歷史市值：用當前損益比例線性估算（簡化）
+      const estMv = stTotMv > 0 ? cumCost * mvRatio : 0;
+      return { m:`${+y}/${+m}`, cost:Math.round(cumCost), mv:Math.round(estMv) };
+    });
+  }, [stocks, stTotMv, stTotCost]);
   const stByAcc = useMemo(() => { const g = {}; stSum.forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
 
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
@@ -892,7 +920,7 @@ export default function App() {
       txns.filter(t => t.date.startsWith(ym)).forEach(t => {
         const day = parseInt(t.date.slice(8));
         dayTxns[day] = dayTxns[day] || 0;
-        if (t.type === "income") dayTxns[day] += t.amt;
+        if (t.type === "income" && t.cat !== "帳戶調整") dayTxns[day] += t.amt;
         if (t.type === "expense" && t.cat !== "帳戶調整") dayTxns[day] -= t.amt;
       });
 
@@ -912,8 +940,9 @@ export default function App() {
     txns.forEach(t => {
       const ym = t.date.slice(0, 7);
       moNet[ym] = moNet[ym] || 0;
-      if (t.type === "income") moNet[ym] += t.amt;
+      if (t.type === "income" && t.cat !== "帳戶調整") moNet[ym] += t.amt;
       if (t.type === "expense" && t.cat !== "帳戶調整") moNet[ym] -= t.amt;
+      // 轉帳和帳戶調整不計入（不影響總資產）
     });
 
     // 找出所有月份（在範圍內）
@@ -1003,6 +1032,12 @@ export default function App() {
 
   const adjBal = (acc, newBalStr, isFirst) => {
     if (!acc || newBalStr === "") return;
+    if (acc.type === "credit") {
+      // 信用卡：調整的是 payable（應付金額），永遠是正數
+      const nv = Math.abs(parseFloat(newBalStr));
+      upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable:nv } : a));
+      return;
+    }
     const nv = parseFloat(newBalStr), df = nv - acc.bal;
     if (df === 0) return;
     upd("accs", p => p.map(a => a.id === acc.id ? { ...a, bal:nv } : a));
@@ -1633,7 +1668,16 @@ export default function App() {
                         <div>
                           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}><span style={{ fontWeight:900, fontSize:14, color:C.text }}>{d.person}</span><Bdg color={dt === "receivable" ? C.teal : C.warn}>{dt === "receivable" ? "欠我" : "我欠"}</Bdg>{d.srcTxnId && <Bdg color={C.accent}>自動</Bdg>}</div>
                           <div style={{ fontSize:12, color:C.textSub }}>{d.desc}</div>
-                          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{d.date}</div>
+                          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>
+                            {d.date}
+                            {d.date && (() => {
+                              const daysLeft = Math.ceil((new Date(d.date) - new Date(TODAY)) / 86400000);
+                              if (daysLeft < 0) return <span style={{ marginLeft:6, padding:"1px 6px", borderRadius:6, background:`${C.danger}22`, color:C.danger, fontWeight:700, fontSize:11 }}>⚠️ 逾期 {Math.abs(daysLeft)} 天</span>;
+                              if (daysLeft <= 3) return <span style={{ marginLeft:6, padding:"1px 6px", borderRadius:6, background:`${C.warn}22`, color:C.warn, fontWeight:700, fontSize:11 }}>⏰ {daysLeft === 0 ? "今天到期！" : `${daysLeft} 天後到期`}</span>;
+                              if (daysLeft <= 7) return <span style={{ marginLeft:6, padding:"1px 6px", borderRadius:6, background:`${C.teal}15`, color:C.teal, fontSize:11 }}>{daysLeft} 天後</span>;
+                              return null;
+                            })()}
+                          </div>
                         </div>
                         <div style={{ fontWeight:900, fontSize:15, color:dt === "receivable" ? C.teal : C.warn, marginLeft:12 }}>{fmt(d.amt)}</div>
                       </div>
@@ -1715,11 +1759,32 @@ export default function App() {
                 </Card>
                 <Card style={{ padding:20, marginBottom:16 }}>
                   <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-                    {[{ v:"alloc", l:"資產配置" }, { v:"hold", l:"持股比例" }].map(o => <button key={o.v} onClick={() => setInvPie(o.v)} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:12, fontWeight:700, background:invPie === o.v ? `${C.accent}30` : C.card, color:invPie === o.v ? C.accentL : C.muted, border:`1px solid ${invPie === o.v ? C.accent : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
+                    {[{ v:"alloc", l:"資產配置" }, { v:"hold", l:"持股比例" }, { v:"growth", l:"投資成長" }].map(o => <button key={o.v} onClick={() => setInvPie(o.v)} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:12, fontWeight:700, background:invPie === o.v ? `${C.accent}30` : C.card, color:invPie === o.v ? C.accentL : C.muted, border:`1px solid ${invPie === o.v ? C.accent : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
                   </div>
-                  <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart></ResponsiveContainer>
+                  {invPie === "growth"
+                    ? invGrowth.length > 1
+                      ? <div>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                              <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
+                              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
+                              <Line type="monotone" dataKey="cost" stroke={theme==="light"?"#222":"#eee"} strokeWidth={2} dot={false} name="cost" />
+                              {stTotMv > 0 && <Line type="monotone" dataKey="mv" stroke={C.income} strokeWidth={2.5} dot={false} name="mv" />}
+                            </LineChart>
+                          </ResponsiveContainer>
+                          <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="light"?"#222":"#eee" }} />投入成本</div>
+                            {stTotMv > 0 && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:C.income }} />市值</div>}
+                          </div>
+                          {stTotMv === 0 && <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>市價載入後顯示市值曲線</div>}
+                        </div>
+                      : <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>需要至少兩筆買入記錄才能顯示成長圖</div>
+                    : <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart></ResponsiveContainer>
+                  }
                   {/* Legend */}
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10, justifyContent:"center" }}>
+                  {invPie !== "growth" && <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10, justifyContent:"center" }}>
                     {(invPie === "alloc" ? allocPie : holdPie).map((item, i) => {
                       const total = (invPie === "alloc" ? allocPie : holdPie).reduce((s,x)=>s+x.value,0);
                       const pct = total > 0 ? (item.value/total*100).toFixed(1) : "0";
@@ -1731,27 +1796,31 @@ export default function App() {
                         </div>
                       );
                     })}
-                  </div>
+                  </div>}
                 </Card>
                 {Object.entries(stByAcc).map(([accN, stks]) => {
                   const accMv   = stks.reduce((s, x) => s + (x.mv > 0 ? x.mv : x.totalCost), 0);
                   const accCost = stks.reduce((s, x) => s + x.totalCost, 0);
                   const accPnl  = accMv - accCost;
                   const hasPrices = stks.some(x => x.curPrice > 0);
+                  const isCollapsed = collapsed[`inv_${accN}`];
                   return <div key={accN} style={{ marginBottom:16 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                      <SH title={accN} />
-                      <div style={{ textAlign:"right" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                          <span style={{ fontSize:10, color:C.muted, background:`${C.muted}18`, padding:"1px 5px", borderRadius:4 }}>
-                            {hasPrices ? "市值" : "成本"}
-                          </span>
-                          <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(hasPrices ? accMv : accCost)}</div>
-                        </div>
-                        {hasPrices && accPnl !== 0 && <div style={{ fontSize:11, color:pnlColor(accPnl, C) }}>{accPnl>0?"▲ +":"▼ "}{fmt(Math.abs(accPnl))}</div>}
+                    <button onClick={() => toggleSection(`inv_${accN}`)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:isCollapsed?0:6 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontWeight:900, fontSize:13, color:C.text }}>{accN}</span>
                       </div>
-                    </div>
-                    <Card style={{ overflow:"hidden" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                            <span style={{ fontSize:10, color:C.muted, background:`${C.muted}18`, padding:"1px 5px", borderRadius:4 }}>{hasPrices?"市值":"成本"}</span>
+                            <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(hasPrices ? accMv : accCost)}</div>
+                          </div>
+                          {hasPrices && accPnl !== 0 && <div style={{ fontSize:11, color:pnlColor(accPnl, C) }}>{accPnl>0?"▲ +":"▼ "}{fmt(Math.abs(accPnl))}</div>}
+                        </div>
+                        <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                      </div>
+                    </button>
+                    {!isCollapsed && <Card style={{ overflow:"hidden" }}>
                       {stks.map((st, i) => {
                         const hasPrice = st.curPrice > 0;
                         const dispMv   = hasPrice ? st.mv : st.totalCost;
@@ -1791,7 +1860,7 @@ export default function App() {
                           </div>
                         </SwipeRow>;
                       })}
-                    </Card>
+                    </Card>}
                   </div>;
                 })}
                 {stSum.length === 0 && <div style={{ padding:"40px 0", textAlign:"center", color:C.muted }}><div style={{ fontSize:38, marginBottom:8 }}>📊</div>尚無持股，點右上角「＋買入」</div>}
@@ -1816,11 +1885,14 @@ export default function App() {
         {/* FAB */}
           {/* ══ SETTINGS ══ */}
           {tab === "settings" && (
-            <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:20 }}>
-                <span style={{ fontSize:18 }}>⚙️</span>
-                <span style={{ fontWeight:900, fontSize:16, color:C.text }}>設定</span>
+            <div>
+              <div style={{ position:"sticky", top:0, zIndex:20, background:`${C.bg}f2`, backdropFilter:"blur(16px)", padding:"12px 16px 10px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:18 }}>⚙️</span>
+                  <span style={{ fontWeight:900, fontSize:16, color:C.text }}>設定</span>
+                </div>
               </div>
+              <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
 
               {/* Theme */}
               <Card style={{ padding:20, marginBottom:16 }}>
@@ -1911,6 +1983,7 @@ export default function App() {
                 </div>
               </Card>
 
+              </div>{/* end padding div */}
             </div>
           )}
 
@@ -2434,18 +2507,32 @@ export default function App() {
 
         {modal === "buyStock" && <Sheet title="記錄買入" onClose={close}>
           <Sl label="證券帳戶" value={buyF.acc} onChange={e => setBuyF(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type === "investment").map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</Sl>
+          {/* 記憶上次買入 */}
+          {stocks.length > 0 && <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>📌 重複買入（點選帶入）</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {[...new Map(stocks.map(s=>[s.ticker,s])).values()].map(s => (
+                <button key={s.ticker} onClick={() => setBuyF(p => ({ ...p, ticker:s.ticker, name:s.name, market:s.market, acc:p.acc||s.acc }))}
+                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:buyF.ticker===s.ticker?`${C.accent}30`:C.card, color:buyF.ticker===s.ticker?C.accentL:C.textSub, border:`1px solid ${buyF.ticker===s.ticker?C.accent:C.border}`, cursor:"pointer" }}>
+                  {s.ticker}
+                </button>
+              ))}
+            </div>
+          </div>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Inp label="股票代號" placeholder="0050 / AAPL" value={buyF.ticker} onChange={e => setBuyF(p => ({ ...p, ticker:e.target.value.toUpperCase() }))} />
+            <div>
+              <Inp label="股票代號" placeholder="0050 / AAPL" value={buyF.ticker} onChange={e => setBuyF(p => ({ ...p, ticker:e.target.value.toUpperCase().replace(/\.TW$|\.US$/i,"") }))} />
+              {buyF.ticker.includes(".") && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>⚠️ 不需要加 .TW 或 .US</div>}
+            </div>
             <Inp label="股票名稱" placeholder="元大台灣50" value={buyF.name} onChange={e => setBuyF(p => ({ ...p, name:e.target.value }))} />
           </div>
           <Sl label="市場" value={buyF.market} onChange={e => setBuyF(p => ({ ...p, market:e.target.value }))}><option value="TW">台股 TW</option><option value="US">美股 US</option></Sl>
-          <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, fontSize:12, color:C.accentL, marginBottom:10 }}>📝 以下欄位全部手動輸入，系統不自動聯動計算</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Inp label="股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value }))} />
-            <Inp label="平均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value }))} />
+            <Inp label="股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value, totalCost:p.avgCost?String(Math.round(+e.target.value*+p.avgCost)):p.totalCost }))} />
+            <Inp label="均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value, totalCost:p.shares?String(Math.round(+p.shares*+e.target.value)):p.totalCost }))} />
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <CalcInp label="投資總成本" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v }))} />
+            <CalcInp label="投資總成本" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v, avgCost:p.shares&&+p.shares>0?String((+v/+p.shares).toFixed(2)):p.avgCost }))} />
             <Inp label="手續費" type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value }))} />
           </div>
           <Sl label="從哪個帳戶扣款（選填）" value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— 不扣款 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
@@ -2560,9 +2647,20 @@ export default function App() {
           const st = stSum.find(s => s.id === sellF.stockId);
           if (!st) return null;
           return <Sheet title="賣出股票" onClose={close}>
-            <div style={{ padding:12, borderRadius:10, marginBottom:12, background:C.card }}>
-              <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{st.ticker} {st.name}</div>
-              <div style={{ fontSize:12, color:C.textSub }}>目前持股 <strong style={{ color:C.accentL }}>{st.totalSh}股</strong> · 均成本 {fmt(Math.round(st.avgCost || 0))}</div>
+            {/* 下拉選擇持股 */}
+            <Fld label="選擇持股">
+              <select value={sellF.stockId} onChange={e => {
+                const s = stSum.find(x => x.id === e.target.value);
+                if (s) setSellF(p => ({ ...p, stockId:s.id, shares:String(s.totalSh), totalProceeds:s.curPrice>0?String(Math.round(s.curPrice*s.totalSh)):"", pnl:s.curPrice>0?String(Math.round(Math.abs(s.upnl))):"", pnlType:s.upnl>=0?"income":"expense" }));
+              }} style={iSt}>
+                {stSum.filter(s => s.totalSh > 0).map(s => (
+                  <option key={s.id} value={s.id}>{s.ticker} {s.name} · {s.totalSh}股 · {s.acc}</option>
+                ))}
+              </select>
+            </Fld>
+            <div style={{ padding:10, borderRadius:10, marginBottom:8, background:C.card, fontSize:12 }}>
+              <div style={{ fontWeight:900, fontSize:13, color:C.text, marginBottom:2 }}>{st.ticker} {st.name}</div>
+              <div style={{ color:C.textSub }}>持股 <strong style={{ color:C.accentL }}>{st.totalSh}股</strong> · 均成本 {fmt(Math.round(st.avgCost||0))}{st.curPrice>0?` · 現價 ${fmt(st.curPrice)}`:""}</div>
             </div>
             <Inp label="賣出股數" type="number" placeholder={String(st.totalSh)} value={sellF.shares} onChange={e => setSellF(p => ({ ...p, shares:e.target.value }))} />
             <CalcInp label="賣出總金額" value={sellF.totalProceeds} onChange={v => setSellF(p => ({ ...p, totalProceeds:v }))} />
