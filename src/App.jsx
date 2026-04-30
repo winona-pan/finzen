@@ -2,17 +2,51 @@ import { useState, useMemo, useRef, useCallback, useEffect } from “react”;
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from “recharts”;
 
 /* ── Tokens ── */
-const C = {
+const THEMES = {
+dark: {
 bg:”#0d0f14”, surface:”#14161e”, card:”#1a1d28”,
 border:”#252839”, borderL:”#303550”,
 income:”#f43f5e”, expense:”#4ade80”,
 accent:”#7c7cf8”, accentL:”#a5b4fc”, accentD:”#5b5bd6”,
 warn:”#fb923c”, teal:”#2dd4bf”,
 text:”#eef0fa”, textSub:”#7c80a0”, muted:”#444660”, danger:”#ef4444”,
+name:“深色”, icon:“🌙”,
+},
+light: {
+bg:”#f4f6fc”, surface:”#ffffff”, card:”#ffffff”,
+border:”#e2e8f0”, borderL:”#cbd5e1”,
+income:”#e11d48”, expense:”#16a34a”,
+accent:”#6366f1”, accentL:”#4f46e5”, accentD:”#4338ca”,
+warn:”#d97706”, teal:”#0d9488”,
+text:”#1e293b”, textSub:”#475569”, muted:”#94a3b8”, danger:”#dc2626”,
+name:“淺色”, icon:“☀️”,
+},
+purple: {
+bg:”#0e0b1a”, surface:”#16112b”, card:”#1f1840”,
+border:”#2e2550”, borderL:”#3d3370”,
+income:”#f43f5e”, expense:”#34d399”,
+accent:”#a855f7”, accentL:”#c084fc”, accentD:”#9333ea”,
+warn:”#f59e0b”, teal:”#06b6d4”,
+text:”#f3e8ff”, textSub:”#a78bfa”, muted:”#6d5a9e”, danger:”#ef4444”,
+name:“紫色”, icon:“💜”,
+},
+ocean: {
+bg:”#020b18”, surface:”#061825”, card:”#0a2236”,
+border:”#0f3450”, borderL:”#1a4a6e”,
+income:”#f43f5e”, expense:”#4ade80”,
+accent:”#0ea5e9”, accentL:”#38bdf8”, accentD:”#0284c7”,
+warn:”#f59e0b”, teal:”#14b8a6”,
+text:”#e0f2fe”, textSub:”#7dd3fc”, muted:”#2d6a8a”, danger:”#ef4444”,
+name:“海洋”, icon:“🌊”,
+},
 };
+// C will be set dynamically from theme
+let C = THEMES.dark;
+function getC(theme) { return THEMES[theme] || THEMES.dark; }
 const PIE = [”#f43f5e”,”#7c7cf8”,”#4ade80”,”#fb923c”,”#06b6d4”,”#ec4899”,”#a78bfa”,”#34d399”];
 const DAYS = [“Sun”,“Mon”,“Tue”,“Wed”,“Thu”,“Fri”,“Sat”];
-const TODAY = new Date().toISOString().slice(0,10);
+// 台灣時間 UTC+8
+const TODAY = new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 /* ── Currency ── */
 const DEF_RATES = { TWD:1,USD:32.5,EUR:35.2,JPY:0.22,GBP:41.0,HKD:4.17,SGD:24.1,CNY:4.48,KRW:0.024,AUD:21.0,CAD:23.8,CHF:36.5,MYR:7.3,THB:0.93,VND:0.0013 };
@@ -28,7 +62,7 @@ return `${s}${Number(n).toLocaleString("en", { maximumFractionDigits: 2 })}`;
 }
 
 /* ── Constants ── */
-const CE = { 食物:“🍔”,交通:“🚌”,家居:“🏠”,娛樂:“🎬”,訂閱:“📱”,薪資:“💰”,家教:“📖”,零用錢:“🏮”,利息:“🏦”,股息:“📈”,紅包:“🧧”,投資收益:“📈”,教育:“🎓”,醫療:“💊”,美容:“💄”,帳戶調整:“✨”,其他:“📦”,其他收入:“💴” };
+const CE = { 食物:“🍔”,交通:“🚌”,家居:“🏠”,娛樂:“🎬”,訂閱:“📱”,薪資:“💰”,家教:“📖”,零用錢:“🏮”,利息:“🏦”,股息:“📈”,紅包:“🧧”,投資收益:“📈”,教育:“🎓”,醫療:“💊”,美容:“💄”,帳戶調整:“✨”,其他:“📦”,其他收入:“💴”,往來帳:“🤝” };
 const AT = { cash:“💰”,debit:“🏦”,investment:“📊”,credit:“💳” };
 const PASSIVE = [“利息”,“股息”,“紅包”,“投資收益”];
 const APP_VER = “2.2”;
@@ -43,9 +77,11 @@ accs: [
 { id:“c1”,name:“信用卡”, type:“credit”,  cur:“TWD”,bal:0,payable:0,limit:100000,vis:true,order:2 },
 ],
 txns:[], debts:[], subs:[], bills:[], stocks:[], pools:[],
+customCE: {},
+goals: [],
 cats: {
-expense: [“食物”,“交通”,“家居”,“娛樂”,“訂閱”,“教育”,“醫療”,“美容”,“其他”],
-income:  [“薪資”,“家教”,“零用錢”,“利息”,“股息”,“紅包”,“投資收益”,“其他收入”],
+expense: [“食物”,“交通”,“家居”,“娛樂”,“訂閱”,“教育”,“醫療”,“美容”,“其他”,“往來帳”],
+income:  [“薪資”,“家教”,“零用錢”,“利息”,“股息”,“紅包”,“投資收益”,“其他收入”,“往來帳”],
 },
 rates: DEF_RATES,
 };
@@ -56,7 +92,12 @@ try {
 const s = localStorage.getItem(DATA_KEY);
 if (!s) return DEF;
 const saved = JSON.parse(s);
-return { …DEF, …saved, rates: { …DEF_RATES, …(saved.rates || {}) }, cats: { expense: saved.cats?.expense || DEF.cats.expense, income: saved.cats?.income || DEF.cats.income } };
+const expCats = saved.cats?.expense || DEF.cats.expense;
+const incCats = saved.cats?.income  || DEF.cats.income;
+// Always ensure 往來帳 exists
+if (!expCats.includes(“往來帳”)) expCats.push(“往來帳”);
+if (!incCats.includes(“往來帳”))  incCats.push(“往來帳”);
+return { …DEF, …saved, rates: { …DEF_RATES, …(saved.rates || {}) }, cats: { expense: expCats, income: incCats } };
 } catch { return DEF; }
 }
 function saveData(d) { try { localStorage.setItem(DATA_KEY, JSON.stringify(d)); } catch {} }
@@ -67,7 +108,8 @@ return null;
 }
 
 /* ── UI Atoms ── */
-const iSt = { background:”#1a1d28”,border:“1px solid #252839”,color:”#eef0fa”,borderRadius:10,padding:“9px 12px”,fontSize:14,outline:“none”,width:“100%”,boxSizing:“border-box” };
+const getISt = () => ({ background:C.card, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:“9px 12px”, fontSize:14, outline:“none”, width:“100%”, boxSizing:“border-box” });
+let iSt = getISt();
 function Card({ children, style = {} }) { return <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:16,…style }}>{children}</div>; }
 function SH({ title, right }) {
 return <div style={{ display:“flex”,justifyContent:“space-between”,alignItems:“center”,padding:“0 4px”,marginBottom:8 }}>
@@ -233,6 +275,181 @@ style={{ padding:“9px 12px”,borderRadius:10,background:`${C.accent}22`,color
 </Fld>
 );
 }
+/* ── 週期選擇器 ── */
+function PeriodSel({ period, periodN, onChange }) {
+const opts = [{ v:“week”,l:“每週” },{ v:“month”,l:“每月” },{ v:“year”,l:“每年” }];
+return (
+<Fld label="付款週期">
+<div style={{ display:“flex”, gap:6, marginBottom:8 }}>
+{opts.map(o => (
+<button key={o.v} onClick={() => onChange({ period:o.v, periodN:o.v===“year”?“1”:periodN })}
+style={{ flex:1, padding:“8px 4px”, borderRadius:10, fontWeight:700, fontSize:13,
+background:period===o.v?`${C.accent}30`:C.card, color:period===o.v?C.accentL:C.muted,
+border:`1px solid ${period===o.v?C.accent:C.border}`, cursor:“pointer” }}>{o.l}</button>
+))}
+</div>
+{period !== “year” && (
+<div style={{ display:“flex”, alignItems:“center”, gap:8 }}>
+<span style={{ fontSize:13, color:C.textSub, whiteSpace:“nowrap” }}>每隔</span>
+<select value={periodN} onChange={e => onChange({ period, periodN:e.target.value })} style={{ …iSt, flex:1 }}>
+{Array.from({ length:12 }, (_,i) => i+1).map(n => (
+<option key={n} value={n}>{n} {period===“week”?“週”:“個月”}</option>
+))}
+</select>
+<span style={{ fontSize:13, color:C.textSub, whiteSpace:“nowrap” }}>付一次</span>
+</div>
+)}
+</Fld>
+);
+}
+/* ── 猜測 Emoji ── */
+const EMOJI_KEYWORDS = {
+“🍔”:[“食物”,“吃”,“餐”,“飯”,“麵”,“麥當勞”,“便當”,“外食”,“早餐”,“午餐”,“晚餐”,“宵夜”,“點心”,“飲料”,“咖啡”,“下午茶”,“燒烤”,“火鍋”,“壽司”,“pizza”,“漢堡”],
+“🚌”:[“交通”,“車”,“公車”,“捷運”,“計程車”,“uber”,“taxi”,“停車”,“油”,“高鐵”,“火車”,“機票”,“機場”,“通勤”],
+“🏠”:[“家居”,“房”,“租”,“水”,“電”,“瓦斯”,“網路”,“清潔”,“家具”,“修繕”,“管理”,“住”,“宿舍”],
+“🎬”:[“娛樂”,“電影”,“遊戲”,“ktv”,“旅遊”,“旅行”,“出遊”,“景點”,“門票”,“演唱會”,“展覽”],
+“📱”:[“訂閱”,“netflix”,“youtube”,“spotify”,“apple”,“google”,“軟體”,“app”,“會員”,“月費”],
+“💰”:[“薪資”,“薪水”,“工資”,“月薪”,“獎金”,“年薪”,“兼職”],
+“📖”:[“教育”,“學費”,“書”,“課程”,“補習”,“學習”,“培訓”,“證照”],
+“💊”:[“醫療”,“醫院”,“診所”,“藥”,“健康”,“保健”,“牙醫”,“健檢”],
+“💄”:[“美容”,“美髮”,“美甲”,“保養”,“化妝”,“髮廊”,“spa”,“美容院”],
+“👕”:[“衣”,“服”,“鞋”,“包包”,“配件”,“時尚”,“購物”,“服飾”],
+“🎓”:[“學費”,“大學”,“研究所”,“學校”],
+“🐾”:[“寵物”,“狗”,“貓”,“動物”,“飼料”,“獸醫”],
+“🏋️”:[“運動”,“健身”,“球”,“游泳”,“跑步”,“瑜珈”,“體育”],
+“✈️”:[“旅行”,“旅遊”,“出國”,“機票”,“飯店”,“住宿”],
+“🎁”:[“禮物”,“送禮”,“生日”,“紅包”,“祝賀”,“婚禮”],
+“💻”:[“電腦”,“3c”,“科技”,“手機”,“相機”,“耳機”,“設備”],
+“🏦”:[“利息”,“銀行”,“投資”,“理財”,“股息”,“股票”,“基金”],
+“🧴”:[“日用”,“生活用品”,“衛生”,“清潔用品”],
+“🍵”:[“飲料”,“咖啡”,“茶”,“手搖”,“飲品”],
+“🚗”:[“汽車”,“加油”,“保養”,“車險”,“停車費”],
+“📦”:[“其他”,“雜項”,“雜費”,“不確定”],
+};
+function guessEmoji(name) {
+const n = name.toLowerCase();
+for (const [emoji, keywords] of Object.entries(EMOJI_KEYWORDS)) {
+if (keywords.some(k => n.includes(k))) return emoji;
+}
+return “📦”;
+}
+
+/* ── 常用 Emoji 清單（供使用者選） ── */
+const EMOJI_LIST = [
+// 食物飲料
+“🍔”,“🍟”,“🌭”,“🍕”,“🌮”,“🌯”,“🥗”,“🥙”,“🧆”,“🥚”,“🍳”,“🥞”,“🧇”,“🥓”,“🥩”,“🍗”,“🍖”,“🦴”,“🌽”,“🥕”,“🥦”,“🧄”,“🧅”,“🥔”,“🍠”,“🥐”,“🥖”,“🫓”,“🧀”,“🥗”,“🍱”,“🍘”,“🍙”,“🍚”,“🍛”,“🍜”,“🍝”,“🍞”,“🥨”,“🥯”,“🧁”,“🎂”,“🍰”,“🍮”,“🍭”,“🍬”,“🍫”,“🍿”,“🍩”,“🍪”,“🌰”,“🥜”,“🫘”,“🍯”,
+“☕”,“🧋”,“🍵”,“🫖”,“🍺”,“🍻”,“🥂”,“🍷”,“🥃”,“🍸”,“🍹”,“🧃”,“🥤”,“🧊”,“🫗”,“🍶”,“🍾”,
+// 水果
+“🍎”,“🍊”,“🍋”,“🍇”,“🍓”,“🫐”,“🍈”,“🍑”,“🍒”,“🍍”,“🥭”,“🍌”,“🍉”,“🍅”,“🫒”,“🥝”,“🍐”,“🥑”,
+// 交通
+“🚗”,“🚕”,“🚙”,“🚌”,“🚎”,“🏎”,“🚓”,“🚑”,“🚒”,“🚐”,“🛻”,“🚚”,“🚛”,“🚜”,“🏍”,“🛵”,“🚲”,“🛴”,“🛺”,“🚨”,“🚔”,“🚍”,“🚘”,“🚖”,“✈️”,“🚀”,“🛸”,“🚁”,“🛶”,“⛵”,“🚢”,“🛳”,“🚂”,“🚃”,“🚄”,“🚅”,“🚆”,“🚇”,“🚈”,“🚉”,“🚊”,“🚝”,“🚞”,“🛞”,“⛽”,“🅿️”,“🛣”,“🛤”,
+// 家居生活
+“🏠”,“🏡”,“🏢”,“🏣”,“🏤”,“🏥”,“🏦”,“🏨”,“🏩”,“🏪”,“🏫”,“🏬”,“🏭”,“🏗”,“🛖”,“🏘”,“🪵”,“🛋”,“🪑”,“🚿”,“🛁”,“🪠”,“🪤”,“🧹”,“🧺”,“🧻”,“🪣”,“🧴”,“🪥”,“🧷”,“🧹”,“🪜”,“🔑”,“🗝”,“🔐”,“🔒”,“🔓”,“💡”,“🔦”,“🕯”,
+// 娛樂休閒
+“🎬”,“🎥”,“📷”,“📸”,“📹”,“🎮”,“🕹”,“🎲”,“♟”,“🎯”,“🎳”,“🎰”,“🎪”,“🎠”,“🎡”,“🎢”,“🎭”,“🎨”,“🖼”,“🎵”,“🎶”,“🎤”,“🎧”,“🎸”,“🎹”,“🥁”,“🎷”,“🎺”,“🎻”,“🪗”,“🎙”,“📻”,“📺”,“🎞”,“📽”,“🎟”,“🎫”,“🎈”,“🎉”,“🎊”,“🪅”,“🎁”,“🎀”,“🏷”,
+// 運動健身
+“⚽”,“🏀”,“🏈”,“⚾”,“🥎”,“🎾”,“🏐”,“🏉”,“🥏”,“🎱”,“🪃”,“🏓”,“🏸”,“🥅”,“⛳”,“🏒”,“🎣”,“🤿”,“🏂”,“⛷”,“🛷”,“🛹”,“🛼”,“🤸”,“🏋”,“🚴”,“🧘”,“🤾”,“🧗”,“⛹”,“🤺”,“🥊”,“🥋”,“🏆”,“🥇”,“🥈”,“🥉”,“🏅”,“🎖”,
+// 購物時尚
+“🛍”,“👗”,“👔”,“👕”,“👖”,“🧥”,“👙”,“👘”,“🩱”,“🩲”,“🩳”,“👚”,“👛”,“👜”,“👝”,“🎒”,“🧳”,“👒”,“🎩”,“🪖”,“⛑”,“👑”,“💎”,“💍”,“💄”,“👠”,“👡”,“👢”,“🥿”,“👟”,“🩴”,“🧦”,“🧤”,“🧣”,“👓”,“🕶”,“🥽”,“⌚”,
+// 健康醫療
+“💊”,“💉”,“🩺”,“🩹”,“🩻”,“🩸”,“🧬”,“🦷”,“🦴”,“👁”,“👂”,“🫀”,“🫁”,“🧠”,“🏥”,“😷”,“🤒”,“🤕”,“🤧”,“🥵”,“🥶”,
+// 美容保養
+“💅”,“💆”,“💇”,“🧖”,“🪞”,“✂”,“💈”,“🪒”,“🧴”,“🧼”,“🛁”,“🚿”,
+// 教育學習
+“📖”,“📚”,“📝”,“✏”,“🖊”,“🖋”,“📓”,“📔”,“📒”,“📕”,“📗”,“📘”,“📙”,“📃”,“📄”,“📑”,“📊”,“📈”,“📉”,“🗒”,“🗓”,“🗃”,“🗂”,“📁”,“📂”,“🗄”,“🗑”,“📌”,“📍”,“📎”,“🖇”,“📏”,“📐”,“✂”,“🔬”,“🔭”,“🧪”,“🧫”,“🧲”,“💻”,“🖥”,“🖨”,“⌨”,“🖱”,“💾”,“💿”,“📀”,
+// 動物寵物
+“🐶”,“🐱”,“🐭”,“🐹”,“🐰”,“🦊”,“🐻”,“🐼”,“🐨”,“🐯”,“🦁”,“🐮”,“🐷”,“🐸”,“🐵”,“🙈”,“🙉”,“🙊”,“🐔”,“🐧”,“🐦”,“🦆”,“🦅”,“🦉”,“🦇”,“🐝”,“🐛”,“🦋”,“🐌”,“🐞”,“🐜”,“🦟”,“🐢”,“🐍”,“🦎”,“🦖”,“🦕”,“🐙”,“🦑”,“🦐”,“🦀”,“🦞”,“🐡”,“🐟”,“🐠”,“🐬”,“🐳”,“🐋”,“🦈”,“🦭”,“🦦”,“🐊”,“🦛”,“🦏”,“🐘”,“🦒”,“🦓”,“🦌”,“🐃”,“🐂”,“🐄”,“🐎”,“🐖”,“🐏”,“🐑”,“🦙”,“🐐”,“🦃”,“🐓”,“🦚”,“🦜”,“🐇”,“🐿”,“🦔”,“🐾”,
+// 金融投資
+“💰”,“💴”,“💵”,“💶”,“💷”,“💳”,“🏦”,“📈”,“📉”,“💹”,“🪙”,“💸”,“🤑”,“🏧”,“💱”,“💲”,
+// 旅遊自然
+“🌍”,“🌎”,“🌏”,“🗺”,“🧭”,“🏔”,“⛰”,“🌋”,“🗻”,“🏕”,“🏖”,“🏜”,“🏝”,“🏞”,“🌅”,“🌄”,“🌠”,“🎇”,“🎆”,“🌇”,“🌆”,“🏙”,“🌃”,“🌌”,“🌉”,“🌁”,“✈️”,“🚀”,“🧳”,“🎫”,“🗺”,“🌴”,“🌳”,“🌲”,“🌿”,“☘”,“🍀”,“🎋”,“🎍”,“🍃”,“🍂”,“🍁”,“🌾”,“🌺”,“🌻”,“🌹”,“🌷”,“🌸”,“💐”,“🌝”,“🌞”,“☀”,“🌤”,“⛅”,“🌦”,“🌧”,“⛈”,“🌩”,“🌨”,“❄”,“☃”,“⛄”,“🌬”,“💨”,“🌪”,“🌊”,“🌈”,“☂”,“⛱”,
+// 感情社交
+“❤”,“🧡”,“💛”,“💚”,“💙”,“💜”,“🖤”,“🤍”,“🤎”,“💔”,“❣”,“💕”,“💞”,“💓”,“💗”,“💖”,“💘”,“💝”,“💟”,“☮”,“✌”,“🤞”,“🤟”,“🤙”,“👍”,“👎”,“✊”,“👏”,“🙌”,“🤲”,“🙏”,“🤝”,“💪”,“🦾”,“🫂”,
+// 星星符號
+“⭐”,“🌟”,“💫”,“✨”,“🌙”,“☀”,“🌈”,“🔥”,“💥”,“❄”,“🌊”,“🍀”,“🎯”,“🎪”,“🎭”,“🏆”,“🥇”,“🎁”,“🎊”,“🎉”,“🎈”,“💡”,“🔮”,“🧿”,“🪬”,“🧲”,“🔑”,“🗝”,“🪄”,“🧸”,“🪆”,“🎎”,“🎐”,“🎏”,“⛩”,“🗿”,“🗽”,“⛲”,“🌁”,“🎑”,“🗼”,
+];
+
+/* ── Emoji 選擇器 ── */
+function EmojiPicker({ onSelect, onClose }) {
+return (
+<div style={{ position:“fixed”,inset:0,zIndex:300,display:“flex”,alignItems:“flex-end”,justifyContent:“center”,background:“rgba(0,0,0,0.7)”,backdropFilter:“blur(8px)” }}
+onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+<div style={{ width:“100%”,maxWidth:420,background:C.surface,border:`1px solid ${C.borderL}`,borderRadius:“20px 20px 0 0”,padding:“16px 16px 40px”,maxHeight:“60dvh”,display:“flex”,flexDirection:“column” }}>
+<div style={{ display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:12,flexShrink:0 }}>
+<span style={{ fontWeight:700,fontSize:15,color:C.text }}>選擇圖示</span>
+<button onClick={onClose} style={{ background:“none”,border:“none”,color:C.muted,fontSize:20,cursor:“pointer” }}>✕</button>
+</div>
+<div style={{ overflowY:“auto”,WebkitOverflowScrolling:“touch” }}>
+<div style={{ display:“grid”,gridTemplateColumns:“repeat(8,1fr)”,gap:6 }}>
+{EMOJI_LIST.map(e => (
+<button key={e} onClick={() => { onSelect(e); onClose(); }}
+style={{ fontSize:24,padding:“8px 0”,borderRadius:10,background:C.card,border:`1px solid ${C.border}`,cursor:“pointer” }}>
+{e}
+</button>
+))}
+</div>
+</div>
+</div>
+</div>
+);
+}
+function CatPicker({ value, onChange, cats, ce, onAddCat }) {
+const [adding, setAdding] = useState(false);
+const [newName, setNewName] = useState(””);
+const [newEmoji, setNewEmoji] = useState(“📦”);
+const [showEP, setShowEP] = useState(false);
+const handleNameChange = (v) => { setNewName(v); setNewEmoji(guessEmoji(v)); };
+const handleAdd = () => {
+if (!newName.trim()) return;
+onAddCat(newName.trim(), newEmoji);
+onChange(newName.trim());
+setNewName(””); setNewEmoji(“📦”); setAdding(false);
+};
+return (
+<Fld label="分類">
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(4,1fr)”, gap:6 }}>
+{cats.map(cat => (
+<button key={cat} onClick={() => onChange(cat)}
+style={{ display:“flex”, flexDirection:“column”, alignItems:“center”, gap:2, padding:8,
+borderRadius:10, background:value===cat?`${C.accent}30`:C.card,
+border:`1px solid ${value===cat?C.accent:C.border}`, cursor:“pointer” }}>
+<span style={{ fontSize:20 }}>{ce[cat]||“📦”}</span>
+<span style={{ fontSize:11, color:value===cat?C.accentL:C.textSub }}>{cat.length>3?cat.slice(0,3)+”…”:cat}</span>
+</button>
+))}
+<button onClick={() => setAdding(true)}
+style={{ display:“flex”, flexDirection:“column”, alignItems:“center”, gap:2, padding:8,
+borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:“pointer” }}>
+<span style={{ fontSize:20 }}>➕</span>
+<span style={{ fontSize:11, color:C.accentL }}>新增</span>
+</button>
+</div>
+{adding && (
+<div style={{ marginTop:8, padding:12, borderRadius:12, background:`${C.accent}10`, border:`1px solid ${C.accent}33` }}>
+<div style={{ display:“flex”, gap:8, alignItems:“flex-start”, marginBottom:8 }}>
+<button onClick={() => setShowEP(true)}
+style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:“pointer”, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+{newEmoji}
+</button>
+<div style={{ flex:1 }}>
+<input value={newName} onChange={e => handleNameChange(e.target.value)}
+placeholder=“類別名稱（自動猜 emoji）” style={{ …iSt, marginBottom:4 }}
+onKeyDown={e => e.key===“Enter” && handleAdd()} />
+<div style={{ fontSize:11, color:C.muted }}>點左側 emoji 可以換</div>
+</div>
+</div>
+<div style={{ display:“flex”, gap:6 }}>
+<button onClick={handleAdd}
+style={{ flex:1, padding:“9px”, borderRadius:10, background:C.accent, color:”#fff”, border:“none”, fontWeight:700, cursor:“pointer” }}>確認新增</button>
+<button onClick={() => { setAdding(false); setNewName(””); setNewEmoji(“📦”); }}
+style={{ padding:“9px 14px”, borderRadius:10, background:C.card, color:C.muted, border:`1px solid ${C.border}`, cursor:“pointer” }}>取消</button>
+</div>
+</div>
+)}
+{showEP && <EmojiPicker onSelect={e => { setNewEmoji(e); }} onClose={() => setShowEP(false)} />}
+</Fld>
+);
+}
 function ConfirmDialog({ msg, onOk, onCancel }) {
 return (
 <div style={{ position:“fixed”,inset:0,zIndex:200,display:“flex”,alignItems:“center”,justifyContent:“center”,background:“rgba(0,0,0,0.7)”,backdropFilter:“blur(8px)” }}>
@@ -321,10 +538,15 @@ saveData(next);
 return next;
 });
 }, []);
-const { accs, txns, debts, subs, bills, stocks, pools, cats, rates } = d;
+const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals } = d;
 
 /* ── tabs / modal ── */
 const [tab, setTab] = useState(“overview”);
+const [theme, setTheme] = useState(() => localStorage.getItem(“finzen_theme”) || “dark”);
+// Update global C and iSt based on current theme - runs before every render
+C = getC(theme);
+iSt = getISt();
+const changeTheme = (t) => { localStorage.setItem(“finzen_theme”, t); setTheme(t); };
 const [modal, setModal] = useState(null);
 const [confirmDlg, setConfirmDlg] = useState(null);
 const confirm = (msg, onOk) => setConfirmDlg({ msg, onOk });
@@ -362,19 +584,32 @@ const [chartView, setChartView] = useState(“expense”);
 const [newBal, setNewBal] = useState(””);
 const [newCatType, setNewCatType] = useState(“expense”);
 const [newCatName, setNewCatName] = useState(””);
+const [newCatEmoji, setNewCatEmoji] = useState(“📦”);
+const [showCatEP, setShowCatEP] = useState(false);
+const [editCat, setEditCat] = useState(null); // {type, oldName, name, emoji}
+const [showEditEP, setShowEditEP] = useState(false);
+const [showAccEP, setShowAccEP] = useState(false);
+const [showGoalEP, setShowGoalEP] = useState(false);
+// Custom emoji map stored in data
+const ceMap = useMemo(() => ({ …CE, …(d.customCE || {}) }), [d.customCE]);
+const addCustomCE = (name, emoji) => upd(“customCE”, p => ({ …(p||{}), [name]:emoji }));
 const [curSearch, setCurSearch] = useState(””);
 const [localRates, setLocalRates] = useState(() => ({ …DEF_RATES }));
 const [trFrom, setTrFrom] = useState(””), [trTo, setTrTo] = useState(””), [trAmt, setTrAmt] = useState(””);
 const [recAmt, setRecAmt] = useState(””);
+const [settleDebt, setSettleDebt] = useState(null);
+const [editDebt, setEditDebt] = useState(null);
+const [editGoal, setEditGoal] = useState(null);
+const [settleAcc, setSettleAcc] = useState(””);
 
 /* ── forms ── */
 const T0 = { type:“expense”,cat:“食物”,amt:””,desc:””,acc:””,date:TODAY,tags:””,proxy:false,proxyList:[{ person:””,amt:”” }],deferred:false,deferMonths:“4”,deferMoAmt:”” };
 const [nT, setNT] = useState(T0);
-const D0 = { type:“receivable”,person:””,amt:””,desc:””,date:TODAY,note:”” };
+const D0 = { type:“receivable”,person:””,amt:””,desc:””,date:TODAY,note:””,installTotal:0,installAmt:””,installPaid:0,installPaidAmt:0 };
 const [nD, setND] = useState(D0);
-const S0 = { name:””,amt:””,acc:””,day:“1”,cat:“訂閱” };
+const S0 = { name:””,amt:””,acc:””,day:“1”,cat:“訂閱”,period:“month”,periodN:“1” };
 const [nS, setNS] = useState(S0);
-const B0 = { name:””,amt:””,acc:””,day:“1”,cat:“家居”,active:false };
+const B0 = { name:””,amt:””,acc:””,day:“1”,cat:“家居”,active:false,period:“month”,periodN:“1” };
 const [nB, setNB] = useState(B0);
 const NA0 = { name:””,type:“debit”,cur:“TWD”,limit:“100000” };
 const [nAcc, setNAcc] = useState(NA0);
@@ -434,30 +669,44 @@ const t = setInterval(check, 60000);
 return () => clearInterval(t);
 }, [fetchAllPrices]);
 
-/* ── Auto exchange rate fetch every minute ── */
+/* ── Auto exchange rate fetch every 30 min ── */
 useEffect(() => {
+const CURRENCY_MAP = { USD:“USD”,EUR:“EUR”,JPY:“JPY”,GBP:“GBP”,HKD:“HKD”,SGD:“SGD”,CNY:“CNY”,KRW:“KRW”,AUD:“AUD”,CAD:“CAD”,CHF:“CHF”,MYR:“MYR”,THB:“THB” };
 const fetchRates = async () => {
-try {
-// Use exchangerate-api free tier (no key needed for basic pairs)
-const res = await fetch(“https://api.exchangerate-api.com/v4/latest/TWD”, { signal:AbortSignal.timeout(5000) });
-const json = await res.json();
-if (json.rates) {
-// Convert: api gives TWD→other, we need other→TWD (invert)
-const newRates = { TWD:1 };
-ALL_CURS.forEach(cur => { if (cur !== “TWD” && json.rates[cur]) newRates[cur] = 1 / json.rates[cur]; });
-upd(“rates”, () => ({ …DEF_RATES, …newRates }));
+const toCurs = Object.keys(CURRENCY_MAP).join(”,”);
+const apis = [
+// frankfurter.app - CORS enabled, free
+async () => {
+const r = await fetch(`https://api.frankfurter.app/latest?from=TWD&to=${toCurs}`, { signal:AbortSignal.timeout(6000) });
+const j = await r.json();
+if (!j.rates) throw new Error();
+const nr = { TWD:1 };
+Object.entries(j.rates).forEach(([cur,rate]) => { nr[cur] = 1/rate; });
+return nr;
+},
+// exchangerate-api fallback
+async () => {
+const r = await fetch(“https://api.exchangerate-api.com/v4/latest/TWD”, { signal:AbortSignal.timeout(6000) });
+const j = await r.json();
+if (!j.rates) throw new Error();
+const nr = { TWD:1 };
+ALL_CURS.forEach(cur => { if (cur!==“TWD” && j.rates[cur]) nr[cur] = 1/j.rates[cur]; });
+return nr;
+},
+];
+for (const api of apis) {
+try { const nr = await api(); upd(“rates”, () => ({ …DEF_RATES, …nr })); return; } catch {}
 }
-} catch {} // Silently fail, keep existing rates
 };
-fetchRates(); // Fetch immediately on load
-const t = setInterval(fetchRates, 60 * 1000);
+fetchRates();
+const t = setInterval(fetchRates, 30*60*1000);
 return () => clearInterval(t);
 }, []);
 const visA = useMemo(() => accs.filter(a => a.type !== “credit” && a.vis), [accs]);
 const totAssets = useMemo(() => visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
 const totDebt = useMemo(() => accs.filter(a => a.type === “credit” && a.vis).reduce((s, c) => s + (c.payable || 0), 0), [accs]);
-const totRec = useMemo(() => debts.filter(x => x.type === “receivable” && !x.settled).reduce((s, x) => s + x.amt, 0), [debts]);
-const totPay = useMemo(() => debts.filter(x => x.type === “payable” && !x.settled).reduce((s, x) => s + x.amt, 0), [debts]);
+const totRec = useMemo(() => debts.filter(x => x.type === “receivable” && !x.settled).reduce((s, x) => s + (x.amt - (x.installPaidAmt||0)), 0), [debts]);
+const totPay = useMemo(() => debts.filter(x => x.type === “payable” && !x.settled).reduce((s, x) => s + (x.amt - (x.installPaidAmt||0)), 0), [debts]);
 const netWorth = totAssets - totDebt - totPay + totRec;
 const subsMo = useMemo(() => subs.filter(s => s.active).reduce((s, x) => s + x.amt, 0), [subs]);
 const billsMo = useMemo(() => (bills || []).filter(b => b.active).reduce((s, x) => s + x.amt, 0), [bills]);
@@ -469,16 +718,21 @@ const buys  = st.trades.filter(t => t.type===“buy”);
 const sells = st.trades.filter(t => t.type===“sell”);
 const bSh   = buys.reduce((s,t)=>s+t.shares,0);
 const sSh   = sells.reduce((s,t)=>s+t.shares,0);
-// 無交易紀錄但有 manualShares（初始持股）→ 直接用 manualShares
-const totalSh = st.manualShares != null && st.trades.length === 0
-? st.manualShares
-: (st.manualShares != null && buys.length === 0 ? st.manualShares : Math.max(0, bSh - sSh));
-const calcCost  = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0), 0);
+// 股數計算：初始持股(manualShares) + 後續買入 - 後續賣出
+// manualShares = 登錄現有持股時輸入的，是「起始基數」
+// 有 trades 代表之後有買賣，要疊加
+const initSh = st.manualShares != null ? st.manualShares : 0;
+const totalSh = st.manualShares != null
+? Math.max(0, initSh + bSh - sSh)   // 初始持股 + 買入 - 賣出
+: Math.max(0, bSh - sSh);            // 純 trades 計算
+// 成本計算：初始成本 + 後續買入成本
+const initCost = st.manualTotalCost != null ? st.manualTotalCost : 0;
+const tradesCost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0), 0);
 const totalCost = st.manualTotalCost != null
-? st.manualTotalCost
-: (buys.length===1 ? calcCost : calcCost);
-const calcAvg = buys.length > 0 ? calcCost / bSh : 0;
-const avgCost = st.manualAvgCost != null ? st.manualAvgCost : calcAvg;
+? initCost + tradesCost
+: tradesCost;
+// 均成本
+const avgCost = totalSh > 0 ? totalCost / totalSh : (st.manualAvgCost || 0);
 const mv   = totalSh * (st.curPrice||0);
 const upnl = mv - totalCost;
 return {…st, totalSh, totalCost, avgCost, mv, upnl};
@@ -535,12 +789,50 @@ const id = Date.now();
 const validProxies = nT.proxy ? nT.proxyList.filter(p => p.person && +p.amt > 0) : [];
 const t = { …nT, id, amt:+nT.amt, proxyAmt:validProxies.reduce((s, p) => s + +p.amt, 0), proxyFor:validProxies.map(p => p.person).join(”、”), proxyList:validProxies };
 upd(“txns”, p => […p, t]);
-if (t.type === “expense”) { const ca = accs.find(a => a.name === t.acc && a.type === “credit”); if (ca) upd(“accs”, p => p.map(a => a.id === ca.id ? { …a, payable:(a.payable || 0) + t.amt } : a)); }
-validProxies.forEach(pr => { upd(“debts”, p => […p, { id:“d” + Date.now() + Math.random(), type:“receivable”, person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc || nT.cat}`, date:nT.date, settled:false, note:“自動產生”, srcTxnId:id }]); });
-if (nT.deferred && nT.deferMoAmt && t.type === “income”) upd(“pools”, p => […p, { id:“p” + id, desc:nT.desc || nT.cat, totalAmt:t.amt, recognized:+nT.deferMoAmt, date:nT.date, acc:nT.acc }]);
+
+```
+// 更新帳戶餘額
+const acc = accs.find(a => a.name === t.acc);
+if (acc) {
+  if (t.type === "income") {
+    // 收入：帳戶餘額增加
+    upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
+  } else if (t.type === "expense") {
+    if (acc.type === "credit") {
+      // 信用卡：增加應付金額，不動現金餘額
+      upd("accs", p => p.map(a => a.id===acc.id ? {...a, payable:(a.payable||0)+t.amt} : a));
+    } else {
+      // 現金/銀行：帳戶餘額減少
+      upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+    }
+  }
+}
+
+validProxies.forEach(pr => { upd("debts", p => [...p, { id:"d" + Date.now() + Math.random(), type:"receivable", person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc || nT.cat}`, date:nT.date, settled:false, note:"自動產生", srcTxnId:id }]); });
+if (nT.deferred && nT.deferMoAmt && t.type === "income") upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, totalAmt:t.amt, recognized:+nT.deferMoAmt, date:nT.date, acc:nT.acc }]);
 setNT(T0); close();
+```
+
 };
-const delTxn = id => { upd(“txns”, p => p.filter(t => t.id !== id)); close(); };
+const delTxn = id => {
+const t = txns.find(x => x.id === id);
+if (t) {
+const acc = accs.find(a => a.name === t.acc);
+if (t.type === “transfer”) {
+if (t.acc) upd(“accs”, p => p.map(a => a.name===t.acc ? {…a, bal:a.bal+t.amt} : a));
+if (t.toAcc) upd(“accs”, p => p.map(a => a.name===t.toAcc ? {…a, bal:Math.max(0,a.bal-t.amt)} : a));
+} else if (t.type === “expense” && t.cat !== “帳戶調整”) {
+if (acc?.type === “credit”) {
+upd(“accs”, p => p.map(a => a.name===t.acc ? {…a, payable:Math.max(0,(a.payable||0)-t.amt)} : a));
+} else if (t.acc) {
+upd(“accs”, p => p.map(a => a.name===t.acc ? {…a, bal:a.bal+t.amt} : a));
+}
+} else if (t.type === “income” && t.acc) {
+upd(“accs”, p => p.map(a => a.name===t.acc ? {…a, bal:a.bal-t.amt} : a));
+}
+}
+upd(“txns”, p => p.filter(x => x.id !== id)); close();
+};
 const saveTxn = t => { upd(“txns”, p => p.map(x => x.id === t.id ? t : x)); close(); };
 
 const adjBal = (acc, newBalStr, isFirst) => {
@@ -569,6 +861,9 @@ const addSub = () => { if (!nS.name || !nS.amt) return; upd(“subs”, p => [�
 const saveSub = s => { upd(“subs”, p => p.map(x => x.id === s.id ? s : x)); close(); };
 const addBill = () => { if (!nB.name || !nB.amt) return; upd(“bills”, p => […(p || []), { …nB, id:“bill” + Date.now(), amt:+nB.amt, day:+nB.day, active:false }]); setNB(B0); close(); };
 const saveBill = b => { upd(“bills”, p => p.map(x => x.id === b.id ? b : x)); close(); };
+const G0 = { name:””, target:””, deadline:””, emoji:“🎯”, accIds:[] };
+const [nG, setNG] = useState(G0);
+const addGoal = () => { if (!nG.name || !nG.target) return; upd(“goals”, p => […(p||[]), { …nG, id:“g”+Date.now(), target:+nG.target }]); setNG(G0); close(); };
 
 const addAccFn = () => {
 if (!nAcc.name) return;
@@ -580,17 +875,14 @@ upd(“accs”, p => […p, { …base, …extra }]); setNAcc(NA0); close();
 
 const doBuy = () => {
 if (!buyF.ticker || !buyF.shares) return;
-const trade = { id:“t”+Date.now(), type:“buy”, date:TODAY, shares:+buyF.shares, price:buyF.avgCost?+buyF.avgCost:0, fee:+buyF.fee||0 };
+const trade = { id:“t”+Date.now(), type:“buy”, date:TODAY, shares:+buyF.shares, price:buyF.avgCost?+buyF.avgCost:0, fee:+buyF.fee||0, totalCost:buyF.totalCost?+buyF.totalCost:0 };
 const ex = stocks.find(s => s.ticker===buyF.ticker && s.acc===buyF.acc);
 if (ex) {
-// 同代號同帳戶 → 直接加進 trades，股數由 stSum 從 trades 計算（買入加、賣出減）
-// 只更新名稱，不覆蓋 manualShares（讓 trades 累積計算）
+// 同代號同帳戶 → 加入 trades，保留 manualShares（stSum 會疊加）
 upd(“stocks”, p => p.map(s => s.id===ex.id ? {
 …s,
 name: buyF.name || s.name,
-manualShares: null,    // 清除手動覆蓋，改由 trades 自動計算
-manualAvgCost: null,   // 同上
-manualTotalCost: null, // 同上
+// 不清除 manualShares！stSum 會自動 initSh + bSh - sSh
 trades: […s.trades, trade],
 } : s));
 } else {
@@ -604,11 +896,27 @@ manualTotalCost: null,
 trades:[trade],
 }]);
 }
-if (buyF.fromAcc && buyF.totalCost) upd(“accs”, p => p.map(a => a.name===buyF.fromAcc ? {…a, bal:a.bal-+buyF.totalCost} : a));
+if (buyF.fromAcc && buyF.totalCost) {
+const cost = +buyF.totalCost;
+// 扣款帳戶餘額減少
+upd(“accs”, p => p.map(a => a.name===buyF.fromAcc ? {…a, bal:a.bal-cost} : a));
+// 同步更新對應的證券帳戶餘額增加
+if (buyF.acc) upd(“accs”, p => p.map(a => a.name===buyF.acc ? {…a, bal:a.bal+cost} : a));
+// 總覽記錄：帳戶轉帳（type=transfer，不計入收支統計）
+upd(“txns”, p => […p, {
+id:Date.now(), type:“transfer”,
+cat:“帳戶調整”,
+amt:cost,
+desc:`買入 ${buyF.ticker} ${buyF.shares}股（均${buyF.avgCost||0}元）`,
+acc:buyF.fromAcc,
+toAcc:buyF.acc||””,
+date:TODAY, tags:”#投資”,
+}]);
+}
 setBuyF(BF0); close();
 };
 
-// sellF: stockId, shares, totalProceeds, pnl, pnlType, returnAcc
+// sellF: stockId, shares, totalProceeds, fee, pnl, pnlType, returnAcc
 const doSell = () => {
 const st = stSum.find(s => s.id === sellF.stockId);
 if (!st || !sellF.shares) return;
@@ -617,14 +925,32 @@ const pnlAmt   = sellF.pnl ? Math.abs(+sellF.pnl) : 0;
 const isProfit = sellF.pnlType === “income”;
 const sellPrice = +sellF.shares > 0 && proceeds > 0 ? proceeds / +sellF.shares : 0;
 const sellFee = sellF.fee ? +sellF.fee : 0;
-// 加賣出紀錄 → stSum 從 trades 自動算出剩餘股數
+// 加賣出紀錄（不清除 manualShares，讓 stSum 用 initSh+bSh-sSh 計算）
 upd(“stocks”, p => p.map(s => s.id===st.id ? {
 …s,
-manualShares: null,
 trades:[…s.trades, { id:“t”+Date.now(), type:“sell”, date:TODAY, shares:+sellF.shares, price:sellPrice, fee:sellFee, totalProceeds:proceeds }],
 } : s));
-if (sellF.returnAcc && proceeds) upd(“accs”, p => p.map(a => a.name===sellF.returnAcc ? {…a, bal:a.bal+proceeds-sellFee} : a));
-if (pnlAmt > 0) upd(“txns”, p => […p, { id:Date.now(), type:isProfit?“income”:“expense”, cat:“投資收益”, amt:pnlAmt, desc:`${isProfit?"賣出獲利":"賣出虧損"}：${st.ticker}`, acc:sellF.returnAcc||””, date:TODAY, tags:”#投資” }]);
+if (sellF.returnAcc && proceeds) {
+// 款項回流帳戶
+upd(“accs”, p => p.map(a => a.name===sellF.returnAcc ? {…a, bal:a.bal+proceeds-sellFee} : a));
+// 證券帳戶餘額減少
+upd(“accs”, p => p.map(a => a.name===st.acc ? {…a, bal:Math.max(0, a.bal-proceeds)} : a));
+// 總覽：帳戶轉帳（不計入收支）
+upd(“txns”, p => […p, {
+id:Date.now(), type:“transfer”, cat:“帳戶調整”,
+amt:proceeds,
+desc:`賣出 ${st.ticker} ${sellF.shares}股`,
+acc:st.acc, toAcc:sellF.returnAcc,
+date:TODAY, tags:”#投資”,
+}]);
+}
+// 損益：才算真正的收入/支出
+if (pnlAmt > 0) upd(“txns”, p => […p, {
+id:Date.now()+1, type:isProfit?“income”:“expense”,
+cat:“投資收益”, amt:pnlAmt,
+desc:`${isProfit?"投資獲利":"投資虧損"}：${st.ticker} ${sellF.shares}股`,
+acc:sellF.returnAcc||””, date:TODAY, tags:”#投資”,
+}]);
 setSellF({ stockId:””, shares:””, totalProceeds:””, fee:””, pnl:””, pnlType:“income”, returnAcc:”” }); close();
 };
 
@@ -638,7 +964,7 @@ setRecAmt(””); close();
 };
 
 const reorderGrp = (type, r) => upd(“accs”, p => […p.filter(a => a.type !== type), …r.map((a, i) => ({ …a, order:i }))]);
-const addCat = () => { if (!newCatName.trim()) return; upd(“cats”, p => ({ …p, [newCatType]:[…p[newCatType], newCatName.trim()] })); setNewCatName(””); };
+const addCat = () => { if (!newCatName.trim()) return; upd(“cats”, p => ({ …p, [newCatType]:[…p[newCatType], newCatName.trim()] })); addCustomCE(newCatName.trim(), newCatEmoji); setNewCatName(””); setNewCatEmoji(“📦”); };
 const exportData = () => { const b = new Blob([JSON.stringify(d, null, 2)], { type:“application/json” }); const u = URL.createObjectURL(b), a = document.createElement(“a”); a.href = u; a.download = `finzen_${TODAY}.json`; a.click(); URL.revokeObjectURL(u); };
 
 /* ══════════════════════════════════════════════════════
@@ -648,7 +974,7 @@ const rowSt = (i, border = true) => ({ display:“flex”, alignItems:“center�
 
 return (
 <>
-<style>{`@keyframes fadeSlideIn { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } } * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; } body { background:#0d0f14; } ::-webkit-scrollbar { display:none; } input, select, textarea, button { font-family:'Noto Sans TC',system-ui,sans-serif; } select option { background:#1a1d28; } input[type=date]::-webkit-calendar-picker-indicator { filter:invert(0.7); }`}</style>
+<style>{`@keyframes fadeSlideIn { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } } * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; } body { background:${C.bg}; } ::-webkit-scrollbar { display:none; } input, select, textarea, button { font-family:'Noto Sans TC',system-ui,sans-serif; } select option { background:${C.card}; } input[type=date]::-webkit-calendar-picker-indicator { filter:invert(${theme==="light"?"0":"0.7"}); }`}</style>
 <div style={{ maxWidth:480, margin:“0 auto”, minHeight:“100dvh”, background:C.bg, color:C.text, fontFamily:”‘Noto Sans TC’,system-ui,sans-serif”, display:“flex”, flexDirection:“column” }}>
 
 ```
@@ -685,6 +1011,20 @@ return (
             </div>}
           </div>
           {alertR > 0.4 && <div style={{ margin:"0 16px 10px", display:"flex", alignItems:"center", gap:8, padding:"10px 14px", borderRadius:14, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, fontSize:12, fontWeight:700, color:C.warn }}>⚠️ 生活支出 {(alertR * 100).toFixed(0)}% 超過收入 40%！</div>}
+          {/* Goal progress bars in overview */}
+          {(goals||[]).filter(g=>g.target>0).map(g => {
+            const cur = g.accIds&&g.accIds.length>0 ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0) : netWorth;
+            const pct = Math.min(100, cur>0?(cur/g.target*100):0);
+            const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
+            const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
+            return <div key={g.id} style={{ margin:"0 16px 8px", padding:"8px 12px", borderRadius:12, background:`${col}14`, border:`1px solid ${col}33` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:700, marginBottom:4 }}>
+                <span style={{ color:col }}>{g.emoji} {g.name}{daysLeft!==null?` · 剩${daysLeft}天`:""}</span>
+                <span style={{ color:col }}>{pct.toFixed(0)}% · 差 {fmt(Math.max(0,g.target-cur))}</span>
+              </div>
+              <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, background:col, width:`${pct}%`, transition:"width .5s" }} /></div>
+            </div>;
+          })}
           <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:12 }}>
             {grpTxns.length === 0 && <div style={{ padding:"60px 0", textAlign:"center", color:C.muted }}><div style={{ fontSize:44, marginBottom:10 }}>📭</div><div>本月尚無記錄，點右下角 ✏️ 開始記帳</div></div>}
             {grpTxns.map(([date, dayT]) => {
@@ -706,7 +1046,7 @@ return (
                   {dayT.map((t, i) => (
                     <SwipeRow key={t.id} onDelete={() => delTxn(t.id)} onEdit={() => { setSelTxn({ ...t }); setModal("editTxn"); }} onClick={() => { setSelTxn({ ...t }); setModal("txnDet"); }}>
                       <div style={rowSt(i, true)}>
-                        <div style={{ width:44, height:44, borderRadius:14, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{CE[t.cat] || "📦"}</div>
+                        <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{CE[t.cat] || "📦"}</div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
                             <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{t.cat}</span>
@@ -719,9 +1059,14 @@ return (
                           </div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>
-                          <div style={{ fontWeight:900, fontSize:14, color:t.type === "income" ? C.income : t.type === "adjust" ? C.textSub : C.expense }}>
-                            {t.type === "income" ? "+" : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "") : "-"}{fmt(t.amt)}
+                          <div style={{ fontWeight:900, fontSize:14,
+                            color: t.type === "income" ? C.income
+                                 : t.type === "transfer" ? C.accentL
+                                 : t.type === "adjust" ? C.textSub
+                                 : C.expense }}>
+                            {t.type === "income" ? "+" : t.type === "transfer" ? "↔" : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "") : "-"}{fmt(t.amt)}
                           </div>
+                          {t.type === "transfer" && t.toAcc && <div style={{ fontSize:11, color:C.muted }}>{t.acc} → {t.toAcc}</div>}
                           {t.proxyAmt > 0 && <div style={{ fontSize:11, color:C.warn }}>代墊 {fmt(t.proxyAmt)}</div>}
                         </div>
                       </div>
@@ -741,14 +1086,19 @@ return (
             <span style={{ fontSize:13, fontWeight:700, color:C.accentL }}>⠿ 拖曳調整順序</span>
             <button onClick={() => setWMode("normal")} style={{ padding:"6px 16px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:900, fontSize:14, cursor:"pointer" }}>✓ 完成</button>
           </div>}
-          <div style={{ position:"relative", padding:"20px 20px 28px", background:"linear-gradient(150deg,#1a1d2e 0%,#0d0f14 100%)" }}>
+          <div style={{ position:"relative", padding:"20px 20px 28px", background:`linear-gradient(150deg,${C.surface} 0%,${C.bg} 100%)` }}>
             <div style={{ position:"absolute", right:-30, top:-30, width:200, height:200, borderRadius:"50%", background:C.accent, filter:"blur(60px)", opacity:.07, pointerEvents:"none" }} />
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, position:"relative", zIndex:2 }}>
-              <span style={{ fontWeight:900, fontSize:24, color:C.text }}>Wallet</span>
+              <span style={{ fontWeight:900, fontSize:24, color:C.text }}>錢包</span>
               <div style={{ display:"flex", gap:6 }}>
                 {[{ icon:"👁", mode:"vis" }, { icon:"⠿", mode:"sort" }, { icon:"➕", cb:() => setModal("addAcc") }].map((b, i) => (
                   <button key={i} onClick={b.cb || (() => setWMode(p => p === b.mode ? "normal" : b.mode))}
-                    style={{ width:36, height:36, borderRadius:10, background:b.mode && wMode === b.mode ? `${C.accent}40` : "rgba(255,255,255,0.08)", border:`1px solid ${b.mode && wMode === b.mode ? C.accent : "rgba(255,255,255,0.15)"}`, cursor:"pointer", color:b.mode && wMode === b.mode ? C.accent : "#fff", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    style={{ width:36, height:36, borderRadius:10,
+                      background: b.mode && wMode === b.mode ? `${C.accent}40` : `${C.text}12`,
+                      border:`1px solid ${b.mode && wMode === b.mode ? C.accent : `${C.text}30`}`,
+                      cursor:"pointer",
+                      color: b.mode && wMode === b.mode ? C.accent : C.text,
+                      fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>
                     {b.icon}
                   </button>
                 ))}
@@ -758,7 +1108,7 @@ return (
               <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>點擊切換顯示</div>
               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{accs.map(a => <button key={a.id} onClick={() => upd("accs", p => p.map(x => x.id === a.id ? { ...x, vis:!x.vis } : x))} style={{ fontSize:12, padding:"4px 10px", borderRadius:10, fontWeight:700, background:a.vis ? `${C.accent}28` : C.surface, color:a.vis ? C.accentL : C.muted, border:`1px solid ${a.vis ? C.accent : C.border}`, cursor:"pointer" }}>{AT[a.type] || ""} {a.name}</button>)}</div>
             </div>}
-            <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:3 }}>Net Worth</div>
+            <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:3 }}>總資產淨值</div>
             <div style={{ fontWeight:900, fontSize:34, color:C.text, letterSpacing:"-1.5px", marginBottom:18 }}>{fmt(netWorth)}</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, textAlign:"center" }}>
               {[{ l:"資產", v:totAssets, c:C.income }, { l:"負債", v:totDebt, c:C.expense }, { l:"應收", v:totRec, c:C.teal }, { l:"應付", v:totPay, c:C.warn }].map(k => (
@@ -774,7 +1124,7 @@ return (
             </div>
 
             {/* Account groups */}
-            {[{ label:"CASH", type:"cash" }, { label:"DEBIT CARD", type:"debit" }, { label:"INVESTMENT", type:"investment" }].map(grp => {
+            {[{ label:"現金", type:"cash" }, { label:"銀行帳戶", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
               const items = accs.filter(a => a.type === grp.type).sort((a, b) => a.order - b.order);
               const all = accs.filter(a => a.type === grp.type).sort((a, b) => a.order - b.order);
               const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
@@ -789,13 +1139,13 @@ return (
                 <SH title={grp.label} right={fmt(total)} />
                 <Card style={{ overflow:"hidden" }}>
                   {all.map((a, i) => (
-                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => upd("accs", p => p.filter(x => x.id !== a.id))); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }}>
+                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => upd("accs", p => p.filter(x => x.id !== a.id))); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, opacity:a.vis?1:0.45 }}>
                         {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }}>
                           <button onClick={e => { e.stopPropagation(); moveAcc(a.id, -1); }} disabled={i === 0} style={{ width:24, height:22, borderRadius:6, background:i === 0 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === 0 ? "default" : "pointer", color:i === 0 ? C.muted : C.accentL, fontSize:13 }}>▲</button>
                           <button onClick={e => { e.stopPropagation(); moveAcc(a.id, 1); }} disabled={i === all.length - 1} style={{ width:24, height:22, borderRadius:6, background:i === all.length - 1 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === all.length - 1 ? "default" : "pointer", color:i === all.length - 1 ? C.muted : C.accentL, fontSize:13 }}>▼</button>
                         </div>}
-                        <div style={{ width:44, height:44, borderRadius:14, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{AT[a.type] || "💳"}</div>
+                        <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{a.icon || AT[a.type] || "💳"}</div>
                         <div style={{ flex:1 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                         <div style={{ fontWeight:700, fontSize:14, color:a.vis?C.text:C.muted }}>{a.name}</div>
@@ -817,16 +1167,16 @@ return (
 
             {/* Credit cards */}
             {accs.filter(a => a.type === "credit").length > 0 && <div>
-              <SH title="CREDIT CARD" right={fmt(totDebt)} />
+              <SH title="信用卡" right={fmt(totDebt)} />
               <Card style={{ overflow:"hidden" }}>
                 {accs.filter(a => a.type === "credit").sort((a, b) => a.order - b.order).map((c, i) => {
                   const pct = c.limit > 0 ? Math.round(c.payable / c.limit * 100) : 0;
                   const col = pct > 70 ? C.warn : pct > 40 ? C.income : C.textSub;
                   return <SwipeRow key={c.id} onDelete={() => confirm(`確定刪除「${c.name}」？`, () => upd("accs", p => p.filter(a => a.id !== c.id)))} onEdit={() => { setSelAcc({ ...c }); setModal("editCredit"); }}>
                     <div style={{ padding:"14px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, cursor:"pointer" }}
-                      onClick={() => { setSelAcc({ ...c }); setModal("editCredit"); }}>
+                      onClick={() => { setSelAcc({ ...c }); setNewBal(String(c.payable || 0)); setModal("accDetail"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-                        <div style={{ width:44, height:44, borderRadius:14, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>💳</div>
+                        <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>💳</div>
                         <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{c.name}</div><div style={{ fontSize:12, color:C.muted }}>應付 <span style={{ color:col }}>{fmt(c.payable)}</span> / {fmt(c.limit)}</div></div>
                         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                           <Bdg color={col}>{pct}%</Bdg>
@@ -844,10 +1194,10 @@ return (
             <div>
               <SH title="訂閱管理" right={`月費 ${fmt(subsMo)}`} />
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {subs.map(s => <SwipeRow key={s.id} onDelete={() => upd("subs", p => p.filter(x => x.id !== s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
+                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => <SwipeRow key={s.id} onDelete={() => upd("subs", p => p.filter(x => x.id !== s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
-                    <div style={{ width:40, height:40, borderRadius:12, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
-                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>每月{s.day}日 · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}</div></div>
+                    <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
+                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>{s.period==="year"?"每年":s.period==="week"?`每${s.periodN||1}週`:`每${s.periodN||1}個月`} {s.day}日 · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}</div></div>
                     <span style={{ fontWeight:900, fontSize:14, color:C.expense, marginRight:8 }}>{fmt(s.amt)}</span>
                     <button onClick={e => { e.stopPropagation(); upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
                   </div>
@@ -863,10 +1213,10 @@ return (
                 💡 適合水電費、房租等固定支出。停用狀態不計入月費。
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {(bills || []).map(b => <SwipeRow key={b.id} onDelete={() => upd("bills", p => p.filter(x => x.id !== b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
+                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => upd("bills", p => p.filter(x => x.id !== b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
-                    <div style={{ width:40, height:40, borderRadius:12, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
-                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>每月{b.day}日{b.active && <span style={{ color:C.warn }}> · 計算中</span>}</div></div>
+                    <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
+                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>{b.period==="year"?"每年":b.period==="week"?`每${b.periodN||1}週`:`每${b.periodN||1}個月`} {b.day}日{b.active && <span style={{ color:C.warn }}> · 計算中</span>}</div></div>
                     <span style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted, marginRight:8 }}>{fmt(b.amt)}</span>
                     <button onClick={e => { e.stopPropagation(); upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
                   </div>
@@ -945,6 +1295,54 @@ return (
               </div>
             ))}
           </Card>
+
+          {/* Goals */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, marginTop:8 }}>
+            <span style={{ fontWeight:900, fontSize:14, color:C.text }}>🎯 我的目標</span>
+            <Btn sz="sm" onClick={() => setModal("addGoal")}>＋ 新增目標</Btn>
+          </div>
+          {(!goals || goals.length === 0) && <Card style={{ padding:20, textAlign:"center", marginBottom:16 }}>
+            <div style={{ color:C.muted, fontSize:13 }}>還沒有設定目標，點右上角新增！</div>
+          </Card>}
+          {(goals||[]).map(g => {
+            const current = g.accIds && g.accIds.length > 0
+              ? accs.filter(a => g.accIds.includes(a.id)).reduce((s,a) => s+toTWD(a.bal,a.cur,rates), 0)
+              : netWorth;
+            const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
+            const remaining = Math.max(0, g.target - current);
+            const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
+            const isExpired = g.deadline && daysLeft === 0;
+            const col = daysLeft !== null && daysLeft <= 30 ? C.warn : C.accent;
+            return <Card key={g.id} style={{ padding:20, marginBottom:12, border:`1px solid ${pct>=100?C.teal:C.border}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:24 }}>{g.emoji}</span>
+                  <div>
+                    <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{g.name}</div>
+                    {g.deadline && <div style={{ fontSize:11, color:isExpired?C.danger:daysLeft<=30?C.warn:C.muted, marginTop:2 }}>
+                      {isExpired ? "⚠️ 已到期" : `⏳ 還有 ${daysLeft} 天（${g.deadline}）`}
+                    </div>}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
+                  <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
+                </div>
+              </div>
+              <div style={{ height:10, borderRadius:5, background:C.border, marginBottom:8 }}>
+                <div style={{ height:"100%", borderRadius:5, background:pct>=100?C.teal:col, width:`${pct}%`, transition:"width .5s" }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+                <span style={{ color:C.textSub }}>目前 {fmt(current)}</span>
+                <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
+                <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
+              </div>
+              {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
+              {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
+            </Card>;
+          })}
         </div>
       )}
 
@@ -980,8 +1378,17 @@ return (
                     <div style={{ fontWeight:900, fontSize:15, color:dt === "receivable" ? C.teal : C.warn, marginLeft:12 }}>{fmt(d.amt)}</div>
                   </div>
                   {d.note && <div style={{ fontSize:12, padding:"8px 12px", borderRadius:8, background:`${C.border}88`, color:C.textSub, fontStyle:"italic", marginBottom:10 }}>"{d.note}"</div>}
+                  {/* Installment progress */}
+                  {d.installTotal > 0 && <div style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+                      <span style={{ color:C.textSub }}>分期進度</span>
+                      <span style={{ color:C.warn }}>{d.installPaid||0}/{d.installTotal}期 · 剩 {fmt(d.amt - (d.installPaidAmt||0))}</span>
+                    </div>
+                    <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, background:C.warn, width:`${Math.min(100,((d.installPaid||0)/d.installTotal)*100)}%` }} /></div>
+                  </div>}
                   <div style={{ display:"flex", gap:8 }}>
-                    <Btn v="teal" style={{ flex:1 }} onClick={() => upd("debts", p => p.map(x => x.id === d.id ? { ...x, settled:true } : x))}>✓ 結清</Btn>
+                    <Btn v="secondary" sz="sm" onClick={() => { setEditDebt({...d}); setModal("editDebt"); }}>✏️</Btn>
+                    <Btn v="teal" style={{ flex:1 }} onClick={() => { setSettleDebt(d); setSettleAcc(""); setModal("settleDebt"); }}>✓ {d.installTotal > 0 ? (dt==="receivable"?"收一期":"付一期") : (dt==="receivable"?"確認收款":"結清")}</Btn>
                     <Btn v="danger" sz="sm" onClick={() => upd("debts", p => p.filter(x => x.id !== d.id))}>🗑</Btn>
                   </div>
                 </Card>)}
@@ -1014,10 +1421,10 @@ return (
             {[{ v:"holdings", l:"持股" }, { v:"news", l:"新聞" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
           </div>
           {invTab === "holdings" && <div>
-            <Card style={{ padding:20, marginBottom:16, background:"linear-gradient(135deg,#1a1d2e,#12141c)" }}>
+            <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                 <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>總投資成本</div><div style={{ fontWeight:900, fontSize:20, color:C.accentL }}>{fmt(stTotCost)}</div></div>
-                <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>持股標的數</div><div style={{ fontWeight:900, fontSize:20, color:C.text }}>{stSum.filter(s=>s.totalSh>0).length} 檔</div></div>
+                <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>持股標的數</div><div style={{ fontWeight:900, fontSize:20, color:C.text }}>{new Set(stSum.filter(s=>s.totalSh>0).map(s=>`${s.ticker}_${s.market}`)).size} 檔</div></div>
               </div>
             </Card>
             <Card style={{ padding:20, marginBottom:16 }}>
@@ -1080,11 +1487,94 @@ return (
     </div>
 
     {/* FAB */}
+      {/* ══ SETTINGS ══ */}
+      {tab === "settings" && (
+        <div style={{ padding:"16px 16px 0" }}>
+          <div style={{ fontWeight:900, fontSize:20, color:C.text, marginBottom:20 }}>⚙️ 設定</div>
+
+          {/* Theme */}
+          <Card style={{ padding:20, marginBottom:16 }}>
+            <SH title="外觀主題" />
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {Object.entries(THEMES).map(([k, th]) => (
+                <button key={k} onClick={() => changeTheme(k)}
+                  style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${theme===k ? th.accent : C.border}`,
+                    background: theme===k ? `${th.accent}20` : C.card, cursor:"pointer", textAlign:"left" }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>{th.icon}</div>
+                  <div style={{ fontWeight:900, fontSize:14, color: theme===k ? th.accent : C.text }}>{th.name}</div>
+                  <div style={{ display:"flex", gap:4, marginTop:6 }}>
+                    {[th.bg, th.surface, th.accent, th.income].map((col,i) => (
+                      <div key={i} style={{ width:14, height:14, borderRadius:4, background:col, border:"1px solid rgba(255,255,255,0.1)" }} />
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {/* Category management */}
+          <Card style={{ padding:20, marginBottom:16 }}>
+            <SH title="類別管理" right={<button onClick={() => setModal("catSet")} style={{ fontSize:12, color:C.accentL, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>編輯 →</button>} />
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {[...cats.expense, ...cats.income].slice(0,12).map(cat => (
+                <div key={cat} style={{ padding:"4px 10px", borderRadius:10, background:`${C.accent}15`, fontSize:12, color:C.textSub }}>
+                  {ceMap[cat]||"📦"} {cat}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Data management */}
+          <Card style={{ padding:20, marginBottom:16 }}>
+            <SH title="資料管理" />
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+              <Btn onClick={exportData} v="secondary" sz="sm">📤 匯出備份</Btn>
+              <label style={{ padding:"6px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}`, color:C.text, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                📥 匯入備份
+                <input type="file" accept=".json" onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => { try { const nd = JSON.parse(ev.target.result); setD({ ...DEF, ...nd }); saveData({ ...DEF, ...nd }); } catch {} }; r.readAsText(f); }} style={{ display:"none" }} />
+              </label>
+              <Btn onClick={() => confirm("確定清空所有資料？這無法復原！", () => { setD(DEF); saveData(DEF); })} v="danger" sz="sm">🗑 清空</Btn>
+            </div>
+            <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
+          </Card>
+
+          {/* 使用手冊 */}
+          <Card style={{ padding:20, marginBottom:16 }}>
+            <SH title="📖 使用手冊" />
+            {[
+              { icon:"📊", title:"總覽", desc:"查看本月收支。點右下角 ✏️ 新增記帳。左滑刪除、右滑編輯交易記錄。" },
+              { icon:"👛", title:"錢包", desc:"管理所有帳戶。點帳戶可編輯餘額和圖示。帳戶轉帳、信用卡繳費都在這裡。" },
+              { icon:"📋", title:"現有持股", desc:"第一次使用先點「現有持股」登錄你已有的股票，不會產生收支記錄。之後買賣才用「＋買入」和「賣出」。" },
+              { icon:"📈", title:"投資追蹤", desc:"持股頁顯示各券商帳戶的股票。同一代號在不同券商算同一檔。" },
+              { icon:"👥", title:"往來帳", desc:"記錄借貸往來。結清時可選帳戶付款，自動更新餘額。" },
+              { icon:"🗂️", title:"圖表", desc:"查看支出收入圓餅圖和資產成長趨勢。右上角可設定日期範圍。" },
+              { icon:"⚙️", title:"設定", desc:"切換深色/淺色/紫色/海洋主題。管理類別（可自訂名稱和 emoji）。匯出備份儲存資料。" },
+              { icon:"💡", title:"小技巧", desc:"資料存在瀏覽器，換裝置前記得匯出備份！訂閱停用後不計入月費但保留記錄。" },
+            ].map((item, i) => (
+              <div key={i} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:i<7?`1px solid ${C.border}`:"none" }}>
+                <div style={{ fontSize:22, flexShrink:0, marginTop:2 }}>{item.icon}</div>
+                <div><div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{item.title}</div><div style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{item.desc}</div></div>
+              </div>
+            ))}
+          </Card>
+
+          {/* App info */}
+          <Card style={{ padding:20, marginBottom:16 }}>
+            <SH title="關於" />
+            <div style={{ fontSize:13, color:C.textSub, lineHeight:1.8 }}>
+              <div>FinZen 財務管理</div>
+              <div style={{ color:C.muted }}>版本 {APP_VER}</div>
+              <div style={{ marginTop:8, color:C.muted, fontSize:12 }}>資料僅存在你的裝置，不會上傳到任何伺服器。</div>
+            </div>
+          </Card>
+        </div>
+      )}
+
     {tab === "overview" && <button onClick={() => { setNT({ ...T0, acc:accs.filter(a => a.type !== "credit")[0]?.name || "" }); setModal("addTxn"); }} style={{ position:"fixed", bottom:"calc(76px + env(safe-area-inset-bottom,0px))", right:18, width:54, height:54, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.accentD})`, border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 6px 24px ${C.accent}55`, zIndex:25, fontSize:22 }}>✏️</button>}
 
     {/* Update banner */}
     {updateMsg && <div style={{ position:"fixed", top:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px", height:"100%", pointerEvents:"none" }}>
-      <div style={{ pointerEvents:"auto", background:"rgba(13,15,20,0.92)", backdropFilter:"blur(18px)", border:`1px solid ${C.accent}66`, borderRadius:20, padding:"24px 24px 20px", maxWidth:340, width:"100%", textAlign:"center", boxShadow:`0 0 60px ${C.accent}44`, animation:"fadeSlideIn .4s ease", position:"relative" }}>
+      <div style={{ pointerEvents:"auto", background:`rgba(${theme==="light"?"240,242,248":"13,15,20"},0.95)`, backdropFilter:"blur(18px)", border:`1px solid ${C.accent}66`, borderRadius:20, padding:"24px 24px 20px", maxWidth:340, width:"100%", textAlign:"center", boxShadow:`0 0 60px ${C.accent}44`, animation:"fadeSlideIn .4s ease", position:"relative" }}>
         <button onClick={() => setUpdateMsg(null)} style={{ position:"absolute", top:12, right:12, width:28, height:28, borderRadius:8, background:`${C.muted}33`, border:"none", color:C.text, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         <div style={{ fontSize:32, marginBottom:10 }}>✨</div>
         <div style={{ fontWeight:900, fontSize:16, color:C.text, marginBottom:8 }}>有新增功能！</div>
@@ -1096,7 +1586,7 @@ return (
     {/* Bottom Nav */}
     <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
       <div style={{ display:"flex" }}>
-        {[{ k:"overview", i:"📊", l:"總覽" }, { k:"wallet", i:"👛", l:"錢包" }, { k:"charts", i:"📉", l:"圖表" }, { k:"notes", i:"👥", l:"往來帳" }, { k:"invest", i:"📈", l:"投資" }].map(t => {
+        {[{ k:"overview", i:"📊", l:"總覽" }, { k:"wallet", i:"👛", l:"錢包" }, { k:"charts", i:"📉", l:"圖表" }, { k:"notes", i:"👥", l:"往來帳" }, { k:"invest", i:"📈", l:"投資" }, { k:"settings", i:"⚙️", l:"設定" }].map(t => {
           const active = tab === t.k;
           return <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
             <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
@@ -1112,7 +1602,7 @@ return (
     {modal === "txnDet" && selTxn && <Sheet title="交易明細" onClose={close}>
       <div style={{ borderRadius:14, padding:16, marginBottom:16, background:C.card }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-          <div style={{ width:54, height:54, borderRadius:16, background:"#252839", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>{CE[selTxn.cat] || "📦"}</div>
+          <div style={{ width:54, height:54, borderRadius:16, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>{CE[selTxn.cat] || "📦"}</div>
           <div><div style={{ fontWeight:900, fontSize:15, color:C.text }}>{selTxn.cat}</div><div style={{ fontWeight:900, fontSize:22, color:selTxn.type === "income" ? C.income : C.expense }}>{selTxn.type === "income" ? "+" : "-"}{fmt(selTxn.amt)}</div></div>
         </div>
         {[{ l:"日期", v:selTxn.date }, { l:"說明", v:selTxn.desc || "—" }, { l:"帳戶", v:selTxn.acc || "—" }, { l:"標籤", v:selTxn.tags || "—" }, ...(selTxn.proxyAmt > 0 ? [{ l:"代墊對象", v:selTxn.proxyFor }, { l:"代墊金額", v:fmt(selTxn.proxyAmt) }] : [])].map(r => (
@@ -1206,11 +1696,57 @@ return (
       </div>)}
     </Sheet>}
 
+    {modal === "accDetail" && selAcc && (() => {
+      const accTxns = txns
+        .filter(t => t.acc === selAcc.name || t.toAcc === selAcc.name)
+        .sort((a,b) => b.date.localeCompare(a.date))
+        .slice(0, 50);
+      const isCredit = selAcc.type === "credit";
+      return <Sheet title={`${selAcc.icon||AT[selAcc.type]||""} ${selAcc.name}`} onClose={close}>
+        {/* Balance summary */}
+        <Card style={{ padding:16, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
+          <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{isCredit ? "應付金額" : "目前餘額"}</div>
+          <div style={{ fontWeight:900, fontSize:28, color:C.accentL }}>{isCredit ? fmt(selAcc.payable||0) : fmt(selAcc.bal, selAcc.cur)}</div>
+          {selAcc.cur !== "TWD" && !isCredit && <div style={{ fontSize:13, color:C.muted }}>≈ {fmt(toTWD(selAcc.bal, selAcc.cur, rates))} TWD</div>}
+          {isCredit && <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>信用額度 {fmt(selAcc.limit||0)} · 使用 {selAcc.limit>0?((selAcc.payable||0)/selAcc.limit*100).toFixed(0):0}%</div>}
+        </Card>
+        {/* Action buttons */}
+        <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+          <Btn style={{ flex:1 }} onClick={() => { close(); setTimeout(() => setModal("adjBal"), 50); }}>✏️ 編輯帳戶</Btn>
+          {isCredit && <Btn v="teal" style={{ flex:1 }} onClick={() => { setPayF({ creditId:selAcc.id, fromId:"", amt:String(selAcc.payable||0), date:TODAY, note:"" }); close(); setTimeout(() => setModal("payCred"), 50); }}>💳 繳費</Btn>}
+        </div>
+        {/* Transaction history */}
+        <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>交易紀錄</div>
+        {accTxns.length === 0 && <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>此帳戶尚無交易記錄</div>}
+        <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+          {accTxns.map((t, i) => {
+            const isFrom = t.acc === selAcc.name;
+            const sign = t.type === "income" ? "+" : t.type === "transfer" ? (isFrom ? "↔出" : "↔入") : "-";
+            const col = t.type === "income" ? C.income : t.type === "transfer" ? C.accentL : C.expense;
+            return <div key={t.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{ceMap[t.cat]||"📦"}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{t.cat}</div>
+                <div style={{ fontSize:11, color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.date} {t.desc||""}</div>
+              </div>
+              <div style={{ fontWeight:900, fontSize:13, color:col, flexShrink:0 }}>{sign}{fmt(t.amt)}</div>
+            </div>;
+          })}
+        </div>
+      </Sheet>;
+    })()}
+
     {modal === "adjBal" && selAcc && (() => {
       const isFirst = selAcc.bal === 0 && !txns.some(t => t.acc === selAcc.name);
       const moAdj = moTxns.filter(t => t.cat === "帳戶調整" && t.acc === selAcc.name);
       const moAdjTotal = moAdj.reduce((s, t) => s + (t.adjDiff || 0), 0);
       return <Sheet title={`編輯帳戶 — ${selAcc.name}`} onClose={close}>
+        {/* Icon picker */}
+        <Fld label="圖示（點擊更換）">
+          <button onClick={() => setShowAccEP(true)} style={{ width:56, height:56, borderRadius:16, background:C.card, border:`2px solid ${C.accent}`, fontSize:28, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {selAcc.icon || AT[selAcc.type] || "💳"}
+          </button>
+        </Fld>
         <Inp label="帳戶名稱" value={selAcc.name} onChange={e => setSelAcc(p => ({ ...p, name:e.target.value }))} />
         <Fld label="帳戶類型"><div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
           {[{ v:"cash", l:"💰 現金" }, { v:"debit", l:"🏦 銀行" }, { v:"investment", l:"📊 證券" }, { v:"credit", l:"💳 信用卡" }].map(o => <button key={o.v} onClick={() => setSelAcc(p => ({ ...p, type:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:selAcc.type === o.v ? `${C.accent}30` : C.card, color:selAcc.type === o.v ? C.accentL : C.muted, border:`1px solid ${selAcc.type === o.v ? C.accent : C.border}`, cursor:"pointer", minWidth:60 }}>{o.l}</button>)}
@@ -1228,13 +1764,14 @@ return (
         </div>}
         <div style={{ display:"flex", gap:8, marginBottom:8 }}>
           <Btn style={{ flex:1 }} onClick={() => {
-            upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, type:selAcc.type } : a));
+            upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, type:selAcc.type, icon:selAcc.icon } : a));
             if (newBal && +newBal !== selAcc.bal) adjBal(selAcc, newBal, isFirst);
             setNewBal(""); close();
           }}>{isFirst && newBal && +newBal !== selAcc.bal ? "設為初始金額" : "儲存"}</Btn>
           <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
         </div>
         <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); close(); })}>🗑 刪除此帳戶</Btn>
+        {showAccEP && <EmojiPicker onSelect={e => { setSelAcc(p => ({ ...p, icon:e })); setShowAccEP(false); }} onClose={() => setShowAccEP(false)} />}
       </Sheet>;
     })()}
 
@@ -1276,22 +1813,109 @@ return (
         {[{ v:"receivable", l:"別人欠我 💚", c:C.teal }, { v:"payable", l:"我欠別人 🟡", c:C.warn }].map(o => <TP key={o.v} active={nD.type === o.v} color={o.c} onClick={() => setND(p => ({ ...p, type:o.v }))}>{o.l}</TP>)}
       </div>
       <Inp label="對象" placeholder="媽媽" value={nD.person} onChange={e => setND(p => ({ ...p, person:e.target.value }))} />
-      <Inp label="金額" type="number" value={nD.amt} onChange={e => setND(p => ({ ...p, amt:e.target.value }))} />
-      <Inp label="說明" placeholder="生活費" value={nD.desc} onChange={e => setND(p => ({ ...p, desc:e.target.value }))} />
-      <Fld label="日記備註"><textarea value={nD.note} onChange={e => setND(p => ({ ...p, note:e.target.value }))} placeholder="今天發生了什麼…" style={{ ...iSt, height:70, resize:"none" }} /></Fld>
+      <CalcInp label="總金額" value={nD.amt} onChange={v => setND(p => ({ ...p, amt:v }))} />
+      <Inp label="說明" placeholder="植村秀" value={nD.desc} onChange={e => setND(p => ({ ...p, desc:e.target.value }))} />
       <Fld label="日期"><input type="date" value={nD.date} onChange={e => setND(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+      {/* Installment option */}
+      <button onClick={() => setND(p => ({ ...p, installTotal:p.installTotal>0?0:3, installAmt:p.amt?String(Math.round(+p.amt/3)):"" }))}
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nD.installTotal>0?`${C.warn}22`:C.card, color:nD.installTotal>0?C.warn:C.textSub, border:`1px solid ${nD.installTotal>0?C.warn:C.border}`, cursor:"pointer", marginBottom:12 }}>
+        <span>{nD.installTotal>0?"✅":"⬜"}</span> 分期付款
+      </button>
+      {nD.installTotal > 0 && <div style={{ padding:12, borderRadius:12, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          <Fld label="分幾期">
+            <select value={String(nD.installTotal)} onChange={e => setND(p => ({ ...p, installTotal:+e.target.value, installAmt:p.amt?String(Math.round(+p.amt/+e.target.value)):"" }))} style={iSt}>
+              {Array.from({length:47},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} 期</option>)}
+            </select>
+          </Fld>
+          <CalcInp label={nD.type==="receivable"?"每期收款":"每期付款"} value={nD.installAmt||""} onChange={v => setND(p => ({ ...p, installAmt:v }))} />
+        </div>
+        <div style={{ fontSize:12, color:nD.type==="receivable"?C.teal:C.warn }}>💡 {nD.type==="receivable"?"每次對方還錢點「收一期」":"每次付款點「付一期」"}，自動更新帳戶餘額</div>
+      </div>}
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
         <Btn style={{ flex:1 }} onClick={addDebt}>新增</Btn>
         <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
       </div>
     </Sheet>}
 
+    {modal === "editDebt" && editDebt && <Sheet title="編輯往來帳" onClose={close}>
+      <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+        {[{ v:"receivable", l:"別人欠我 💚", c:C.teal }, { v:"payable", l:"我欠別人 🟡", c:C.warn }].map(o => <TP key={o.v} active={editDebt.type === o.v} color={o.c} onClick={() => setEditDebt(p => ({ ...p, type:o.v }))}>{o.l}</TP>)}
+      </div>
+      <Inp label="對象" value={editDebt.person||""} onChange={e => setEditDebt(p => ({ ...p, person:e.target.value }))} />
+      <CalcInp label="總金額" value={String(editDebt.amt||"")} onChange={v => setEditDebt(p => ({ ...p, amt:+v }))} />
+      <Inp label="說明" value={editDebt.desc||""} onChange={e => setEditDebt(p => ({ ...p, desc:e.target.value }))} />
+      <Fld label="日期"><input type="date" value={editDebt.date||TODAY} onChange={e => setEditDebt(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+      <div style={{ display:"flex", gap:8, marginTop:8 }}>
+        <Btn style={{ flex:1 }} onClick={() => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); }}>儲存</Btn>
+        <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+      </div>
+    </Sheet>}
+
+    {modal === "settleDebt" && settleDebt && (() => {
+      const d = settleDebt;
+      const isInstall = d.installTotal > 0;
+      const eachAmt = isInstall ? +(d.installAmt || Math.round(d.amt / d.installTotal)) : +d.amt;
+      const paidSoFar = d.installPaidAmt || 0;
+      const remaining = d.amt - paidSoFar;
+      const thisPay = isInstall ? Math.min(eachAmt, remaining) : remaining;
+      const isReceivable = d.type === "receivable";
+      const newPaidCount = (d.installPaid||0) + 1;
+      const isLast = !isInstall || newPaidCount >= d.installTotal;
+      return <Sheet title={isInstall ? `${isReceivable?"收第":"付第"} ${newPaidCount}/${d.installTotal} 期` : (isReceivable?"收款結清":"付款結清")} onClose={close}>
+        <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:16 }}>
+          <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>{d.person} · {d.desc}</div>
+          <div style={{ fontSize:13, color:isReceivable?C.teal:C.warn }}>
+            {isInstall
+              ? `本次${isReceivable?"收款":"付款"}：${fmt(thisPay)} · 剩餘：${fmt(Math.max(0,remaining-thisPay))}`
+              : `${isReceivable?"收款":"結清"}金額：${fmt(thisPay)}`}
+          </div>
+        </div>
+        <Sl label={isReceivable ? "款項收入到哪個帳戶" : "從哪個帳戶付款"}
+          value={settleAcc} onChange={e => setSettleAcc(e.target.value)}>
+          <option value="">— 選擇帳戶（選填）—</option>
+          {accs.filter(a => isReceivable ? (a.type!=="credit"&&a.type!=="investment") : a.type!=="investment")
+            .map(a => <option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name} ({fmt(a.bal, a.cur)})</option>)}
+        </Sl>
+        <div style={{ display:"flex", gap:8, marginTop:8 }}>
+          <Btn style={{ flex:1 }} onClick={() => {
+            // 1. 更新往來帳記錄
+            if (isInstall) {
+              upd("debts", p => p.map(x => x.id===d.id ? {...x, installPaid:newPaidCount, installPaidAmt:paidSoFar+thisPay, settled:isLast} : x));
+            } else {
+              upd("debts", p => p.map(x => x.id===d.id ? {...x, settled:true} : x));
+            }
+            // 2. 更新錢包帳戶餘額
+            if (settleAcc && thisPay) {
+              if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
+              else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
+            }
+            // 3. 總覽記一筆（雙方都記）
+            const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
+            upd("txns", p => [...p, {
+              id:Date.now(),
+              type: isReceivable ? "income" : "expense",
+              cat: "往來帳",
+              amt: thisPay,
+              desc,
+              acc: settleAcc || "",
+              date: TODAY,
+              tags: "#往來帳",
+            }]);
+            setSettleDebt(null); setSettleAcc(""); close();
+          }}>✓ {isInstall ? (isReceivable?`收第${newPaidCount}期`:`付第${newPaidCount}期`) : (isReceivable?"確認收款":"確認付款")}</Btn>
+          <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+        </div>
+      </Sheet>;
+    })()}
+
     {modal === "addSub" && <Sheet title="新增訂閱" onClose={close}>
       <Inp label="名稱" placeholder="Netflix" value={nS.name} onChange={e => setNS(p => ({ ...p, name:e.target.value }))} />
-      <Inp label="每月金額" type="number" value={nS.amt} onChange={e => setNS(p => ({ ...p, amt:e.target.value }))} />
+      <CalcInp label="金額" value={nS.amt} onChange={v => setNS(p => ({ ...p, amt:v }))} />
       <Sl label="扣款帳戶" value={nS.acc} onChange={e => setNS(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-      <Inp label="每月扣款日" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />
-      <Sl label="分類" value={nS.cat} onChange={e => setNS(p => ({ ...p, cat:e.target.value }))}>{cats.expense.map(k => <option key={k} value={k}>{CE[k] || "📦"} {k}</option>)}</Sl>
+      <PeriodSel period={nS.period||"month"} periodN={nS.periodN||"1"} onChange={v => setNS(p => ({ ...p, ...v }))} />
+      <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />
+      <CatPicker value={nS.cat} onChange={v => setNS(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
         <Btn style={{ flex:1 }} onClick={addSub}>新增</Btn>
         <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -1300,22 +1924,73 @@ return (
 
     {modal === "editSub" && selSub && <Sheet title="編輯訂閱" onClose={close}>
       <Inp label="名稱" value={selSub.name} onChange={e => setSelSub(p => ({ ...p, name:e.target.value }))} />
-      <Inp label="每月金額" type="number" value={selSub.amt} onChange={e => setSelSub(p => ({ ...p, amt:+e.target.value }))} />
+      <CalcInp label="金額" value={String(selSub.amt)} onChange={v => setSelSub(p => ({ ...p, amt:+v }))} />
       <Sl label="扣款帳戶" value={selSub.acc} onChange={e => setSelSub(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-      <Inp label="每月扣款日" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />
+      <PeriodSel period={selSub.period||"month"} periodN={selSub.periodN||"1"} onChange={v => setSelSub(p => ({ ...p, ...v }))} />
+      <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />
+      <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
         <Btn style={{ flex:1 }} onClick={() => saveSub(selSub)}>儲存</Btn>
         <Btn v="danger" style={{ flex:1 }} onClick={() => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); }}>刪除</Btn>
       </div>
     </Sheet>}
 
+    {modal === "addGoal" && <Sheet title="新增目標" onClose={close}>
+      <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:12 }}>
+        <button onClick={() => setShowGoalEP(true)} style={{ width:52, height:52, borderRadius:14, background:C.card, border:`2px solid ${C.accent}`, fontSize:26, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nG.emoji}</button>
+        <div style={{ flex:1 }}><Inp label="目標名稱" placeholder="買新電腦、旅遊基金、緊急預備金…" value={nG.name} onChange={e => setNG(p => ({ ...p, name:e.target.value }))} /></div>
+      </div>
+      <CalcInp label="目標金額" value={nG.target} onChange={v => setNG(p => ({ ...p, target:v }))} />
+      <Fld label="目標期限（選填）">
+        <input type="date" value={nG.deadline||""} onChange={e => setNG(p => ({ ...p, deadline:e.target.value }))} style={iSt} min={TODAY} />
+        {nG.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
+          ⏳ 還有 {Math.max(0, Math.ceil((new Date(nG.deadline)-new Date(TODAY))/(86400000)))} 天
+        </div>}
+      </Fld>
+      <Fld label="計算哪些帳戶（不選則用總資產）">
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+          {accs.filter(a => a.type !== "credit").map(a => (
+            <button key={a.id} onClick={() => setNG(p => ({ ...p, accIds:p.accIds.includes(a.id)?p.accIds.filter(x=>x!==a.id):[...p.accIds, a.id] }))}
+              style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:nG.accIds.includes(a.id)?`${C.accent}28`:C.card, color:nG.accIds.includes(a.id)?C.accentL:C.muted, border:`1px solid ${nG.accIds.includes(a.id)?C.accent:C.border}`, cursor:"pointer" }}>
+              {a.icon||AT[a.type]||""} {a.name}
+            </button>
+          ))}
+        </div>
+      </Fld>
+      <div style={{ display:"flex", gap:8, marginTop:8 }}>
+        <Btn style={{ flex:1 }} onClick={addGoal}>新增</Btn>
+        <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+      </div>
+      {showGoalEP && <EmojiPicker onSelect={e => { setNG(p => ({ ...p, emoji:e })); setShowGoalEP(false); }} onClose={() => setShowGoalEP(false)} />}
+    </Sheet>}
+
+    {modal === "editGoal" && editGoal && <Sheet title="編輯目標" onClose={close}>
+      <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:12 }}>
+        <button onClick={() => setShowGoalEP(true)} style={{ width:52, height:52, borderRadius:14, background:C.card, border:`2px solid ${C.accent}`, fontSize:26, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{editGoal.emoji||"🎯"}</button>
+        <div style={{ flex:1 }}><Inp label="目標名稱" value={editGoal.name||""} onChange={e => setEditGoal(p => ({ ...p, name:e.target.value }))} /></div>
+      </div>
+      <CalcInp label="目標金額" value={String(editGoal.target||"")} onChange={v => setEditGoal(p => ({ ...p, target:+v }))} />
+      <Fld label="目標期限">
+        <input type="date" value={editGoal.deadline||""} onChange={e => setEditGoal(p => ({ ...p, deadline:e.target.value }))} style={iSt} />
+        {editGoal.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
+          ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))} 天
+        </div>}
+      </Fld>
+      <div style={{ display:"flex", gap:8, marginTop:8 }}>
+        <Btn style={{ flex:1 }} onClick={() => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }}>儲存</Btn>
+        <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+      </div>
+      {showGoalEP && <EmojiPicker onSelect={e => { setEditGoal(p => ({ ...p, emoji:e })); setShowGoalEP(false); }} onClose={() => setShowGoalEP(false)} />}
+    </Sheet>}
+
     {modal === "addBill" && <Sheet title="新增基本開銷" onClose={close}>
       <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, fontSize:12, color:C.warn, marginBottom:12 }}>🏠 預設停用，需要時再點開啟</div>
       <Inp label="名稱" placeholder="電費、水費、房租…" value={nB.name} onChange={e => setNB(p => ({ ...p, name:e.target.value }))} />
-      <Inp label="每月金額" type="number" value={nB.amt} onChange={e => setNB(p => ({ ...p, amt:e.target.value }))} />
+      <CalcInp label="金額" value={nB.amt} onChange={v => setNB(p => ({ ...p, amt:v }))} />
       <Sl label="扣款帳戶" value={nB.acc} onChange={e => setNB(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-      <Inp label="每月扣款日" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />
-      <Sl label="分類" value={nB.cat} onChange={e => setNB(p => ({ ...p, cat:e.target.value }))}>{cats.expense.map(k => <option key={k} value={k}>{CE[k] || "📦"} {k}</option>)}</Sl>
+      <PeriodSel period={nB.period||"month"} periodN={nB.periodN||"1"} onChange={v => setNB(p => ({ ...p, ...v }))} />
+      <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />
+      <CatPicker value={nB.cat} onChange={v => setNB(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
         <Btn style={{ flex:1 }} onClick={addBill}>新增</Btn>
         <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -1324,10 +1999,11 @@ return (
 
     {modal === "editBill" && selBill && <Sheet title="編輯基本開銷" onClose={close}>
       <Inp label="名稱" value={selBill.name} onChange={e => setSelBill(p => ({ ...p, name:e.target.value }))} />
-      <Inp label="每月金額" type="number" value={selBill.amt} onChange={e => setSelBill(p => ({ ...p, amt:+e.target.value }))} />
+      <CalcInp label="金額" value={String(selBill.amt)} onChange={v => setSelBill(p => ({ ...p, amt:+v }))} />
       <Sl label="扣款帳戶" value={selBill.acc} onChange={e => setSelBill(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-      <Inp label="每月扣款日" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:+e.target.value }))} />
-      <Sl label="分類" value={selBill.cat} onChange={e => setSelBill(p => ({ ...p, cat:e.target.value }))}>{cats.expense.map(k => <option key={k} value={k}>{CE[k] || "📦"} {k}</option>)}</Sl>
+      <PeriodSel period={selBill.period||"month"} periodN={selBill.periodN||"1"} onChange={v => setSelBill(p => ({ ...p, ...v }))} />
+      <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:+e.target.value }))} />
+      <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
       <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
         <Btn style={{ flex:1 }} onClick={() => saveBill(selBill)}>儲存</Btn>
         <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -1498,21 +2174,72 @@ return (
     })()}
 
     {modal === "catSet" && <Sheet title="類別管理" onClose={close}>
-      {["expense","income"].map(type => <div key={type} style={{ marginBottom:20 }}>
-        <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:10, color:type === "expense" ? C.expense : C.income }}>{type === "expense" ? "💸 支出類別" : "💰 收入類別"}</div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-          {cats[type].map(cat => <div key={cat} style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:10, fontSize:13, fontWeight:700, background:`${C.accent}18`, border:`1px solid ${C.border}` }}>
-            <span>{CE[cat] || "📦"} {cat}</span>
-            <button onClick={() => upd("cats", p => ({ ...p, [type]:p[type].filter(c => c !== cat) }))} style={{ background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:14, lineHeight:1, marginLeft:2 }}>✕</button>
-          </div>)}
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <input value={newCatType === type ? newCatName : ""} onChange={e => { setNewCatType(type); setNewCatName(e.target.value); }} placeholder={`新增${type === "expense" ? "支出" : "收入"}類別…`} style={{ ...iSt, flex:1 }} onKeyDown={e => { if (e.key === "Enter") { setNewCatType(type); addCat(); } }} />
-          <Btn sz="sm" onClick={() => { setNewCatType(type); addCat(); }}>＋</Btn>
-        </div>
-      </div>)}
-      <Btn v="secondary" style={{ width:"100%", marginTop:8 }} onClick={close}>關閉</Btn>
-    </Sheet>}
+        {["expense","income"].map(type => <div key={type} style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:10, color:type === "expense" ? C.expense : C.income }}>{type === "expense" ? "💸 支出類別" : "💰 收入類別"}</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+            {cats[type].map(cat => (
+              <button key={cat}
+                onClick={() => setEditCat({ type, oldName:cat, name:cat, emoji:ceMap[cat]||"📦" })}
+                style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:10, fontSize:13, fontWeight:700,
+                  background: editCat?.oldName===cat && editCat?.type===type ? `${C.accent}30` : `${C.accent}18`,
+                  border:`1px solid ${editCat?.oldName===cat && editCat?.type===type ? C.accent : C.border}`, cursor:"pointer" }}>
+                <span>{ceMap[cat]||"📦"}</span>
+                <span style={{ color:C.text }}>{cat}</span>
+                <span style={{ color:C.muted, fontSize:11 }}>✏️</span>
+              </button>
+            ))}
+          </div>
+          {/* Edit panel */}
+          {editCat?.type === type && (
+            <div style={{ padding:12, borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}44`, marginBottom:10 }}>
+              <div style={{ fontSize:11, color:C.accentL, marginBottom:8, fontWeight:700 }}>編輯「{editCat.oldName}」</div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
+                <button onClick={() => setShowEditEP(true)}
+                  style={{ width:44, height:44, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:22, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {editCat.emoji}
+                </button>
+                <input value={editCat.name} onChange={e => setEditCat(p => ({ ...p, name:e.target.value }))}
+                  style={{ ...iSt, flex:1 }} />
+              </div>
+              <div style={{ display:"flex", gap:6 }}>
+                <button onClick={() => {
+                  if (!editCat.name.trim()) return;
+                  // Update cats list (rename)
+                  upd("cats", p => ({ ...p, [type]:p[type].map(c => c===editCat.oldName ? editCat.name.trim() : c) }));
+                  // Update customCE
+                  addCustomCE(editCat.name.trim(), editCat.emoji);
+                  if (editCat.name.trim() !== editCat.oldName) {
+                    upd("customCE", p => { const n = {...(p||{})}; delete n[editCat.oldName]; n[editCat.name.trim()] = editCat.emoji; return n; });
+                  }
+                  setEditCat(null);
+                }} style={{ flex:1, padding:"8px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, cursor:"pointer" }}>儲存</button>
+                <button onClick={() => { upd("cats", p => ({ ...p, [type]:p[type].filter(c => c!==editCat.oldName) })); setEditCat(null); }}
+                  style={{ padding:"8px 14px", borderRadius:10, background:`${C.danger}22`, color:C.danger, border:`1px solid ${C.danger}44`, cursor:"pointer", fontWeight:700 }}>刪除</button>
+                <button onClick={() => setEditCat(null)}
+                  style={{ padding:"8px 12px", borderRadius:10, background:C.card, color:C.muted, border:`1px solid ${C.border}`, cursor:"pointer" }}>✕</button>
+              </div>
+              {showEditEP && <EmojiPicker onSelect={e => { setEditCat(p => ({ ...p, emoji:e })); setShowEditEP(false); }} onClose={() => setShowEditEP(false)} />}
+            </div>
+          )}
+          {/* 新增列 */}
+          <div style={{ padding:10, borderRadius:12, background:`${C.accent}10`, border:`1px solid ${C.accent}33` }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
+              <button onClick={() => { setNewCatType(type); setShowCatEP(true); }}
+                style={{ width:40, height:40, borderRadius:10, background:C.card, border:`2px solid ${C.accent}`, fontSize:20, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {newCatType===type ? newCatEmoji : "📦"}
+              </button>
+              <input value={newCatType === type ? newCatName : ""}
+                onChange={e => { setNewCatType(type); setNewCatName(e.target.value); setNewCatEmoji(guessEmoji(e.target.value)); }}
+                placeholder={`新增${type === "expense" ? "支出" : "收入"}類別…`}
+                style={{ ...iSt, flex:1 }}
+                onKeyDown={e => { if (e.key === "Enter") { setNewCatType(type); addCat(); } }} />
+            </div>
+            <Btn sz="sm" style={{ width:"100%" }} onClick={() => { setNewCatType(type); addCat(); }}>＋ 新增</Btn>
+          </div>
+        </div>)}
+        {showCatEP && <EmojiPicker onSelect={e => setNewCatEmoji(e)} onClose={() => setShowCatEP(false)} />}
+        <Btn v="secondary" style={{ width:"100%", marginTop:8 }} onClick={close}>關閉</Btn>
+      </Sheet>}
 
     {modal === "rateSettings" && (() => {
       const usedCurs = [...new Set(accs.map(a => a.cur).filter(c => c !== "TWD"))];
