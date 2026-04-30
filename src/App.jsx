@@ -755,16 +755,10 @@ export default function App() {
     }
   }, [stocks, fetchPrice, upd]);
 
-  /* ── 資料載入後立刻抓股價 ── */
+  /* ── 資料載入後立刻抓股價（只抓一次，不自動輪詢）── */
   useEffect(() => {
     if (stocks.length > 0) fetchAllPrices(stocks);
   }, [stocks.length]);
-
-  /* ── 每 30 分鐘自動更新 ── */
-  useEffect(() => {
-    const t = setInterval(() => { if (stocks.length > 0) fetchAllPrices(); }, 30 * 60 * 1000);
-    return () => clearInterval(t);
-  }, []);
 
   /* ── Auto exchange rate fetch every 30 min ── */
   useEffect(() => {
@@ -1677,7 +1671,12 @@ export default function App() {
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                       <SH title={accN} />
                       <div style={{ textAlign:"right" }}>
-                        <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(hasPrices ? accMv : accCost)}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                          <span style={{ fontSize:10, color:C.muted, background:`${C.muted}18`, padding:"1px 5px", borderRadius:4 }}>
+                            {hasPrices ? "市值" : "成本"}
+                          </span>
+                          <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(hasPrices ? accMv : accCost)}</div>
+                        </div>
                         {hasPrices && accPnl !== 0 && <div style={{ fontSize:11, color:pnlColor(accPnl, C) }}>{accPnl>0?"▲ +":"▼ "}{fmt(Math.abs(accPnl))}</div>}
                       </div>
                     </div>
