@@ -707,7 +707,9 @@ export default function App() {
         upd("stocks", p => p.map(s => {
           const keys = [`${s.ticker}.TW`, s.ticker, s.ticker.toUpperCase(), `${s.ticker}.US`];
           const item = keys.map(k => data[k]).find(v => v?.price);
-          if (item) { found++; return { ...s, curPrice:item.price, name:item.name||s.name, lastUpdated:item.updated||"" }; }
+          if (item) { found++; return { ...s, curPrice:item.price, name:item.name||s.name, lastUpdated:item.updated||"",
+            _extra: { high:item.high, low:item.low, vol:item.vol, chgPct:item.chgPct, institutional:item.institutional, institutional_date:item.institutional_date }
+          }; }
           return s;
         }));
         if (found > 0) { console.log(`✅ 股價從 stock_prices.json 載入 ${found} 檔`); return; }
@@ -2547,99 +2549,109 @@ export default function App() {
           const hasPrice = st.curPrice > 0;
           const pnl = hasPrice ? st.upnl : 0;
           const pnlPct = st.totalCost > 0 && hasPrice ? (pnl / st.totalCost * 100) : 0;
+          const extra = st._extra || {};
+          const inst = extra.institutional || {};
+          const hasInst = inst.foreign !== undefined || inst.trust !== undefined;
+          const yahooUrl = `https://finance.yahoo.com/quote/${st.market==="TW"?st.ticker+".TW":st.ticker}/chart`;
+          const newsUrl = `https://news.google.com/search?q=${encodeURIComponent((st.name||st.ticker)+" 股票")}&hl=zh-TW`;
           return <Sheet title={`${st.ticker} ${st.name}`} onClose={close}>
 
-            {/* ── 市價損益摘要卡 ── */}
-            <Card style={{ padding:16, marginBottom:14, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
+            {/* 市價損益摘要 */}
+            <Card style={{ padding:16, marginBottom:12, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:hasPrice?10:0 }}>
-                <div>
-                  <div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>市值</div>
-                  <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>
-                    {hasPrice ? fmt(st.mv) : <span style={{ color:C.muted, fontSize:12 }}>載入中…</span>}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>投入成本</div>
-                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{fmt(st.totalCost)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>持股</div>
-                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{st.totalSh} 股</div>
-                </div>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>市值</div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{hasPrice ? fmt(st.mv) : <span style={{ color:C.muted, fontSize:12 }}>載入中…</span>}</div></div>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>投入成本</div>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{fmt(st.totalCost)}</div></div>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>持股</div>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{st.totalSh} 股</div></div>
               </div>
               {hasPrice && <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                 <div>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>現價</div>
                   <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(st.curPrice)}/股</div>
-                  <div style={{ fontSize:10, color:C.muted }}>均成本 {fmt(Math.round(st.avgCost||0))}/股</div>
+                  <div style={{ fontSize:10, color:C.muted }}>均 {fmt(Math.round(st.avgCost||0))}/股</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>未實現損益</div>
-                  <div style={{ fontWeight:900, fontSize:16, color:pnlColor(pnl, C) }}>
-                    {pnl >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(pnl))}
-                  </div>
-                  <div style={{ fontSize:11, fontWeight:700, color:pnlColor(pnl, C) }}>
-                    {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
-                  </div>
+                  <div style={{ fontWeight:900, fontSize:16, color:pnlColor(pnl, C) }}>{pnl >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(pnl))}</div>
+                  <div style={{ fontSize:11, fontWeight:700, color:pnlColor(pnl, C) }}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%</div>
                 </div>
               </div>}
-              {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>更新時間：{st.lastUpdated}</div>}
+              {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>更新：{st.lastUpdated}</div>}
             </Card>
 
+            {/* 今日行情 */}
+            {hasPrice && (extra.high || extra.low || extra.vol) && <Card style={{ padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:900, color:C.muted, marginBottom:8, letterSpacing:"0.08em" }}>今日行情</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+                {[{l:"最高", v:extra.high, c:C.income}, {l:"最低", v:extra.low, c:C.expense},
+                  {l:"成交量", v:extra.vol ? (extra.vol>1000?`${(extra.vol/1000).toFixed(0)}K`:extra.vol) : null, c:C.text},
+                  {l:"漲跌幅", v:extra.chgPct!==undefined?`${extra.chgPct>=0?"+":""}${extra.chgPct}%`:null, c:pnlColor(extra.chgPct||0,C)}
+                ].map(({l,v,c}) => v ? <div key={l}><div style={{ fontSize:10, color:C.textSub }}>{l}</div><div style={{ fontWeight:700, fontSize:13, color:c }}>{typeof v==="number"?fmt(v):v}</div></div> : null)}
+              </div>
+            </Card>}
+
+            {/* 三大法人 */}
+            {st.market === "TW" && <Card style={{ padding:14, marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:11, fontWeight:900, color:C.muted, letterSpacing:"0.08em" }}>三大法人買賣超（千股）</div>
+                {extra.institutional_date && <div style={{ fontSize:10, color:C.muted }}>{extra.institutional_date ? `${extra.institutional_date.slice(0,4)}-${extra.institutional_date.slice(4,6)}-${extra.institutional_date.slice(6,8)}` : ""}</div>}
+              </div>
+              {hasInst
+                ? <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {[{label:"外資",val:inst.foreign},{label:"投信",val:inst.trust},{label:"自營商",val:inst.dealer}].map(({label,val}) => (
+                      <div key={label} style={{ textAlign:"center", padding:"10px 6px", borderRadius:10, background:val>0?`${C.income}15`:val<0?`${C.expense}15`:`${C.muted}10` }}>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:4 }}>{label}</div>
+                        <div style={{ fontWeight:900, fontSize:14, color:val>0?C.income:val<0?C.expense:C.muted }}>
+                          {val>0?"▲":val<0?"▼":"—"} {val!==undefined?Math.abs(val).toLocaleString():"—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
+            </Card>}
+
+            {/* 外部連結 */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+              <button onClick={() => window.open(yahooUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.accent}20`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>📊 技術線圖</button>
+              <button onClick={() => window.open(newsUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>📰 個股新聞</button>
+            </div>
+
+            {/* 持股編輯 */}
+            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <Inp label="股數（自動計算）" type="number" value={String(st.totalSh)}
-                onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, manualShares:+e.target.value} : s))}
-                style={{...iSt, color:C.accentL}} />
-              <Inp label="平均成本（自動）" type="number"
-                value={String(st.totalSh > 0 && st.totalCost > 0 ? (st.totalCost / st.totalSh).toFixed(2) : (st.manualAvgCost||0))}
-                onChange={e => {
-                  const avg = +e.target.value;
-                  upd("stocks", p => p.map(s => s.id===st.id ? {
-                    ...s, manualAvgCost:avg,
-                    manualTotalCost: s.totalSh > 0 ? Math.round(avg * s.totalSh) : s.manualTotalCost
-                  } : s));
-                }} />
+              <Inp label="股數（自動）" type="number" value={String(st.totalSh)}
+                onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, manualShares:+e.target.value} : s))} style={{...iSt, color:C.accentL}} />
+              <Inp label="均成本（自動）" type="number"
+                value={String(st.totalSh>0&&st.totalCost>0?(st.totalCost/st.totalSh).toFixed(2):(st.manualAvgCost||0))}
+                onChange={e => { const avg=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualAvgCost:avg,manualTotalCost:s.totalSh>0?Math.round(avg*s.totalSh):s.manualTotalCost}:s)); }} />
             </div>
-            <Inp label="投資總成本（自動）" type="number"
-              value={String(Math.round(st.totalCost || 0))}
-              onChange={e => {
-                const cost = +e.target.value;
-                upd("stocks", p => p.map(s => s.id===st.id ? {
-                  ...s, manualTotalCost:cost,
-                  manualAvgCost: s.totalSh > 0 ? +(cost / s.totalSh).toFixed(2) : s.manualAvgCost
-                } : s));
-              }} />
-            <div style={{ fontSize:11, color:C.teal, marginBottom:12, padding:"8px 12px", borderRadius:8, background:`${C.teal}12` }}>
-              💡 平均成本 = 總成本 ÷ 總股數（含手續費）。手動改其中一個會自動帶入另一個。
-            </div>
-            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>交易紀錄</div>
+            <Inp label="投資總成本（自動）" type="number" value={String(Math.round(st.totalCost||0))}
+              onChange={e => { const cost=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualTotalCost:cost,manualAvgCost:s.totalSh>0?+(cost/s.totalSh).toFixed(2):s.manualAvgCost}:s)); }} />
+
+            {/* 交易紀錄 */}
+            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, margin:"12px 0 8px" }}>交易紀錄</div>
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
-              {(st.trades||[]).length === 0 && !st.manualShares && <div style={{ fontSize:12, color:C.muted, padding:"8px 0" }}>尚無買賣記錄</div>}
-              {/* 顯示初始持股登錄 */}
-              {st.manualShares > 0 && <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-                <span style={{ color:C.accentL }}>📋 現有持股登錄 {st.manualShares}股</span>
-                <span style={{ fontWeight:700, color:C.accentL }}>
-                  {st.manualTotalCost ? `成本 ${fmt(st.manualTotalCost)}` : st.manualAvgCost ? `均 ${fmt(st.manualAvgCost)}/股` : ""}
-                </span>
+              {(st.trades||[]).length===0&&!st.manualShares&&<div style={{ fontSize:12, color:C.muted, padding:"8px 0" }}>尚無買賣記錄</div>}
+              {st.manualShares>0&&<div style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
+                <span style={{ color:C.accentL }}>📋 現有持股 {st.manualShares}股</span>
+                <span style={{ fontWeight:700, color:C.accentL }}>{st.manualTotalCost?`成本 ${fmt(st.manualTotalCost)}`:st.manualAvgCost?`均 ${fmt(st.manualAvgCost)}/股`:""}</span>
               </div>}
-              {(st.trades||[]).map(tr => <div key={tr.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:tr.type==="buy"?`${C.expense}12`:`${C.income}12` }}>
+              {(st.trades||[]).map(tr=><div key={tr.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:tr.type==="buy"?`${C.expense}12`:`${C.income}12` }}>
                 <span style={{ color:C.textSub }}>{tr.date} {tr.type==="buy"?"買入":"賣出"} {tr.shares}股</span>
-                <span style={{ fontWeight:700, color:tr.type==="buy"?C.expense:C.income }}>
-                  {tr.totalCost ? fmt(tr.totalCost) : tr.price ? `NT$${Math.round(tr.price)}/股` : tr.totalProceeds ? `回收 ${fmt(tr.totalProceeds)}` : ""}
-                </span>
+                <span style={{ fontWeight:700, color:tr.type==="buy"?C.expense:C.income }}>{tr.totalCost?fmt(tr.totalCost):tr.price?`NT$${Math.round(tr.price)}/股`:tr.totalProceeds?`回收 ${fmt(tr.totalProceeds)}`:""}</span>
               </div>)}
             </div>
             <div style={{ display:"flex", gap:8 }}>
               <Btn v="warn" style={{ flex:1 }} onClick={() => {
-                // 自動帶入市價計算的損益
-                const proceeds = hasPrice ? String(Math.round(st.curPrice * st.totalSh)) : "";
-                const autoPnl  = hasPrice ? String(Math.round(Math.abs(pnl))) : "";
-                setSellF({ stockId:st.id, shares:String(st.totalSh), totalProceeds:proceeds, fee:"", pnl:autoPnl, pnlType:pnl>=0?"income":"expense", returnAcc:"" });
+                const proceeds=hasPrice?String(Math.round(st.curPrice*st.totalSh)):"";
+                const autoPnl=hasPrice?String(Math.round(Math.abs(pnl))):"";
+                setSellF({stockId:st.id,shares:String(st.totalSh),totalProceeds:proceeds,fee:"",pnl:autoPnl,pnlType:pnl>=0?"income":"expense",returnAcc:""});
                 setModal("sellStock");
               }}>賣出 {st.ticker}</Btn>
-              <Btn v="secondary" style={{ flex:1 }} onClick={() => window.open(`https://finance.yahoo.com/quote/${st.market==="TW"?st.ticker+".TW":st.ticker}`, "_blank")}>Yahoo ↗</Btn>
             </div>
-            <Btn v="danger" style={{ width:"100%", marginTop:8 }} onClick={() => confirm(`確定刪除 ${st.ticker}？`, () => { upd("stocks", p => p.filter(s => s.id!==st.id)); close(); })}>🗑 刪除此持股</Btn>
+            <Btn v="danger" style={{ width:"100%", marginTop:8 }} onClick={() => confirm(`確定刪除 ${st.ticker}？`,()=>{upd("stocks",p=>p.filter(s=>s.id!==st.id));close();})}>🗑 刪除此持股</Btn>
           </Sheet>;
         })()}
 
