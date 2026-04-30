@@ -873,7 +873,7 @@ export default function App() {
 
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
-  const moInc = useMemo(() => moTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amt, 0) + poolThisMo, [moTxns, poolThisMo]);
+  const moInc = useMemo(() => moTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amt, 0), [moTxns]);
   const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + t.amt, 0), [moTxns]);
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
@@ -1008,7 +1008,11 @@ export default function App() {
     }
 
     validProxies.forEach(pr => { upd("debts", p => [...p, { id:"d" + Date.now() + Math.random(), type:"receivable", person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc || nT.cat}`, date:nT.date, settled:false, note:"自動產生", srcTxnId:id }]); });
-    if (nT.deferred && nT.deferMoAmt && t.type === "income") upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, totalAmt:t.amt, recognized:+nT.deferMoAmt, date:nT.date, acc:nT.acc }]);
+    if (nT.deferred && nT.deferMoAmt && t.type === "income") {
+      // 認列模式：把 txn 標記為 deferred（不計入總覽收入統計），只有每次認列才算收入
+      upd("txns", p => p.map(x => x.id === id ? { ...x, type:"transfer", cat:"帳戶調整", desc:`待認列收入：${nT.desc || nT.cat}（共 ${fmt(t.amt)}）` } : x));
+      upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, totalAmt:t.amt, recognized:0, date:nT.date, acc:nT.acc }]);
+    }
     setNT(T0); close();
   };
   const delTxn = id => {
@@ -1160,9 +1164,11 @@ export default function App() {
   const doRecognize = () => {
     if (!selPool || !recAmt) return;
     const a = +recAmt, rem = selPool.totalAmt - selPool.recognized;
-    if (a > rem) return;
+    if (a > rem || a <= 0) return;
+    // 更新 pool 已認列金額
     upd("pools", p => p.map(x => x.id === selPool.id ? { ...x, recognized:x.recognized + a } : x));
-    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:"家教", amt:a, desc:`認列：${selPool.desc}`, acc:selPool.acc || "", date:TODAY, tags:"" }]);
+    // 記一筆收入（帳戶餘額已在最初記帳時加入，這裡只是讓收入統計正確，不再動餘額）
+    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:"家教", amt:a, desc:`認列：${selPool.desc}`, acc:"", date:TODAY, tags:"#認列" }]);
     setRecAmt(""); close();
   };
 
