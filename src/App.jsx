@@ -869,10 +869,81 @@ export default function App() {
   const chartData = useMemo(() => {
     if (!txns.length) return [];
     const s = new Date(chartRange.s);
-    if (isSingleMo) { const dim = new Date(s.getFullYear(), s.getMonth() + 1, 0).getDate(); return Array.from({ length:dim }, (_, i) => ({ d:`${i + 1}日`, assets:totAssets + Math.round(Math.sin(i * 0.5) * 5000) })); }
-    const mo = {};
-    txns.forEach(t => { const [y, m] = t.date.split("-"); const k = `${y}-${m}`; mo[k] = mo[k] || { i:0, e:0 }; if (t.type === "income") mo[k].i += t.amt; if (t.type === "expense" && t.cat !== "帳戶調整") mo[k].e += t.amt; });
-    return Object.entries(mo).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => ({ m:`${+k.split("-")[1]}月`, assets:Math.max(0, totAssets + (v.i - v.e) * 0.05) }));
+    const e = new Date(chartRange.e);
+
+    if (isSingleMo) {
+      // 單月：每天的資產 = 今天總資產，往回推每一天的交易
+      const year = s.getFullYear(), month = s.getMonth();
+      const dim = new Date(year, month + 1, 0).getDate();
+      const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+
+      // 算出這個月之後（不含本月）的所有淨流入
+      const afterMo = txns.filter(t => t.date > `${ym}-31`);
+      const afterNet = afterMo.reduce((s, t) => {
+        if (t.type === "income") return s + t.amt;
+        if (t.type === "expense" && t.cat !== "帳戶調整") return s - t.amt;
+        return s;
+      }, 0);
+      // 月底資產 = 現在總資產 - 本月之後的淨流入
+      const endOfMonthAssets = totAssets - afterNet;
+
+      // 本月每天的交易，從月底往前推
+      const dayTxns = {};
+      txns.filter(t => t.date.startsWith(ym)).forEach(t => {
+        const day = parseInt(t.date.slice(8));
+        dayTxns[day] = dayTxns[day] || 0;
+        if (t.type === "income") dayTxns[day] += t.amt;
+        if (t.type === "expense" && t.cat !== "帳戶調整") dayTxns[day] -= t.amt;
+      });
+
+      // 從月底往回算每天資產
+      const result = [];
+      let running = endOfMonthAssets;
+      for (let d = dim; d >= 1; d--) {
+        result.unshift({ d:`${d}日`, assets:Math.max(0, running) });
+        running -= (dayTxns[d] || 0); // 往前一天，扣掉當天的淨流入
+      }
+      return result;
+    }
+
+    // 多月：每月的資產
+    // 先收集每個月的淨流入
+    const moNet = {};
+    txns.forEach(t => {
+      const ym = t.date.slice(0, 7);
+      moNet[ym] = moNet[ym] || 0;
+      if (t.type === "income") moNet[ym] += t.amt;
+      if (t.type === "expense" && t.cat !== "帳戶調整") moNet[ym] -= t.amt;
+    });
+
+    // 找出所有月份（在範圍內）
+    const allMonths = [];
+    const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+    const end = new Date(e.getFullYear(), e.getMonth(), 1);
+    while (cur <= end) {
+      allMonths.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    if (allMonths.length === 0) return [];
+
+    // 從現在往回推：計算每個月底的資產
+    // 今天之後的淨流入先扣掉
+    const lastMonth = allMonths[allMonths.length - 1];
+    const afterNet = Object.entries(moNet)
+      .filter(([ym]) => ym > lastMonth)
+      .reduce((s, [, v]) => s + v, 0);
+
+    let running = totAssets - afterNet;
+    const result = [];
+
+    // 從最後一個月往前推
+    for (let i = allMonths.length - 1; i >= 0; i--) {
+      const ym = allMonths[i];
+      const [y, m] = ym.split("-");
+      result.unshift({ m:`${+y}/${+m}月`, assets:Math.max(0, running) });
+      running -= (moNet[ym] || 0); // 往前一個月，扣掉當月淨流入
+    }
+    return result;
   }, [txns, chartRange, isSingleMo, totAssets]);
 
   const rl = r => { if (!r.s || !r.e) return "—"; if (r.s === r.e) return r.s; const s = new Date(r.s), e = new Date(r.e); if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) return `${s.getFullYear()}/${s.getMonth() + 1}月`; return `${r.s.slice(5)}~${r.e.slice(5)}`; };
@@ -1745,12 +1816,11 @@ export default function App() {
         {/* FAB */}
           {/* ══ SETTINGS ══ */}
           {tab === "settings" && (
-            <div style={{ paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
-              {/* 固定標題 */}
-              <div style={{ position:"sticky", top:0, zIndex:10, background:C.bg, padding:"14px 16px 10px", borderBottom:`1px solid ${C.border}` }}>
-                <div style={{ fontWeight:900, fontSize:20, color:C.text }}>⚙️ 設定</div>
+            <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:20 }}>
+                <span style={{ fontSize:18 }}>⚙️</span>
+                <span style={{ fontWeight:900, fontSize:16, color:C.text }}>設定</span>
               </div>
-              <div style={{ padding:"16px 16px 0" }}>
 
               {/* Theme */}
               <Card style={{ padding:20, marginBottom:16 }}>
@@ -1841,7 +1911,6 @@ export default function App() {
                 </div>
               </Card>
 
-              </div>
             </div>
           )}
 
