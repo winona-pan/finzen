@@ -1238,7 +1238,16 @@ export default function App() {
               {alertR > 0.4 && <div style={{ margin:"0 16px 10px", display:"flex", alignItems:"center", gap:8, padding:"10px 14px", borderRadius:14, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, fontSize:12, fontWeight:700, color:C.warn }}>⚠️ 生活支出 {(alertR * 100).toFixed(0)}% 超過收入 40%！</div>}
               {/* Goal progress bars in overview */}
               {(goals||[]).filter(g=>g.target>0).map(g => {
-                const cur = g.accIds&&g.accIds.length>0 ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0) : netWorth;
+                const cur = g.accIds&&g.accIds.length>0
+                  ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>{
+                      if (useMvForAssets && a.type==="investment") {
+                        // 用市值：找這個帳戶下的股票市值
+                        const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
+                        return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
+                      }
+                      return s + toTWD(a.bal,a.cur,rates);
+                    },0)
+                  : netWorth;
                 const pct = Math.min(100, cur>0?(cur/g.target*100):0);
                 const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
                 const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
@@ -1621,7 +1630,13 @@ export default function App() {
               </Card>}
               {(goals||[]).map(g => {
                 const current = g.accIds && g.accIds.length > 0
-                  ? accs.filter(a => g.accIds.includes(a.id)).reduce((s,a) => s+toTWD(a.bal,a.cur,rates), 0)
+                  ? accs.filter(a => g.accIds.includes(a.id)).reduce((s,a) => {
+                      if (useMvForAssets && a.type==="investment") {
+                        const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
+                        return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
+                      }
+                      return s + toTWD(a.bal,a.cur,rates);
+                    }, 0)
                   : netWorth;
                 const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
                 const remaining = Math.max(0, g.target - current);
