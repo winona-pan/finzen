@@ -838,7 +838,8 @@ export default function App() {
       return accBal - invAccBal + stTotMv;
     }
     return accBal;
-  }, [visA, rates, useMvForAssets, stTotMv]);
+  // eslint-disable-next-line
+  }, [visA, rates, useMvForAssets, stTotMv, accs]);
   const netWorth = totAssets - totDebt - totPay + totRec;
   const allocPie  = useMemo(()=>[{ name:"現金+銀行", value:cashBal }, { name:"股票投資", value:stTotCost }],[cashBal,stTotCost]);
   const holdPie   = useMemo(()=>stSum.filter(x=>x.totalSh>0).map(x=>({name:x.ticker, value:x.totalCost})),[stSum]);
@@ -1241,13 +1242,12 @@ export default function App() {
                 const cur = g.accIds&&g.accIds.length>0
                   ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>{
                       if (useMvForAssets && a.type==="investment") {
-                        // 用市值：找這個帳戶下的股票市值
                         const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
                         return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
                       }
                       return s + toTWD(a.bal,a.cur,rates);
                     },0)
-                  : netWorth;
+                  : netWorth;  // 資產 - 負債 + 應收 - 應付（已含未實現損益開關）
                 const pct = Math.min(100, cur>0?(cur/g.target*100):0);
                 const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
                 const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
@@ -1669,6 +1669,12 @@ export default function App() {
                     <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
                     <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
                   </div>
+                  {/* 計算基準說明 */}
+                  <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
+                    {g.accIds&&g.accIds.length>0
+                      ? `指定帳戶：${accs.filter(a=>g.accIds.includes(a.id)).map(a=>a.name).join("、")}`
+                      : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
+                  </div>
                   {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
                   {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
                 </Card>;
@@ -1786,7 +1792,12 @@ export default function App() {
                     </div>
                   </div>}
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-                    <span style={{ fontSize:12, color:C.accentL }}>總資產計入未實現損益</span>
+                    <div>
+                      <span style={{ fontSize:12, color:C.accentL }}>總資產計入未實現損益</span>
+                      {useMvForAssets && <div style={{ fontSize:10, color:stTotMv>0?C.teal:C.muted, marginTop:2 }}>
+                        {stTotMv>0 ? `市值 ${fmt(stTotMv)}` : "⏳ 等待市價載入…"}
+                      </div>}
+                    </div>
                     <button onClick={toggleMv} style={{ width:44, height:24, borderRadius:12, background:useMvForAssets?C.income:C.muted, border:"none", cursor:"pointer", position:"relative", flexShrink:0 }}>
                       <span style={{ position:"absolute", top:2, left:useMvForAssets?22:2, width:20, height:20, borderRadius:10, background:"#fff", transition:"left .2s", display:"block" }} />
                     </button>
