@@ -79,8 +79,9 @@ const DEF = {
   txns:[], debts:[], subs:[], bills:[], stocks:[], pools:[],
   customCE: {},
   goals: [],
+  policies: [], // 儲蓄險/投資型保單
   cats: {
-    expense: ["食物","交通","家居","娛樂","訂閱","教育","醫療","美容","其他","往來帳"],
+    expense: ["食物","交通","家居","娛樂","訂閱","教育","醫療","美容","保費","其他","往來帳"],
     income:  ["薪資","家教","零用錢","利息","股息","紅包","投資收益","其他收入","往來帳"],
   },
   rates: DEF_RATES,
@@ -560,7 +561,7 @@ export default function App() {
       return next;
     });
   }, []);
-  const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals } = d;
+  const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
 
   /* ── tabs / modal ── */
   const [tab, setTab] = useState("overview");
@@ -630,6 +631,7 @@ export default function App() {
   const [editDebt, setEditDebt] = useState(null);
   const [editGoal, setEditGoal] = useState(null);
   const [settleAcc, setSettleAcc] = useState("");
+  const [settleCustomAmt, setSettleCustomAmt] = useState(null);
 
   /* ── forms ── */
   const T0 = { type:"expense",cat:"食物",amt:"",desc:"",acc:"",date:TODAY,tags:"",proxy:false,proxyList:[{ person:"",amt:"" }],deferred:false,deferMonths:"4",deferMoAmt:"" };
@@ -947,6 +949,7 @@ export default function App() {
   const stTotCost = useMemo(() => stSum.reduce((s, x) => s + x.totalCost, 0), [stSum]);
   const totAssets = useMemo(() => {
     const accBal = visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
+    // 保單不計入總資產（純追蹤損益用）
     if (useMvForAssets && stTotMv > 0) {
       const invAccBal = visA.filter(a => a.type==="investment").reduce((s,a) => s+toTWD(a.bal,a.cur,rates), 0);
       return accBal - invAccBal + stTotMv;
@@ -955,7 +958,11 @@ export default function App() {
   // eslint-disable-next-line
   }, [visA, rates, useMvForAssets, stTotMv, accs]);
   const netWorth = totAssets - totDebt - totPay + totRec;
-  const allocPie  = useMemo(()=>[{ name:"現金+銀行", value:cashBal }, { name:"股票投資", value:stTotCost }],[cashBal,stTotCost]);
+  const allocPie = useMemo(() => {
+    const liquid    = visA.filter(a=>a.type!=="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0);
+    const nonLiquid = useMvForAssets && stTotMv > 0 ? stTotMv : visA.filter(a=>a.type==="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0);
+    return [{ name:"流動資產", value:liquid }, { name:"非流動資產", value:nonLiquid }].filter(x=>x.value>0);
+  }, [visA, rates, useMvForAssets, stTotMv]);
   const holdPie   = useMemo(()=>stSum.filter(x=>x.totalSh>0).map(x=>({name:x.ticker, value:x.totalCost})),[stSum]);
   // 投資成長：按月累計投入成本 vs 現在市值（用目前市值比例推算歷史市值）
   const invGrowth = useMemo(() => {
@@ -1226,6 +1233,14 @@ export default function App() {
   const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
   const [nG, setNG] = useState(G0);
   const addGoal = () => { if (!nG.name || !nG.target) return; upd("goals", p => [...(p||[]), { ...nG, id:"g"+Date.now(), target:+nG.target }]); setNG(G0); close(); };
+  const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", emoji:"🛡️" };
+  const [nPL, setNPL] = useState(PL0);
+  const [selPolicy, setSelPolicy] = useState(null);
+  const [premAmt, setPremAmt] = useState("");
+  const [premAcc, setPremAcc] = useState("");
+  const [surrenderAmt, setSurrenderAmt] = useState("");
+  const [surrenderAcc, setSurrenderAcc] = useState("");
+  const addPolicy = () => { if (!nPL.name) return; upd("policies", p => [...(p||[]), { ...nPL, id:"pl"+Date.now(), premium:+nPL.premium, surrenderVal:+nPL.surrenderVal||0 }]); setNPL(PL0); close(); };
 
   const addAccFn = () => {
     if (!nAcc.name) return;
@@ -1471,7 +1486,7 @@ export default function App() {
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, position:"relative", zIndex:2 }}>
                   <span style={{ fontWeight:900, fontSize:24, color:C.text }}>錢包</span>
                   <div style={{ display:"flex", gap:6 }}>
-                    {[{ icon:"👁", mode:"vis" }, { icon:"⠿", mode:"sort" }, { icon:"➕", cb:() => setModal("addAcc") }].map((b, i) => (
+                    {[{ icon:"👁", mode:"vis" }, { icon:"⠿", mode:"sort" }, { icon:"➕", cb:() => setModal("addAccType") }].map((b, i) => (
                       <button key={i} onClick={b.cb || (() => setWMode(p => p === b.mode ? "normal" : b.mode))}
                         style={{ width:36, height:36, borderRadius:10,
                           background: b.mode && wMode === b.mode ? `${C.accent}40` : `${C.text}12`,
@@ -1642,6 +1657,56 @@ export default function App() {
                   </div>;
                 })}
 
+                {/* ── 儲蓄險/投資型保單 ── */}
+                {(policies||[]).length > 0 && <div style={{ marginBottom:8 }}>
+                  <button onClick={() => toggleSection("policies")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["policies"]?4:6, marginTop:8 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>儲蓄保單</span>
+                      <InfoBtn msg="純追蹤損益，不計入總資產。繳保費時帳戶餘額減少，解約時記錄領回與損益。" />
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:10, color:C.muted, background:`${C.muted}18`, padding:"1px 6px", borderRadius:4 }}>追蹤用</span>
+                      <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["policies"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    </div>
+                  </button>
+                  {!collapsed["policies"] && <Card style={{ overflow:"hidden" }}>
+                    {(policies||[]).map((pl, i) => {
+                      const totalPaid = pl.totalPaid || 0;
+                      const pnl = (pl.surrenderVal||0) - totalPaid;
+                      return <div key={pl.id} style={{ padding:"12px 16px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <span style={{ fontSize:20 }}>{pl.emoji||"🛡️"}</span>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{pl.name}</div>
+                              <div style={{ fontSize:11, color:C.muted }}>{pl.insurer}</div>
+                              {pl.maturityDate && <div style={{ fontSize:11, color:C.muted }}>到期 {pl.maturityDate}</div>}
+                            </div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:11, color:C.textSub }}>解約金</div>
+                            <div style={{ fontWeight:900, fontSize:14, color:C.accentL }}>{fmt(pl.surrenderVal||0)}</div>
+                            <div style={{ fontSize:11, color:C.muted }}>已繳 {fmt(totalPaid)}</div>
+                            <div style={{ fontSize:12, fontWeight:700, color:pnlColor(pnl,C) }}>{pnl>=0?"▲ +":"▼ "}{fmt(Math.abs(pnl))}</div>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          {/* 繳保費 */}
+                          <Btn sz="sm" v="secondary" onClick={() => { setSelPolicy({...pl}); setPremAmt(String(pl.lastPremium||"")); setPremAcc(""); setModal("payPremium"); }}>💰 繳保費</Btn>
+                          {/* 更新解約金 */}
+                          <Btn sz="sm" v="secondary" onClick={() => { setSelPolicy({...pl}); setModal("editPolicy"); }}>✏️ 更新</Btn>
+                          {/* 解約 */}
+                          <Btn sz="sm" v="warn" onClick={() => { setSelPolicy({...pl}); setSurrenderAmt(String(pl.surrenderVal||"")); setSurrenderAcc(""); setModal("surrenderPolicy"); }}>📋 解約</Btn>
+                          {/* 刪除 */}
+                          <Btn sz="sm" v="danger" onClick={() => confirm(`刪除「${pl.name}」？`, () => upd("policies", p=>p.filter(x=>x.id!==pl.id)))}>🗑</Btn>
+                        </div>
+                      </div>;
+                    })}
+                    <div style={{ padding:"8px 16px" }}>
+                      <Btn v="secondary" style={{ width:"100%" }} onClick={() => { setNPL(PL0); setModal("addPolicy"); }}>＋ 新增保單</Btn>
+                    </div>
+                  </Card>}
+                </div>}
                 {/* ── 分隔線 ── */}
                 <div style={{ height:1, background:C.border, margin:"8px 0" }} />
 
@@ -1912,7 +1977,7 @@ export default function App() {
               </div>
               </div>
               <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20 }}>
-                {[{ v:"holdings", l:"持股" }, { v:"news", l:"新聞" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
+                {[{ v:"holdings", l:"持股" }, { v:"news", l:"新聞" }, { v:"learn", l:"學習" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
               </div>
               {invTab === "holdings" && <div>
                 <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
@@ -2041,6 +2106,7 @@ export default function App() {
                                   ? <div style={{ fontSize:11, color:pnlColor(pnl, C), fontWeight:700 }}>
                                       {pnl > 0 ? "▲ +" : pnl < 0 ? "▼ " : ""}{fmt(Math.abs(pnl))}
                                       {" "}({pnlPct > 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+                                      {st.stopLossPct && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ marginLeft:4, color:C.danger, fontWeight:900 }}>🔴 達停損</span>}
                                     </div>
                                   : <div style={{ fontSize:11, color:C.muted }}>載入市價中…</div>}
                               </div>
@@ -2072,6 +2138,76 @@ export default function App() {
                     </Card>
                   </a>
                 ))}
+              </div>}
+
+              {invTab === "learn" && <div>
+                {[{
+                  section:"🌱 基礎觀念", key:"learn_basic",
+                  items:[
+                    { title:"什麼是複利？為什麼說是第八大奇蹟", tag:"入門", url:"https://rich01.com/compound-interest/" },
+                    { title:"通貨膨脹是什麼？為什麼錢放著會變薄", tag:"入門", url:"https://rich01.com/inflation-2/" },
+                    { title:"資產與負債的差別，富人思維的起點", tag:"入門", url:"https://rich01.com/assets-liabilities/" },
+                    { title:"緊急預備金要存多少才夠？", tag:"入門", url:"https://rich01.com/emergency-fund/" },
+                  ]
+                },{
+                  section:"📈 股票投資", key:"learn_stock",
+                  items:[
+                    { title:"股票是什麼？買股票就是買公司的一部分", tag:"基礎", url:"https://rich01.com/what-is-stock/" },
+                    { title:"ETF 是什麼？為什麼適合一般投資人", tag:"基礎", url:"https://rich01.com/etf-intro/" },
+                    { title:"0050 vs 0056，哪個適合你？", tag:"台股", url:"https://rich01.com/0050-vs-0056/" },
+                    { title:"定期定額投資法，降低進場時機風險", tag:"策略", url:"https://rich01.com/dollar-cost-averaging/" },
+                    { title:"股票的本益比（PE）怎麼看？", tag:"進階", url:"https://rich01.com/pe-ratio/" },
+                  ]
+                },{
+                  section:"🏦 資產配置", key:"learn_alloc",
+                  items:[
+                    { title:"資產配置是什麼？分散風險的核心概念", tag:"重要", url:"https://rich01.com/asset-allocation/" },
+                    { title:"股債配置：股票與債券的比例怎麼決定", tag:"策略", url:"https://rich01.com/stock-bond-allocation/" },
+                    { title:"全球分散投資：為什麼不要只買台股", tag:"策略", url:"https://rich01.com/global-diversification/" },
+                    { title:"懶人投資法：長期持有 ETF 的優缺點", tag:"策略", url:"https://rich01.com/passive-investing/" },
+                  ]
+                },{
+                  section:"🛡️ 風險管理", key:"learn_risk",
+                  items:[
+                    { title:"投資風險有哪些？如何評估自己的風險承受度", tag:"重要", url:"https://rich01.com/investment-risk/" },
+                    { title:"停損是什麼？設停損點的邏輯", tag:"策略", url:"https://rich01.com/stop-loss/" },
+                    { title:"不要把雞蛋放在同一個籃子裡", tag:"基礎", url:"https://rich01.com/diversification/" },
+                  ]
+                },{
+                  section:"💰 理財規劃", key:"learn_plan",
+                  items:[
+                    { title:"50/30/20 法則：收入分配的簡單框架", tag:"入門", url:"https://rich01.com/50-30-20-rule/" },
+                    { title:"財務自由是什麼？FIRE 運動介紹", tag:"目標", url:"https://rich01.com/fire-movement/" },
+                    { title:"退休規劃：幾歲開始存才夠？", tag:"規劃", url:"https://rich01.com/retirement-planning/" },
+                    { title:"保險怎麼買？先保障再儲蓄的原則", tag:"規劃", url:"https://rich01.com/insurance-basic/" },
+                  ]
+                }].map(sec => (
+                  <div key={sec.key} style={{ marginBottom:16 }}>
+                    <button onClick={() => toggleSection(sec.key)}
+                      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:6 }}>
+                      <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>{sec.section}</span>
+                      <span style={{ fontSize:13, color:C.muted, display:"inline-block", transform:collapsed[sec.key]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    </button>
+                    {!collapsed[sec.key] && <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {sec.items.map((item, i) => (
+                        <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+                          <Card style={{ padding:"12px 14px" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:700, color:C.text, lineHeight:1.4, marginBottom:4 }}>{item.title}</div>
+                                <Bdg color={C.accent}>{item.tag}</Bdg>
+                              </div>
+                              <span style={{ color:C.muted, fontSize:16, flexShrink:0 }}>↗</span>
+                            </div>
+                          </Card>
+                        </a>
+                      ))}
+                    </div>}
+                  </div>
+                ))}
+                <div style={{ fontSize:11, color:C.muted, textAlign:"center", padding:"8px 0 16px" }}>
+                  文章來源：<a href="https://rich01.com" target="_blank" rel="noopener noreferrer" style={{ color:C.accentL }}>市場先生 Mr. Market</a>
+                </div>
               </div>}
             </div>
           )}
@@ -2147,77 +2283,88 @@ export default function App() {
                 {!collapsed["manual"] && [{
                   key:"m_overview", icon:"📊", title:"總覽 — 每日記帳",
                   steps:[
-                    "點右下角 ✏️ 開始記一筆收入或支出",
-                    "選擇類別、填金額、選帳戶 → 帳戶餘額自動更新",
-                    "說明欄會記憶同類別的歷史輸入，方便快速選取",
-                    "左滑記錄可刪除（帳戶餘額自動還原）",
-                    "右滑可編輯該筆記錄",
-                    "代墊：記支出時開啟「代墊」，填朋友名字和金額，系統自動拆成兩筆（自己那份 + 代墊轉帳），並在往來帳建立應收",
-                    "分月認列：收到一次性大額收入（如家教學費）可開啟，每月認列一部分，不影響月份統計",
+                    "點右下角 ✏️ 新增一筆收入或支出",
+                    "選類別、填金額、選帳戶 → 帳戶餘額自動更新",
+                    "說明欄會記憶同類別的歷史輸入，方便快速帶入",
+                    "左滑記錄可刪除（帳戶餘額自動還原）；右滑可編輯",
+                    "代墊：開啟「代墊」後填朋友名字和金額，自動拆成兩筆（自己那份支出 + 代墊轉帳），並在往來帳建立應收",
+                    "分月認列：收到一次性大額收入（如學費）可開啟，之後每月到「待認列收入池」手動認列，不影響月份統計",
                   ]
                 },{
-                  key:"m_wallet", icon:"👛", title:"錢包 — 管理帳戶",
+                  key:"m_wallet", icon:"👛", title:"錢包 — 帳戶管理",
                   steps:[
-                    "帳戶分為：流動資產（現金/金融卡）、負債（信用卡）、非流動資產（證券帳戶）",
-                    "點帳戶名稱 → 查看該帳戶的所有交易細項",
-                    "右滑帳戶 → 直接進入編輯（改餘額、改圖示、改名稱）",
-                    "編輯餘額時可填「調整說明」，記下為何調整",
-                    "信用卡：輸入「應付金額」（正數），點 Pay 繳費時選扣款帳戶",
-                    "帳戶轉帳：在錢包頁按「帳戶轉帳」，兩邊餘額自動更新",
-                    "訂閱管理：設定固定扣款，到期自動在總覽記帳（需重新開啟 App 觸發）",
-                    "基本開銷：水電費、房租等，可設每月/每週/每年，停用時不計月費",
+                    "右上角 ➕ 可新增：現金、金融卡、證券帳戶、信用卡、儲蓄保單",
+                    "帳戶分區：流動資產（現金/金融卡）、負債（信用卡）、非流動資產（證券）、儲蓄保單（追蹤用，不計入總資產）",
+                    "點帳戶名稱 → 查看該帳戶所有交易細項",
+                    "右滑帳戶 → 編輯餘額、圖示、名稱；編輯餘額時可填調整說明",
+                    "信用卡：輸入「應付金額」，點 Pay 繳費時選扣款帳戶",
+                    "訂閱管理：設定固定扣款（每月/每週/每年），到期自動記帳（需重新開啟 App）",
+                    "基本開銷：水電費、房租等固定支出，同上自動記帳邏輯",
+                  ]
+                },{
+                  key:"m_policy", icon:"🛡️", title:"儲蓄保單 — 保單追蹤",
+                  steps:[
+                    "點 ➕ → 選「儲蓄保單」新增（儲蓄險、投資型保單適用；醫療險請放基本開銷）",
+                    "填保單名稱、保險公司、目前解約金、已繳總保費、起保日",
+                    "儲蓄保單不計入總資產，純追蹤損益用",
+                    "💰 繳保費：帳戶餘額自動扣除，已繳總保費自動累加，不記支出（不影響月收支統計）",
+                    "✏️ 更新：每年收到對帳單後，更新解約金和已繳總保費",
+                    "📋 解約：填實際領回金額，自動記兩筆（收入：領回；支出：已繳總保費），損益立刻結算，保單移除",
+                    "損益 = 解約金 − 已繳總保費（負數代表還沒回本）",
                   ]
                 },{
                   key:"m_invest", icon:"📈", title:"投資 — 股票追蹤",
                   steps:[
-                    "第一次使用：點「📋 現有持股」登錄目前持有的股票（代號不要加 .TW），填股數和總成本",
-                    "之後買入：點「＋買入」，選擇帳戶，填股數和均成本，自動累加不覆蓋",
-                    "賣出：點個股 → 賣出，可下拉選擇，自動帶入市價損益",
-                    "買入記錄在總覽為「轉帳↔」不算收支；賣出的損益才算收入/支出",
-                    "市價開啟 App 時自動更新，點個股看損益 / 今日行情 / 三大法人",
-                    "台股代號唯一不會撞，美股和台股用「市場」區分",
-                    "「計入未實現損益」開關：開 = 總資產用市值計算；關 = 用成本計算",
+                    "首次使用：點「📋 現有持股」登錄目前持有的股票，代號不要加 .TW，填股數和總成本",
+                    "之後買入：點「＋買入」，可從上方快速選擇重複買入的股票，股數×均成本自動計算總成本",
+                    "賣出：點個股 → 賣出，下拉選擇持股，自動帶入市價損益",
+                    "市價開啟 App 時自動更新；點個股看損益、今日行情、三大法人（台股）",
+                    "技術線圖 → TradingView；個股新聞 → Google News（代號+名稱搜尋）",
+                    "停損提醒：在個股細項設虧損%門檻，達到時顯示 🔴 警示",
+                    "「計入未實現損益」開關：開=總資產用市值計算；關=用成本",
+                    "學習 Tab：市場先生文章分區整理，從基礎到進階",
                   ]
                 },{
                   key:"m_notes", icon:"👥", title:"往來帳 — 借貸管理",
                   steps:[
-                    "別人欠我 💚：記錄應收款，錢包應收欄會增加",
-                    "我欠別人 🟡：記錄應付款，錢包應付欄會增加",
-                    "分期付款：新增時開啟「分期付款」，選幾期、每期多少",
-                    "收款/付款：點「收一期」或「付一期」，選帳戶，餘額自動更新，總覽記一筆",
-                    "應收收款不算收入（錢本來就是你的）；應付付款才算支出",
-                    "7天內到期顯示提醒，逾期顯示紅色警告",
-                    "結清後移至「已結清 ✅」區塊，可點 ✕ 刪除",
+                    "別人欠我 💚：記錄應收款；我欠別人 🟡：記錄應付款",
+                    "分期付款：可設 2-48 期，每期金額可手動修改（不一定要等額）",
+                    "收款/付款：點「收一期」或「付一期」，選帳戶，餘額自動更新",
+                    "應收收款不算收入（本來就是你的錢）；應付付款才算支出",
+                    "7 天內到期顯示提醒，逾期顯示紅色 ⚠️ 警告",
+                    "代墊：記支出時開啟代墊，自動在往來帳建立應收，等對方還錢再結清",
                   ]
                 },{
                   key:"m_charts", icon:"🗂️", title:"圖表 — 收支分析",
                   steps:[
-                    "圓餅圖：查看本月各類別支出/收入佔比，點類別名稱可篩選",
-                    "收支健康度：設定自訂區間，查看儲蓄率、支出佔收入比例",
-                    "資產成長：預設顯示本月每天的資產變化，可切換多月視圖",
-                    "帳戶調整和轉帳不計入資產成長（避免失真）",
-                    "往來帳收款不算收入，代墊只算自己那份",
-                    "目標管理：點「＋新增目標」，設定金額、期限、追蹤帳戶",
-                    "目標進度同步顯示在總覽頁頂部，30天內到期變橘色",
+                    "圓餅圖：查看本月各類別支出/收入佔比（代墊只算自己那份，往來帳收款不算收入）",
+                    "收支健康度：自訂區間查看儲蓄率、支出佔比、訂閱月費",
+                    "資產成長：預設本月，可切換多月。帳戶調整和轉帳不計入（避免失真）",
+                    "投資圖表：資產配置（流動/非流動）、持股比例、投資成長（成本線 vs 市值線）",
+                    "目標管理：點「＋新增目標」設定金額、期限、追蹤帳戶；30 天內到期變橘色",
+                    "目標計算：不指定帳戶 = 用總資產淨值（資產−負債+應收−應付）",
                   ]
                 },{
                   key:"m_settings", icon:"⚙️", title:"設定 — 個人化",
                   steps:[
                     "主題：深色🌙 / 淺色☀️ / 紫色💜 / 海洋🌊，即時切換",
-                    "類別管理：點類別標籤可改名稱和 emoji；點「＋新增」加自訂類別",
-                    "匯出備份：定期點「📤 匯出備份」存成 JSON 檔，換裝置或清除瀏覽器資料前必做",
-                    "匯入備份：點「📥 匯入備份」選 JSON 檔還原所有資料",
+                    "類別管理：點類別可改名稱和 emoji；可新增自訂類別",
+                    "匯出備份：定期點「📤 匯出備份」存成 JSON 檔，換裝置前必做",
+                    "匯入備份：點「📥 匯入備份」選檔案還原所有資料",
                     "資料只存在你的瀏覽器，不會上傳任何伺服器",
+                    "加入主畫面：Safari → 分享 → 加入主畫面，像 App 一樣使用",
                   ]
                 },{
                   key:"m_tips", icon:"💡", title:"常見問題 & 小技巧",
                   steps:[
-                    "Q：記帳後帳戶沒更新？→ 確認記帳時有選帳戶",
-                    "Q：投資市價沒出現？→ 重新開啟 App，等幾秒讓市價載入",
-                    "Q：訂閱沒自動記帳？→ 需要關掉重開 App 才會觸發",
-                    "Q：往來帳收款為什麼不算收入？→ 那是別人還你本來就是你的錢，不是新收入",
-                    "小技巧：支出顏色是綠色、收入是紅色（台灣股市慣例，漲紅跌綠）",
-                    "小技巧：刪除記錄後帳戶餘額自動還原，不用手動調整",
+                    "Q：帳戶餘額沒更新？→ 記帳時確認有選帳戶",
+                    "Q：投資市價沒顯示？→ 重新開啟 App，等幾秒讓市價載入",
+                    "Q：訂閱沒自動記帳？→ 需要關掉重新開啟 App 才觸發",
+                    "Q：往來帳收款為什麼不算收入？→ 那是別人還你本來就是你的錢",
+                    "Q：代墊記帳後支出為什麼少了？→ 代墊那份是轉帳不是支出，只算你自己的那份",
+                    "Q：儲蓄保單不在總資產裡？→ 正確，純追蹤損益，解約時才結算",
+                    "小技巧：支出綠色、收入紅色（台灣股市漲紅跌綠慣例）",
+                    "小技巧：刪除記錄後帳戶餘額自動還原",
                     "小技巧：帳戶餘額調整時填說明，之後看細項才知道為何調整",
                   ]
                 }].map((item) => (
@@ -2545,19 +2692,27 @@ export default function App() {
           const eachAmt = isInstall ? +(d.installAmt || Math.round(d.amt / d.installTotal)) : +d.amt;
           const paidSoFar = d.installPaidAmt || 0;
           const remaining = d.amt - paidSoFar;
-          const thisPay = isInstall ? Math.min(eachAmt, remaining) : remaining;
+          const defaultPay = isInstall ? Math.min(eachAmt, remaining) : remaining;
+          // settleAmt: user can override the amount
+          const thisPay = settleCustomAmt ? +settleCustomAmt : defaultPay;
           const isReceivable = d.type === "receivable";
           const newPaidCount = (d.installPaid||0) + 1;
-          const isLast = !isInstall || newPaidCount >= d.installTotal;
+          const isLast = !isInstall || (paidSoFar + thisPay) >= d.amt;
           return <Sheet title={isInstall ? `${isReceivable?"收第":"付第"} ${newPaidCount}/${d.installTotal} 期` : (isReceivable?"收款結清":"付款結清")} onClose={close}>
-            <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:16 }}>
+            <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
               <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:4 }}>{d.person} · {d.desc}</div>
               <div style={{ fontSize:13, color:isReceivable?C.teal:C.warn }}>
-                {isInstall
-                  ? `本次${isReceivable?"收款":"付款"}：${fmt(thisPay)} · 剩餘：${fmt(Math.max(0,remaining-thisPay))}`
-                  : `${isReceivable?"收款":"結清"}金額：${fmt(thisPay)}`}
+                剩餘未付：{fmt(remaining)} {isInstall ? `（第 ${newPaidCount}/${d.installTotal} 期，預設每期 ${fmt(eachAmt)}）` : ""}
               </div>
             </div>
+            {/* 可手動輸入金額 */}
+            <Fld label={`本次${isReceivable?"收款":"付款"}金額（可修改）`}>
+              <input type="number" value={settleCustomAmt !== null ? settleCustomAmt : String(defaultPay)}
+                onChange={e => setSettleCustomAmt(e.target.value)}
+                placeholder={String(defaultPay)}
+                style={{...iSt}} />
+              {thisPay > 0 && <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>付完後剩 {fmt(Math.max(0, remaining - thisPay))}</div>}
+            </Fld>
             <Sl label={isReceivable ? "款項收入到哪個帳戶" : "從哪個帳戶付款"}
               value={settleAcc} onChange={e => setSettleAcc(e.target.value)}>
               <option value="">— 選擇帳戶（選填）—</option>
@@ -2566,23 +2721,19 @@ export default function App() {
             </Sl>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
-                // 1. 更新往來帳記錄
+                if (!thisPay || thisPay <= 0) return;
                 if (isInstall) {
                   upd("debts", p => p.map(x => x.id===d.id ? {...x, installPaid:newPaidCount, installPaidAmt:paidSoFar+thisPay, settled:isLast} : x));
                 } else {
                   upd("debts", p => p.map(x => x.id===d.id ? {...x, settled:true} : x));
                 }
-                // 2. 更新錢包帳戶餘額
                 if (settleAcc && thisPay) {
                   if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
                   else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
                 }
-                // 3. 總覽記一筆
                 const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
                 upd("txns", p => [...p, {
                   id:Date.now(),
-                  // 應收收款 = 只是錢回到你帳戶，不算收入（transfer）
-                  // 應付付款 = 真的花出去，算支出
                   type: isReceivable ? "transfer" : "expense",
                   cat: "往來帳",
                   amt: thisPay,
@@ -2592,7 +2743,7 @@ export default function App() {
                   date: TODAY,
                   tags: "#往來帳",
                 }]);
-                setSettleDebt(null); setSettleAcc(""); close();
+                setSettleDebt(null); setSettleAcc(""); setSettleCustomAmt(null); close();
               }}>✓ {isInstall ? (isReceivable?`收第${newPaidCount}期`:`付第${newPaidCount}期`) : (isReceivable?"確認收款":"確認付款")}</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
             </div>
@@ -2678,6 +2829,132 @@ export default function App() {
             <Btn style={{ flex:1 }} onClick={() => saveSub(selSub)}>儲存</Btn>
             <Btn v="danger" style={{ flex:1 }} onClick={() => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); }}>刪除</Btn>
           </div>
+        </Sheet>}
+
+        {modal === "addPolicy" && <Sheet title="新增儲蓄保單" onClose={close}>
+          <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, fontSize:12, color:C.accentL, marginBottom:12 }}>
+            🛡️ <strong>怎麼用：</strong> 填入保單基本資料和目前解約金，每年收到保單對帳單後更新一次解約金，就能追蹤損益。
+            <div style={{ marginTop:4, color:C.muted }}>醫療險、意外險等純保障型 → 放「基本開銷」設定每年自動記帳即可。</div>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:8 }}>
+            <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nPL.emoji}</button>
+            <div style={{ flex:1 }}><Inp label="保單名稱" placeholder="例：南山利率變動型年金" value={nPL.name} onChange={e => setNPL(p=>({...p,name:e.target.value}))} /></div>
+          </div>
+          <Inp label="保險公司" placeholder="例：南山人壽" value={nPL.insurer} onChange={e => setNPL(p=>({...p,insurer:e.target.value}))} />
+          <CalcInp label="目前解約金（現值，每年更新）" value={nPL.surrenderVal} onChange={v => setNPL(p=>({...p,surrenderVal:v}))} />
+          <CalcInp label="已繳總保費（到目前為止）" value={nPL.totalPaid||""} onChange={v => setNPL(p=>({...p,totalPaid:+v}))} />
+          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 儲蓄險每年保費可能不同，請直接填截至今日的累計總額</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <Fld label="起保日期"><input type="date" value={nPL.startDate} onChange={e=>setNPL(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label="到期日（選填）"><input type="date" value={nPL.maturityDate} onChange={e=>setNPL(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <Btn style={{ flex:1 }} onClick={addPolicy}>新增</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+          </div>
+          {showGoalEP && <EmojiPicker onSelect={e=>{setNPL(p=>({...p,emoji:e}));setShowGoalEP(false);}} onClose={()=>setShowGoalEP(false)} />}
+        </Sheet>}
+
+        {modal === "payPremium" && selPolicy && (() => {
+          return <Sheet title={`繳保費 — ${selPolicy.name}`} onClose={close}>
+            <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
+              <div style={{ fontSize:13, color:C.textSub }}>已繳總額：<strong style={{ color:C.text }}>{fmt(selPolicy.totalPaid||0)}</strong></div>
+            </div>
+            <CalcInp label="本次繳費金額" value={premAmt} onChange={v => setPremAmt(v)} />
+            <Sl label="從哪個帳戶扣款" value={premAcc} onChange={e => setPremAcc(e.target.value)}>
+              <option value="">— 選擇帳戶 —</option>
+              {accs.filter(a=>a.type!=="credit"&&a.type!=="investment").map(a=><option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name} ({fmt(a.bal,a.cur)})</option>)}
+            </Sl>
+            <div style={{ display:"flex", gap:8, marginTop:8 }}>
+              <Btn style={{ flex:1 }} onClick={() => {
+                if (!premAmt || +premAmt <= 0) return;
+                const amt = +premAmt;
+                // 1. 已繳總額累加
+                upd("policies", p=>p.map(x=>x.id===selPolicy.id ? {...x, totalPaid:(x.totalPaid||0)+amt, lastPremium:amt} : x));
+                // 2. 帳戶餘額扣除
+                if (premAcc) {
+                  const acc = accs.find(a=>a.name===premAcc);
+                  if (acc?.type==="credit") upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, payable:(a.payable||0)+amt} : a));
+                  else upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, bal:a.bal-amt} : a));
+                }
+                // 3. 總覽記一筆支出
+                upd("txns", p=>[...p, { id:Date.now(), type:"expense", cat:"保費", amt, desc:`${selPolicy.name} 保費`, acc:premAcc||"", date:TODAY, tags:"#保單" }]);
+                setPremAmt(""); setPremAcc(""); close();
+              }}>確認繳費</Btn>
+              <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            </div>
+          </Sheet>;
+        })()}
+
+        {modal === "surrenderPolicy" && selPolicy && (() => {
+          const totalPaid = selPolicy.totalPaid || 0;
+          const pnl = +surrenderAmt - totalPaid;
+          return <Sheet title={`解約 — ${selPolicy.name}`} onClose={close}>
+            <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
+              <div style={{ fontSize:13, color:C.textSub }}>已繳總保費：<strong style={{ color:C.text }}>{fmt(totalPaid)}</strong></div>
+            </div>
+            <CalcInp label="實際領回金額" value={surrenderAmt} onChange={v => setSurrenderAmt(v)} />
+            {surrenderAmt && <div style={{ padding:"10px 12px", borderRadius:10, background:`${pnlColor(pnl,C)}15`, marginBottom:8 }}>
+              <div style={{ fontSize:13, fontWeight:900, color:pnlColor(pnl,C) }}>
+                {pnl >= 0 ? "▲ 獲利" : "▼ 虧損"} {fmt(Math.abs(pnl))}
+              </div>
+              <div style={{ fontSize:11, color:C.muted }}>
+                領回 {fmt(+surrenderAmt)} − 已繳 {fmt(totalPaid)}
+              </div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>
+                總覽將記錄：已繳保費收入 {fmt(totalPaid)} ＋ {pnl>=0?"獲利":"虧損"} {fmt(Math.abs(pnl))}
+              </div>
+            </div>}
+            <Sl label="款項存入哪個帳戶" value={surrenderAcc} onChange={e => setSurrenderAcc(e.target.value)}>
+              <option value="">— 選擇帳戶 —</option>
+              {accs.filter(a=>a.type!=="credit"&&a.type!=="investment").map(a=><option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name}</option>)}
+            </Sl>
+            <div style={{ display:"flex", gap:8, marginTop:8 }}>
+              <Btn style={{ flex:1 }} onClick={() => {
+                const amt = +surrenderAmt;
+                if (!amt) return;
+                const now = Date.now();
+                // 帳戶餘額加上領回金額
+                if (surrenderAcc) upd("accs", p=>p.map(a=>a.name===surrenderAcc ? {...a, bal:a.bal+amt} : a));
+                // 筆1：已繳保費「本金回來」（transfer，不算收入）
+                // 筆2：損益（正=收入，負=支出）
+                upd("txns", p=>[...p,
+                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaid,
+                    desc:`${selPolicy.name} 解約 — 本金回收`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
+                  ...(pnl !== 0 ? [{ id:now+1,
+                    type: pnl > 0 ? "income" : "expense",
+                    cat: pnl > 0 ? "投資收益" : "其他",
+                    amt: Math.abs(pnl),
+                    desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}`,
+                    acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
+                ]);
+                // 刪除保單
+                upd("policies", p=>p.filter(x=>x.id!==selPolicy.id));
+                setSurrenderAmt(""); setSurrenderAcc(""); close();
+              }}>確認解約</Btn>
+              <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            </div>
+          </Sheet>;
+        })()}
+
+        {modal === "editPolicy" && selPolicy && <Sheet title="更新保單" onClose={close}>
+          <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:8 }}>
+            <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{selPolicy.emoji||"🛡️"}</button>
+            <div style={{ flex:1 }}><Inp label="保單名稱" value={selPolicy.name} onChange={e=>setSelPolicy(p=>({...p,name:e.target.value}))} /></div>
+          </div>
+          <Inp label="保險公司" value={selPolicy.insurer||""} onChange={e=>setSelPolicy(p=>({...p,insurer:e.target.value}))} />
+          <CalcInp label="目前解約金（現值）" value={String(selPolicy.surrenderVal||"")} onChange={v=>setSelPolicy(p=>({...p,surrenderVal:+v}))} />
+          <CalcInp label="已繳總保費（累計）" value={String(selPolicy.totalPaid||"")} onChange={v=>setSelPolicy(p=>({...p,totalPaid:+v}))} />
+          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 每年收到對帳單後更新解約金和已繳總額</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <Fld label="起保日期"><input type="date" value={selPolicy.startDate||TODAY} onChange={e=>setSelPolicy(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label="到期日"><input type="date" value={selPolicy.maturityDate||""} onChange={e=>setSelPolicy(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <Btn style={{ flex:1 }} onClick={() => { upd("policies", p=>p.map(x=>x.id===selPolicy.id?selPolicy:x)); close(); }}>儲存</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+          </div>
+          {showGoalEP && <EmojiPicker onSelect={e=>{setSelPolicy(p=>({...p,emoji:e}));setShowGoalEP(false);}} onClose={()=>setShowGoalEP(false)} />}
         </Sheet>}
 
         {modal === "addGoal" && <Sheet title="新增目標" onClose={close}>
@@ -2817,6 +3094,28 @@ export default function App() {
           <Btn v="danger" style={{ width:"100%" }} onClick={() => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); }}>🗑 刪除</Btn>
         </Sheet>}
 
+        {modal === "addAccType" && <Sheet title="新增項目" onClose={close}>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {[
+              { icon:"💰", label:"現金帳戶", sub:"錢包現金", cb:() => { setNAcc({...nAcc, type:"cash"}); setModal("addAcc"); } },
+              { icon:"🏦", label:"金融卡帳戶", sub:"銀行存款、活存", cb:() => { setNAcc({...nAcc, type:"debit"}); setModal("addAcc"); } },
+              { icon:"📊", label:"證券帳戶", sub:"股票投資帳戶", cb:() => { setNAcc({...nAcc, type:"investment"}); setModal("addAcc"); } },
+              { icon:"💳", label:"信用卡", sub:"記錄應付帳款", cb:() => { setNAcc({...nAcc, type:"credit"}); setModal("addAcc"); } },
+              { icon:"🛡️", label:"儲蓄保單", sub:"儲蓄險、投資型保單（追蹤解約金損益）", cb:() => { setNPL(PL0); setModal("addPolicy"); } },
+            ].map((item, i) => (
+              <button key={i} onClick={() => { close(); setTimeout(item.cb, 50); }}
+                style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", borderRadius:14, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", width:"100%" }}>
+                <div style={{ width:46, height:46, borderRadius:14, background:`${C.accent}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>{item.icon}</div>
+                <div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:2 }}>{item.label}</div>
+                  <div style={{ fontSize:12, color:C.muted }}>{item.sub}</div>
+                </div>
+                <span style={{ marginLeft:"auto", color:C.muted, fontSize:16 }}>›</span>
+              </button>
+            ))}
+          </div>
+        </Sheet>}
+
         {modal === "addAcc" && <Sheet title="新增帳戶" onClose={close}>
           <Inp label="帳戶名稱" placeholder="玉山銀行" value={nAcc.name} onChange={e => setNAcc(p => ({ ...p, name:e.target.value }))} />
           <Sl label="帳戶類型" value={nAcc.type} onChange={e => setNAcc(p => ({ ...p, type:e.target.value }))}>
@@ -2940,7 +3239,8 @@ export default function App() {
           const inst = extra.institutional || {};
           const hasInst = inst.foreign !== undefined || inst.trust !== undefined;
           const yahooUrl = `https://finance.yahoo.com/quote/${st.market==="TW"?st.ticker+".TW":st.ticker}/chart`;
-          const newsUrl = `https://news.google.com/search?q=${encodeURIComponent((st.name||st.ticker)+" 股票")}&hl=zh-TW`;
+          const newsQuery = [st.ticker, st.name].filter(Boolean).join(" ");
+          const newsUrl = `https://news.google.com/search?q=${encodeURIComponent(newsQuery+" 股票")}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
           return <Sheet title={`${st.ticker} ${st.name}`} onClose={close}>
 
             {/* 市價損益摘要 */}
@@ -2999,11 +3299,13 @@ export default function App() {
                 : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
             </Card>}
 
-            {/* 外部連結 */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-              <button onClick={() => window.open(yahooUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.accent}20`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>📊 技術線圖</button>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+              <button onClick={() => {
+                  const sym = st.market==="TW" ? `TWSE:${st.ticker}` : st.ticker;
+                  window.open(`https://www.tradingview.com/chart/?symbol=${sym}`, "_blank");
+                }} style={{ padding:"10px", borderRadius:12, background:`${C.accent}20`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>📊 技術線圖</button>
               <button onClick={() => window.open(newsUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>📰 個股新聞</button>
-            </div>
+              </div>
 
             {/* 持股編輯 */}
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
@@ -3017,7 +3319,24 @@ export default function App() {
             <Inp label="投資總成本（自動）" type="number" value={String(Math.round(st.totalCost||0))}
               onChange={e => { const cost=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualTotalCost:cost,manualAvgCost:s.totalSh>0?+(cost/s.totalSh).toFixed(2):s.manualAvgCost}:s)); }} />
 
-            {/* 交易紀錄 */}
+            {/* 停損提醒 */}
+            <div style={{ padding:12, borderRadius:12, background:`${C.danger}10`, border:`1px solid ${C.danger}33`, margin:"10px 0" }}>
+              <div style={{ fontSize:11, fontWeight:900, color:C.danger, marginBottom:8 }}>🔴 停損提醒</div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:13, color:C.textSub, flexShrink:0 }}>虧損超過</span>
+                <input type="number" min="1" max="100" placeholder="15"
+                  value={st.stopLossPct || ""}
+                  onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:+e.target.value||null} : s))}
+                  style={{...iSt, width:70, flex:"none"}} />
+                <span style={{ fontSize:13, color:C.textSub, flexShrink:0 }}>% 時顯示警示</span>
+                {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))}
+                  style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
+              </div>
+              {st.stopLossPct && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
+                停損線：均成本 {fmt(Math.round(st.avgCost||0))} × (1−{st.stopLossPct}%) ≈ {fmt(Math.round((st.avgCost||0)*(1-st.stopLossPct/100)))} /股
+                {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ 已達停損！</span>}
+              </div>}
+            </div>
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, margin:"12px 0 8px" }}>交易紀錄</div>
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
               {(st.trades||[]).length===0&&!st.manualShares&&<div style={{ fontSize:12, color:C.muted, padding:"8px 0" }}>尚無買賣記錄</div>}
