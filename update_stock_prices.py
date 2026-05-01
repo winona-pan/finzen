@@ -173,5 +173,38 @@ def main():
     real = [k for k in prices if not k.startswith("_") and not k.endswith(".TW")]
     print(f"\n✅ 完成！共更新 {len(real)} 檔股票")
 
+# ── 順便更新匯率 ──────────────────────────────────────────
+def fetch_rates():
+    """抓取匯率（對 TWD），存入 rates.json"""
+    TWD_CURS = ["USD","EUR","JPY","GBP","HKD","SGD","CNY","KRW","AUD","CAD","CHF","MYR","THB"]
+    to = ",".join(TWD_CURS)
+    apis = [
+        f"https://api.frankfurter.app/latest?from=TWD&to={to}",
+        f"https://open.er-api.com/v6/latest/TWD",
+    ]
+    for url in apis:
+        raw = req(url, timeout=10)
+        if not raw:
+            continue
+        try:
+            d = json.loads(raw)
+            r = d.get("rates") or d.get("conversion_rates")
+            if not r:
+                continue
+            rates = {"TWD": 1.0}
+            for cur in TWD_CURS:
+                if cur in r and r[cur]:
+                    rates[cur] = round(1 / r[cur], 6)  # 換算成 1外幣=N TWD
+            rates["_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            with open("rates.json", "w") as f:
+                json.dump(rates, f, indent=2)
+            print(f"  ✅ 匯率更新完成（{len(rates)-1} 種貨幣）")
+            return
+        except Exception as e:
+            print(f"  匯率解析失敗: {e}")
+    print("  ❌ 匯率更新失敗，保留上次資料")
+
 if __name__ == "__main__":
     main()
+    print("\n💱 更新匯率...")
+    fetch_rates()
