@@ -880,8 +880,8 @@ export default function App() {
     const ownAmt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
     return s + ownAmt;
   }, 0), [moTxns]);
-  const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
-  const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
+  const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
+  const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const alertAmt = useMemo(() => moTxns.filter(t => t.type === "expense" && ["食物","交通","家居"].includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
   const alertR = moInc > 0 ? alertAmt / moInc : 0;
   const passiveMo = useMemo(() => moTxns.filter(t => t.type === "income" && PASSIVE.includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
@@ -902,8 +902,11 @@ export default function App() {
   }, [moTxns, sq]);
 
   const hTxns = useMemo(() => txns.filter(t => t.date >= healthRange.s && t.date <= healthRange.e), [txns, healthRange]);
-  const hInc = useMemo(() => hTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amt, 0), [hTxns]);
-  const hExp = useMemo(() => hTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + t.amt, 0), [hTxns]);
+  const hInc = useMemo(() => hTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [hTxns]);
+  const hExp = useMemo(() => hTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => {
+    const ownAmt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
+    return s + ownAmt;
+  }, 0), [hTxns]);
 
   const isSingleMo = useMemo(() => { const s = new Date(chartRange.s), e = new Date(chartRange.e); return s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth(); }, [chartRange]);
   const chartData = useMemo(() => {
