@@ -1233,7 +1233,7 @@ export default function App() {
   const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
   const [nG, setNG] = useState(G0);
   const addGoal = () => { if (!nG.name || !nG.target) return; upd("goals", p => [...(p||[]), { ...nG, id:"g"+Date.now(), target:+nG.target }]); setNG(G0); close(); };
-  const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", emoji:"🛡️" };
+  const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
   const [selPolicy, setSelPolicy] = useState(null);
   const [premAmt, setPremAmt] = useState("");
@@ -1672,7 +1672,10 @@ export default function App() {
                   {!collapsed["policies"] && <Card style={{ overflow:"hidden" }}>
                     {(policies||[]).map((pl, i) => {
                       const totalPaid = pl.totalPaid || 0;
-                      const pnl = (pl.surrenderVal||0) - totalPaid;
+                      const surrenderTWD = toTWD(pl.surrenderVal||0, pl.cur||"TWD", rates);
+                      const totalPaidTWD = toTWD(totalPaid, pl.cur||"TWD", rates);
+                      const pnl = surrenderTWD - totalPaidTWD;
+                      const isForeign = pl.cur && pl.cur !== "TWD";
                       return <div key={pl.id} style={{ padding:"12px 16px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -1685,8 +1688,11 @@ export default function App() {
                           </div>
                           <div style={{ textAlign:"right" }}>
                             <div style={{ fontSize:11, color:C.textSub }}>解約金</div>
-                            <div style={{ fontWeight:900, fontSize:14, color:C.accentL }}>{fmt(pl.surrenderVal||0)}</div>
-                            <div style={{ fontSize:11, color:C.muted }}>已繳 {fmt(totalPaid)}</div>
+                            <div style={{ fontWeight:900, fontSize:14, color:C.accentL }}>
+                              {isForeign ? `${pl.cur} ${(pl.surrenderVal||0).toLocaleString()}` : fmt(pl.surrenderVal||0)}
+                            </div>
+                            {isForeign && <div style={{ fontSize:11, color:C.muted }}>≈ {fmt(surrenderTWD)}</div>}
+                            <div style={{ fontSize:11, color:C.muted }}>已繳 {isForeign ? `${pl.cur} ${totalPaid.toLocaleString()}` : fmt(totalPaid)}</div>
                             <div style={{ fontSize:12, fontWeight:700, color:pnlColor(pnl,C) }}>{pnl>=0?"▲ +":"▼ "}{fmt(Math.abs(pnl))}</div>
                           </div>
                         </div>
@@ -2841,8 +2847,11 @@ export default function App() {
             <div style={{ flex:1 }}><Inp label="保單名稱" placeholder="例：南山利率變動型年金" value={nPL.name} onChange={e => setNPL(p=>({...p,name:e.target.value}))} /></div>
           </div>
           <Inp label="保險公司" placeholder="例：南山人壽" value={nPL.insurer} onChange={e => setNPL(p=>({...p,insurer:e.target.value}))} />
-          <CalcInp label="目前解約金（現值，每年更新）" value={nPL.surrenderVal} onChange={v => setNPL(p=>({...p,surrenderVal:v}))} />
-          <CalcInp label="已繳總保費（到目前為止）" value={nPL.totalPaid||""} onChange={v => setNPL(p=>({...p,totalPaid:+v}))} />
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8 }}>
+            <CalcInp label="目前解約金（現值，每年更新）" value={nPL.surrenderVal} onChange={v => setNPL(p=>({...p,surrenderVal:v}))} />
+            <Fld label="幣別"><select value={nPL.cur||"TWD"} onChange={e=>setNPL(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
+          </div>
+          <CalcInp label="已繳總保費（到目前為止，同幣別）" value={nPL.totalPaid||""} onChange={v => setNPL(p=>({...p,totalPaid:+v}))} />
           <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 儲蓄險每年保費可能不同，請直接填截至今日的累計總額</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
             <Fld label="起保日期"><input type="date" value={nPL.startDate} onChange={e=>setNPL(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
@@ -2858,9 +2867,9 @@ export default function App() {
         {modal === "payPremium" && selPolicy && (() => {
           return <Sheet title={`繳保費 — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
-              <div style={{ fontSize:13, color:C.textSub }}>已繳總額：<strong style={{ color:C.text }}>{fmt(selPolicy.totalPaid||0)}</strong></div>
+              <div style={{ fontSize:13, color:C.textSub }}>幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong>　已繳總額：<strong style={{ color:C.text }}>{selPolicy.cur&&selPolicy.cur!=="TWD"?`${selPolicy.cur} `:"NT$"}{(selPolicy.totalPaid||0).toLocaleString()}</strong></div>
             </div>
-            <CalcInp label="本次繳費金額" value={premAmt} onChange={v => setPremAmt(v)} />
+            <CalcInp label={`本次繳費金額（${selPolicy.cur||"TWD"}）`} value={premAmt} onChange={v => setPremAmt(v)} />
             <Sl label="從哪個帳戶扣款" value={premAcc} onChange={e => setPremAcc(e.target.value)}>
               <option value="">— 選擇帳戶 —</option>
               {accs.filter(a=>a.type!=="credit"&&a.type!=="investment").map(a=><option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name} ({fmt(a.bal,a.cur)})</option>)}
@@ -2888,21 +2897,25 @@ export default function App() {
 
         {modal === "surrenderPolicy" && selPolicy && (() => {
           const totalPaid = selPolicy.totalPaid || 0;
-          const pnl = +surrenderAmt - totalPaid;
+          const isForeign = selPolicy.cur && selPolicy.cur !== "TWD";
+          const surrenderTWD = toTWD(+surrenderAmt||0, selPolicy.cur||"TWD", rates);
+          const totalPaidTWD = toTWD(totalPaid, selPolicy.cur||"TWD", rates);
+          const pnl = surrenderTWD - totalPaidTWD;
           return <Sheet title={`解約 — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
-              <div style={{ fontSize:13, color:C.textSub }}>已繳總保費：<strong style={{ color:C.text }}>{fmt(totalPaid)}</strong></div>
+              <div style={{ fontSize:13, color:C.textSub }}>
+                幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong>　
+                已繳總保費：<strong style={{ color:C.text }}>{isForeign?`${selPolicy.cur} `:""}{totalPaid.toLocaleString()}</strong>
+                {isForeign && <span style={{ color:C.muted }}> ≈ {fmt(totalPaidTWD)}</span>}
+              </div>
             </div>
-            <CalcInp label="實際領回金額" value={surrenderAmt} onChange={v => setSurrenderAmt(v)} />
+            <CalcInp label={`實際領回金額（${selPolicy.cur||"TWD"}）`} value={surrenderAmt} onChange={v => setSurrenderAmt(v)} />
             {surrenderAmt && <div style={{ padding:"10px 12px", borderRadius:10, background:`${pnlColor(pnl,C)}15`, marginBottom:8 }}>
               <div style={{ fontSize:13, fontWeight:900, color:pnlColor(pnl,C) }}>
                 {pnl >= 0 ? "▲ 獲利" : "▼ 虧損"} {fmt(Math.abs(pnl))}
               </div>
               <div style={{ fontSize:11, color:C.muted }}>
-                領回 {fmt(+surrenderAmt)} − 已繳 {fmt(totalPaid)}
-              </div>
-              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>
-                總覽將記錄：已繳保費收入 {fmt(totalPaid)} ＋ {pnl>=0?"獲利":"虧損"} {fmt(Math.abs(pnl))}
+                領回 {isForeign?`${selPolicy.cur} `:""}{(+surrenderAmt).toLocaleString()}{isForeign?` ≈ ${fmt(surrenderTWD)}`:""} − 已繳 {fmt(totalPaidTWD)}
               </div>
             </div>}
             <Sl label="款項存入哪個帳戶" value={surrenderAcc} onChange={e => setSurrenderAcc(e.target.value)}>
@@ -2914,18 +2927,18 @@ export default function App() {
                 const amt = +surrenderAmt;
                 if (!amt) return;
                 const now = Date.now();
-                // 帳戶餘額加上領回金額
-                if (surrenderAcc) upd("accs", p=>p.map(a=>a.name===surrenderAcc ? {...a, bal:a.bal+amt} : a));
-                // 筆1：已繳保費「本金回來」（transfer，不算收入）
+                // 帳戶餘額加上領回金額（TWD）
+                if (surrenderAcc) upd("accs", p=>p.map(a=>a.name===surrenderAcc ? {...a, bal:a.bal+surrenderTWD} : a));
+                // 筆1：已繳保費本金回收（transfer）
                 // 筆2：損益（正=收入，負=支出）
                 upd("txns", p=>[...p,
-                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaid,
-                    desc:`${selPolicy.name} 解約 — 本金回收`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
+                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaidTWD,
+                    desc:`${selPolicy.name} 解約 — 本金回收${isForeign?` (${selPolicy.cur})`:""}`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
                   ...(pnl !== 0 ? [{ id:now+1,
                     type: pnl > 0 ? "income" : "expense",
                     cat: pnl > 0 ? "投資收益" : "其他",
                     amt: Math.abs(pnl),
-                    desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}`,
+                    desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}${isForeign?` (${selPolicy.cur}換算)`:""}`,
                     acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
                 ]);
                 // 刪除保單
@@ -2943,8 +2956,11 @@ export default function App() {
             <div style={{ flex:1 }}><Inp label="保單名稱" value={selPolicy.name} onChange={e=>setSelPolicy(p=>({...p,name:e.target.value}))} /></div>
           </div>
           <Inp label="保險公司" value={selPolicy.insurer||""} onChange={e=>setSelPolicy(p=>({...p,insurer:e.target.value}))} />
-          <CalcInp label="目前解約金（現值）" value={String(selPolicy.surrenderVal||"")} onChange={v=>setSelPolicy(p=>({...p,surrenderVal:+v}))} />
-          <CalcInp label="已繳總保費（累計）" value={String(selPolicy.totalPaid||"")} onChange={v=>setSelPolicy(p=>({...p,totalPaid:+v}))} />
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8 }}>
+            <CalcInp label="目前解約金（現值）" value={String(selPolicy.surrenderVal||"")} onChange={v=>setSelPolicy(p=>({...p,surrenderVal:+v}))} />
+            <Fld label="幣別"><select value={selPolicy.cur||"TWD"} onChange={e=>setSelPolicy(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
+          </div>
+          <CalcInp label="已繳總保費（累計，同幣別）" value={String(selPolicy.totalPaid||"")} onChange={v=>setSelPolicy(p=>({...p,totalPaid:+v}))} />
           <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 每年收到對帳單後更新解約金和已繳總額</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
             <Fld label="起保日期"><input type="date" value={selPolicy.startDate||TODAY} onChange={e=>setSelPolicy(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
