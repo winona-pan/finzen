@@ -636,9 +636,9 @@ export default function App() {
   const [nT, setNT] = useState(T0);
   const D0 = { type:"receivable",person:"",amt:"",desc:"",date:TODAY,note:"",installTotal:0,installAmt:"",installPaid:0,installPaidAmt:0 };
   const [nD, setND] = useState(D0);
-  const S0 = { name:"",amt:"",acc:"",day:"1",cat:"訂閱",period:"month",periodN:"1" };
+  const S0 = { name:"",amt:"",acc:"",day:"1",weekday:"1",freq:"month",cat:"訂閱",period:"month",periodN:"1" };
   const [nS, setNS] = useState(S0);
-  const B0 = { name:"",amt:"",acc:"",day:"1",cat:"家居",active:false,period:"month",periodN:"1" };
+  const B0 = { name:"",amt:"",acc:"",day:"1",weekday:"1",freq:"month",cat:"家居",active:false,period:"month",periodN:"1" };
   const [nB, setNB] = useState(B0);
   const NA0 = { name:"",type:"debit",cur:"TWD",limit:"100000" };
   const [nAcc, setNAcc] = useState(NA0);
@@ -1544,7 +1544,9 @@ export default function App() {
                     {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => <SwipeRow key={s.id} onDelete={() => upd("subs", p => p.filter(x => x.id !== s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
-                        <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>{s.period==="year"?"每年":s.period==="week"?`每${s.periodN||1}週`:`每${s.periodN||1}個月`} {s.day}日 · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}</div></div>
+                        <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
+                          {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
+                        </div></div>
                         <span style={{ fontWeight:900, fontSize:14, color:C.expense, marginRight:8 }}>{fmt(s.amt)}</span>
                         <button onClick={e => { e.stopPropagation(); upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
                       </div>
@@ -1569,7 +1571,9 @@ export default function App() {
                     {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => upd("bills", p => p.filter(x => x.id !== b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
-                        <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>{b.period==="year"?"每年":b.period==="week"?`每${b.periodN||1}週`:`每${b.periodN||1}個月`} {b.day}日{b.active && <span style={{ color:C.warn }}> · 計算中</span>}</div></div>
+                        <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>
+                          {b.freq==="week" ? `每週${"日一二三四五六"[(+b.weekday)||1]}` : b.freq==="year" ? `每年${b.yearMonth||1}月${b.day}日` : `每月${b.day}日`}{b.active && <span style={{ color:C.warn }}> · 計算中</span>}
+                        </div></div>
                         <span style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted, marginRight:8 }}>{fmt(b.amt)}</span>
                         <button onClick={e => { e.stopPropagation(); upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
                       </div>
@@ -2412,8 +2416,36 @@ export default function App() {
           <Inp label="名稱" placeholder="Netflix" value={nS.name} onChange={e => setNS(p => ({ ...p, name:e.target.value }))} />
           <CalcInp label="金額" value={nS.amt} onChange={v => setNS(p => ({ ...p, amt:v }))} />
           <Sl label="扣款帳戶" value={nS.acc} onChange={e => setNS(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <PeriodSel period={nS.period||"month"} periodN={nS.periodN||"1"} onChange={v => setNS(p => ({ ...p, ...v }))} />
-          <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />
+          {/* 頻率選擇 */}
+          <Fld label="扣款頻率">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+                <button key={o.v} onClick={() => setNS(p=>({...p,freq:o.v}))}
+                  style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
+                    background:nS.freq===o.v?`${C.accent}28`:C.card, color:nS.freq===o.v?C.accentL:C.muted,
+                    border:`1px solid ${nS.freq===o.v?C.accent:C.border}` }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
+          {nS.freq==="week"
+            ? <Fld label="星期幾">
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                  {["日","一","二","三","四","五","六"].map((d,i) => (
+                    <button key={i} onClick={() => setNS(p=>({...p,weekday:String(i)}))}
+                      style={{ padding:"8px 0", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer",
+                        background:+nS.weekday===i?`${C.accent}28`:C.card, color:+nS.weekday===i?C.accentL:C.muted,
+                        border:`1px solid ${+nS.weekday===i?C.accent:C.border}` }}>{d}</button>
+                  ))}
+                </div>
+              </Fld>
+            : nS.freq==="year"
+            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                <Fld label="月份"><select value={nS.yearMonth||"1"} onChange={e => setNS(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
+                </select></Fld>
+                <Inp label="日期（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p=>({...p,day:e.target.value}))} />
+              </div>
+            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={nS.cat} onChange={v => setNS(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addSub}>新增</Btn>
@@ -2425,8 +2457,35 @@ export default function App() {
           <Inp label="名稱" value={selSub.name} onChange={e => setSelSub(p => ({ ...p, name:e.target.value }))} />
           <CalcInp label="金額" value={String(selSub.amt)} onChange={v => setSelSub(p => ({ ...p, amt:+v }))} />
           <Sl label="扣款帳戶" value={selSub.acc} onChange={e => setSelSub(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <PeriodSel period={selSub.period||"month"} periodN={selSub.periodN||"1"} onChange={v => setSelSub(p => ({ ...p, ...v }))} />
-          <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />
+          <Fld label="扣款頻率">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+                <button key={o.v} onClick={() => setSelSub(p=>({...p,freq:o.v}))}
+                  style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
+                    background:selSub.freq===o.v?`${C.accent}28`:C.card, color:selSub.freq===o.v?C.accentL:C.muted,
+                    border:`1px solid ${selSub.freq===o.v?C.accent:C.border}` }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
+          {selSub.freq==="week"
+            ? <Fld label="星期幾">
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                  {["日","一","二","三","四","五","六"].map((d,i) => (
+                    <button key={i} onClick={() => setSelSub(p=>({...p,weekday:String(i)}))}
+                      style={{ padding:"8px 0", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer",
+                        background:+selSub.weekday===i?`${C.accent}28`:C.card, color:+selSub.weekday===i?C.accentL:C.muted,
+                        border:`1px solid ${+selSub.weekday===i?C.accent:C.border}` }}>{d}</button>
+                  ))}
+                </div>
+              </Fld>
+            : selSub.freq==="year"
+            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                <Fld label="月份"><select value={selSub.yearMonth||"1"} onChange={e => setSelSub(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
+                </select></Fld>
+                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p=>({...p,day:+e.target.value}))} />
+              </div>
+            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />}
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => saveSub(selSub)}>儲存</Btn>
@@ -2487,8 +2546,35 @@ export default function App() {
           <Inp label="名稱" placeholder="電費、水費、房租…" value={nB.name} onChange={e => setNB(p => ({ ...p, name:e.target.value }))} />
           <CalcInp label="金額" value={nB.amt} onChange={v => setNB(p => ({ ...p, amt:v }))} />
           <Sl label="扣款帳戶" value={nB.acc} onChange={e => setNB(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <PeriodSel period={nB.period||"month"} periodN={nB.periodN||"1"} onChange={v => setNB(p => ({ ...p, ...v }))} />
-          <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />
+          <Fld label="扣款頻率">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+                <button key={o.v} onClick={() => setNB(p=>({...p,freq:o.v}))}
+                  style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
+                    background:nB.freq===o.v?`${C.accent}28`:C.card, color:nB.freq===o.v?C.accentL:C.muted,
+                    border:`1px solid ${nB.freq===o.v?C.accent:C.border}` }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
+          {nB.freq==="week"
+            ? <Fld label="星期幾">
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                  {["日","一","二","三","四","五","六"].map((d,i) => (
+                    <button key={i} onClick={() => setNB(p=>({...p,weekday:String(i)}))}
+                      style={{ padding:"8px 0", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer",
+                        background:+nB.weekday===i?`${C.accent}28`:C.card, color:+nB.weekday===i?C.accentL:C.muted,
+                        border:`1px solid ${+nB.weekday===i?C.accent:C.border}` }}>{d}</button>
+                  ))}
+                </div>
+              </Fld>
+            : nB.freq==="year"
+            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                <Fld label="月份"><select value={nB.yearMonth||"1"} onChange={e => setNB(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
+                </select></Fld>
+                <Inp label="日期（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p=>({...p,day:e.target.value}))} />
+              </div>
+            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={nB.cat} onChange={v => setNB(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addBill}>新增</Btn>
@@ -2500,8 +2586,42 @@ export default function App() {
           <Inp label="名稱" value={selBill.name} onChange={e => setSelBill(p => ({ ...p, name:e.target.value }))} />
           <CalcInp label="金額" value={String(selBill.amt)} onChange={v => setSelBill(p => ({ ...p, amt:+v }))} />
           <Sl label="扣款帳戶" value={selBill.acc} onChange={e => setSelBill(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <PeriodSel period={selBill.period||"month"} periodN={selBill.periodN||"1"} onChange={v => setSelBill(p => ({ ...p, ...v }))} />
-          <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:+e.target.value }))} />
+          <Fld label="扣款頻率">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+                <button key={o.v} onClick={() => setSelBill(p=>({...p,freq:o.v}))}
+                  style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
+                    background:selBill.freq===o.v?`${C.accent}28`:C.card, color:selBill.freq===o.v?C.accentL:C.muted,
+                    border:`1px solid ${selBill.freq===o.v?C.accent:C.border}` }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
+          {selBill.freq==="week"
+            ? <Fld label="星期幾">
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                  {["日","一","二","三","四","五","六"].map((d,i) => (
+                    <button key={i} onClick={() => setSelBill(p=>({...p,weekday:String(i)}))}
+                      style={{ padding:"8px 0", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer",
+                        background:+selBill.weekday===i?`${C.accent}28`:C.card, color:+selBill.weekday===i?C.accentL:C.muted,
+                        border:`1px solid ${+selBill.weekday===i?C.accent:C.border}` }}>{d}</button>
+                  ))}
+                </div>
+              </Fld>
+            : selBill.freq==="year"
+            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                <Fld label="月份"><select value={selBill.yearMonth||"1"} onChange={e => setSelBill(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
+                </select></Fld>
+                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
+              </div>
+            : selBill.freq==="year"
+            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                <Fld label="月份"><select value={selBill.yearMonth||"1"} onChange={e => setSelBill(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
+                </select></Fld>
+                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
+              </div>
+            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
             <Btn style={{ flex:1 }} onClick={() => saveBill(selBill)}>儲存</Btn>
