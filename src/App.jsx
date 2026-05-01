@@ -610,6 +610,7 @@ export default function App() {
   const [sq, setSq] = useState(""), [showSq, setShowSq] = useState(false);
   const [chartView, setChartView] = useState("expense");
   const [newBal, setNewBal] = useState("");
+  const [adjDesc, setAdjDesc] = useState("");
   const [newCatType, setNewCatType] = useState("expense");
   const [newCatName, setNewCatName] = useState("");
   const [newCatEmoji, setNewCatEmoji] = useState("📦");
@@ -885,6 +886,11 @@ export default function App() {
   const alertR = moInc > 0 ? alertAmt / moInc : 0;
   const passiveMo = useMemo(() => moTxns.filter(t => t.type === "income" && PASSIVE.includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
   const descHistory = useMemo(() => txns.map(t => t.desc).filter(Boolean), [txns]);
+  const descHistoryByCat = useMemo(() => {
+    const m = {};
+    txns.forEach(t => { if (t.cat && t.desc) { m[t.cat] = m[t.cat] || []; if (!m[t.cat].includes(t.desc)) m[t.cat].push(t.desc); } });
+    return m;
+  }, [txns]);
   const tagsHistory = useMemo(() => txns.map(t => t.tags).filter(Boolean), [txns]);
 
   const grpTxns = useMemo(() => {
@@ -1039,10 +1045,9 @@ export default function App() {
   };
   const saveTxn = t => { upd("txns", p => p.map(x => x.id === t.id ? t : x)); close(); };
 
-  const adjBal = (acc, newBalStr, isFirst) => {
+  const adjBal = (acc, newBalStr, isFirst, adjDesc="") => {
     if (!acc || newBalStr === "") return;
     if (acc.type === "credit") {
-      // 信用卡：調整的是 payable（應付金額），永遠是正數
       const nv = Math.abs(parseFloat(newBalStr));
       upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable:nv } : a));
       return;
@@ -1050,7 +1055,7 @@ export default function App() {
     const nv = parseFloat(newBalStr), df = nv - acc.bal;
     if (df === 0) return;
     upd("accs", p => p.map(a => a.id === acc.id ? { ...a, bal:nv } : a));
-    if (!isFirst) upd("txns", p => [...p, { id:Date.now(), type:"adjust", cat:"帳戶調整", amt:Math.abs(df), adjDiff:df, desc:`餘額調整`, acc:acc.name, date:TODAY, tags:"" }]);
+    if (!isFirst) upd("txns", p => [...p, { id:Date.now(), type:"adjust", cat:"帳戶調整", amt:Math.abs(df), adjDiff:df, desc:adjDesc || (df > 0 ? "餘額增加" : "餘額減少"), acc:acc.name, date:TODAY, tags:"" }]);
   };
 
   const payCredit = () => {
@@ -1279,9 +1284,12 @@ export default function App() {
                               <div style={{ fontWeight:900, fontSize:14,
                                 color: t.type === "income" ? C.income
                                      : t.type === "transfer" ? C.accentL
-                                     : t.type === "adjust" ? C.textSub
+                                     : t.type === "adjust" ? (t.adjDiff > 0 ? C.income : C.expense)
                                      : C.expense }}>
-                                {t.type === "income" ? "+" : t.type === "transfer" ? "↔" : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "") : "-"}{fmt(t.amt)}
+                                {t.type === "income" ? "+"
+                                 : t.type === "transfer" ? "↔"
+                                 : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "-")
+                                 : "-"}{fmt(t.amt)}
                               </div>
                               {t.type === "transfer" && t.toAcc && <div style={{ fontSize:11, color:C.muted }}>{t.acc} → {t.toAcc}</div>}
                               {t.proxyAmt > 0 && <div style={{ fontSize:11, color:C.warn }}>代墊 {fmt(t.proxyAmt)}</div>}
@@ -2070,7 +2078,7 @@ export default function App() {
             <button onClick={() => setModal("catSet")} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>➕</span><span style={{ fontSize:11, color:C.accentL }}>新增</span></button>
           </div></Fld>
           <CalcInp label="金額" value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v }))} />
-          <AutoInput label="說明" placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistory} />
+          <AutoInput label="說明" placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
           <AutoInput label="標籤（選填）" placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
           <Sl label="帳戶" value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇帳戶 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
           <Fld label={`日期${nT.date !== TODAY ? " 📅 補記 " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
@@ -2147,8 +2155,8 @@ export default function App() {
             <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
               {accTxns.map((t, i) => {
                 const isFrom = t.acc === selAcc.name;
-                const sign = t.type === "income" ? "+" : t.type === "transfer" ? (isFrom ? "↔出" : "↔入") : "-";
-                const col = t.type === "income" ? C.income : t.type === "transfer" ? C.accentL : C.expense;
+                const sign = t.type === "income" ? "+" : t.type === "transfer" ? (isFrom ? "↔出" : "↔入") : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "-") : "-";
+                const col = t.type === "income" ? C.income : t.type === "transfer" ? C.accentL : t.type === "adjust" ? (t.adjDiff > 0 ? C.income : C.expense) : C.expense;
                 return <div key={t.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}` }}>
                   <div style={{ width:36, height:36, borderRadius:10, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{ceMap[t.cat]||"📦"}</div>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -2184,6 +2192,7 @@ export default function App() {
               </div>
             </div>
             <Inp label="輸入新餘額" type="number" value={newBal} onChange={e => setNewBal(e.target.value)} placeholder={String(selAcc.bal)} />
+            {newBal && +newBal !== selAcc.bal && <Inp label="調整說明（選填）" placeholder="例：現金盤點差異" value={adjDesc} onChange={e => setAdjDesc(e.target.value)} />}
             {newBal && +newBal !== selAcc.bal && <div style={{ marginBottom:12, padding:12, borderRadius:10, fontSize:14, fontWeight:700, background:C.card, border:`1px solid ${C.borderL}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}><span style={{ color:C.textSub }}>調整金額</span><span style={{ color:+newBal > selAcc.bal ? C.income : C.expense, fontWeight:900 }}>{+newBal > selAcc.bal ? "+" : ""}{fmt(+newBal - selAcc.bal, selAcc.cur)}</span></div>
               <div style={{ fontSize:12, color:isFirst ? C.teal : C.muted }}>{isFirst ? "✅ 初次設定，不計入收支" : "📝 調整記錄只用於對帳，不計入收支"}</div>
@@ -2191,8 +2200,8 @@ export default function App() {
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
                 upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, type:selAcc.type, icon:selAcc.icon } : a));
-                if (newBal && +newBal !== selAcc.bal) adjBal(selAcc, newBal, isFirst);
-                setNewBal(""); close();
+                if (newBal && +newBal !== selAcc.bal) adjBal(selAcc, newBal, isFirst, adjDesc);
+                setNewBal(""); setAdjDesc(""); close();
               }}>{isFirst && newBal && +newBal !== selAcc.bal ? "設為初始金額" : "儲存"}</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
             </div>
