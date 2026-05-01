@@ -1970,19 +1970,22 @@ export default function App() {
               <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
 
               {/* Theme */}
-              <Card style={{ padding:20, marginBottom:16 }}>
+              <Card style={{ padding:14, marginBottom:12 }}>
                 <SH title="外觀主題" />
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   {Object.entries(THEMES).map(([k, th]) => (
                     <button key={k} onClick={() => changeTheme(k)}
-                      style={{ padding:"14px 12px", borderRadius:14, border:`2px solid ${theme===k ? th.accent : C.border}`,
-                        background: theme===k ? `${th.accent}20` : C.card, cursor:"pointer", textAlign:"left" }}>
-                      <div style={{ fontSize:24, marginBottom:6 }}>{th.icon}</div>
-                      <div style={{ fontWeight:900, fontSize:14, color: theme===k ? th.accent : C.text }}>{th.name}</div>
-                      <div style={{ display:"flex", gap:4, marginTop:6 }}>
-                        {[th.bg, th.surface, th.accent, th.income].map((col,i) => (
-                          <div key={i} style={{ width:14, height:14, borderRadius:4, background:col, border:"1px solid rgba(255,255,255,0.1)" }} />
-                        ))}
+                      style={{ padding:"10px 12px", borderRadius:12, border:`2px solid ${theme===k ? th.accent : C.border}`,
+                        background: theme===k ? `${th.accent}20` : C.card, cursor:"pointer",
+                        display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
+                      <span style={{ fontSize:20 }}>{th.icon}</span>
+                      <div>
+                        <div style={{ fontWeight:900, fontSize:13, color: theme===k ? th.accent : C.text }}>{th.name}</div>
+                        <div style={{ display:"flex", gap:3, marginTop:3 }}>
+                          {[th.bg, th.accent, th.income, th.expense].map((col,i) => (
+                            <div key={i} style={{ width:10, height:10, borderRadius:3, background:col, border:"1px solid rgba(128,128,128,0.2)" }} />
+                          ))}
+                        </div>
                       </div>
                     </button>
                   ))}
