@@ -1,18 +1,20 @@
-name: 自動更新股價
+name: 自動更新股價與匯率
 
 on:
   schedule:
-    # 台股：週一至週五 09:00-14:00 台灣時間（UTC+8 = UTC 01:00-06:00）每30分鐘
+    # 台股交易時間：週一至週五 09:00-14:00 台灣時間（UTC 01:00-06:00）每30分鐘
     - cron: '0,30 1,2,3,4,5 * * 1-5'
-    # 美股：週一至週五 22:00-05:00 台灣時間（UTC 14:00-21:00）每30分鐘
+    # 美股交易時間：週一至週五 22:00-05:00 台灣時間（UTC 14:00-21:00）每30分鐘
     - cron: '0,30 14,15,16,17,18,19,20 * * 1-5'
+    # 匯率：每天一次（台灣時間早上8點 = UTC 00:00）
+    - cron: '0 0 * * *'
   workflow_dispatch:  # 允許手動觸發
 
 permissions:
   contents: write
 
 jobs:
-  update-prices:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,13 +25,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 執行股價抓取腳本
+      - name: 執行更新腳本（股價 + 匯率）
         run: python update_stock_prices.py
 
-      - name: 推送更新的股價 JSON
+      - name: 推送更新
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add stock_prices.json
-          git diff --staged --quiet || git commit -m "🤖 自動更新股價 $(date +'%Y-%m-%d %H:%M')"
+          git add stock_prices.json rates.json
+          git diff --staged --quiet || git commit -m "🤖 自動更新股價與匯率 $(date +'%Y-%m-%d %H:%M')"
           git push
