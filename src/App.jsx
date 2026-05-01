@@ -1001,30 +1001,58 @@ export default function App() {
     if (!nT.amt) return;
     const id = Date.now();
     const validProxies = nT.proxy ? nT.proxyList.filter(p => p.person && +p.amt > 0) : [];
-    const t = { ...nT, id, amt:+nT.amt, proxyAmt:validProxies.reduce((s, p) => s + +p.amt, 0), proxyFor:validProxies.map(p => p.person).join("、"), proxyList:validProxies };
-    upd("txns", p => [...p, t]);
+    const totalProxyAmt = validProxies.reduce((s, p) => s + +p.amt, 0);
+    const ownAmt = +nT.amt - totalProxyAmt; // 自己那份
 
-    // 更新帳戶餘額
-    const acc = accs.find(a => a.name === t.acc);
-    if (acc) {
-      if (t.type === "income") {
-        // 收入：帳戶餘額增加
-        upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
-      } else if (t.type === "expense") {
+    if (validProxies.length > 0) {
+      // ── 有代墊：拆成兩筆 ──
+      // 筆1：自己的支出（只算自己那份）
+      const ownTxn = { ...nT, id, amt:ownAmt, proxyAmt:0, proxyFor:"", proxyList:[], desc:nT.desc || nT.cat };
+      // 筆2：代墊轉帳記錄（不算支出，只是說明錢出去了在等人還）
+      const proxyTxn = {
+        ...nT, id:id+1, type:"transfer", cat:"往來帳",
+        amt:totalProxyAmt, proxyAmt:totalProxyAmt,
+        proxyFor:validProxies.map(p => p.person).join("、"),
+        proxyList:validProxies,
+        desc:`代墊：${nT.desc || nT.cat}（${validProxies.map(p => `${p.person} ${fmt(+p.amt)}`).join("、")}）`,
+        tags:"#代墊",
+      };
+      upd("txns", p => [...p, ownTxn, proxyTxn]);
+
+      // 帳戶餘額：扣全額（自己 + 代墊都是真實付出去）
+      const acc = accs.find(a => a.name === nT.acc);
+      if (acc) {
         if (acc.type === "credit") {
-          // 信用卡：增加應付金額，不動現金餘額
-          upd("accs", p => p.map(a => a.id===acc.id ? {...a, payable:(a.payable||0)+t.amt} : a));
+          upd("accs", p => p.map(a => a.id===acc.id ? {...a, payable:(a.payable||0)+(+nT.amt)} : a));
         } else {
-          // 現金/銀行：帳戶餘額減少
-          upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+          upd("accs", p => p.map(a => a.name===nT.acc ? {...a, bal:a.bal-(+nT.amt)} : a));
+        }
+      }
+      // 往來帳建立應收（每個代墊對象）
+      validProxies.forEach(pr => {
+        upd("debts", p => [...p, { id:"d"+Date.now()+Math.random(), type:"receivable", person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc||nT.cat}`, date:nT.date, settled:false, srcTxnId:id }]);
+      });
+    } else {
+      // ── 無代墊：原本邏輯 ──
+      const t = { ...nT, id, amt:+nT.amt, proxyAmt:0, proxyFor:"", proxyList:[] };
+      upd("txns", p => [...p, t]);
+      const acc = accs.find(a => a.name === t.acc);
+      if (acc) {
+        if (t.type === "income") {
+          upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
+        } else if (t.type === "expense") {
+          if (acc.type === "credit") {
+            upd("accs", p => p.map(a => a.id===acc.id ? {...a, payable:(a.payable||0)+t.amt} : a));
+          } else {
+            upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+          }
         }
       }
     }
 
-    validProxies.forEach(pr => { upd("debts", p => [...p, { id:"d" + Date.now() + Math.random(), type:"receivable", person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc || nT.cat}`, date:nT.date, settled:false, note:"自動產生", srcTxnId:id }]); });
-    if (nT.deferred && nT.deferMoAmt && t.type === "income") {
-      upd("txns", p => p.map(x => x.id === id ? { ...x, type:"transfer", cat:"帳戶調整", desc:`待認列收入：${nT.desc || nT.cat}（共 ${fmt(t.amt)}）` } : x));
-      upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, cat:nT.cat, totalAmt:t.amt, recognized:0, date:nT.date, acc:nT.acc }]);
+    if (nT.deferred && nT.deferMoAmt && nT.type === "income") {
+      upd("txns", p => p.map(x => x.id === id ? { ...x, type:"transfer", cat:"帳戶調整", desc:`待認列收入：${nT.desc || nT.cat}（共 ${fmt(+nT.amt)}）` } : x));
+      upd("pools", p => [...p, { id:"p"+id, desc:nT.desc||nT.cat, cat:nT.cat, totalAmt:+nT.amt, recognized:0, date:nT.date, acc:nT.acc }]);
     }
     setNT(T0); close();
   };
@@ -1032,15 +1060,16 @@ export default function App() {
     const t = txns.find(x => x.id === id);
     if (t) {
       const acc = accs.find(a => a.name === t.acc);
-      if (t.type === "transfer") {
+      if (t.type === "transfer" && t.tags === "#代墊") {
+        // 代墊轉帳筆：還原帳戶（加回代墊金額）
+        if (acc?.type === "credit") upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:Math.max(0,(a.payable||0)-t.amt)} : a));
+        else if (t.acc) upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
+      } else if (t.type === "transfer") {
         if (t.acc) upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
         if (t.toAcc) upd("accs", p => p.map(a => a.name===t.toAcc ? {...a, bal:Math.max(0,a.bal-t.amt)} : a));
       } else if (t.type === "expense" && t.cat !== "帳戶調整") {
-        if (acc?.type === "credit") {
-          upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:Math.max(0,(a.payable||0)-t.amt)} : a));
-        } else if (t.acc) {
-          upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
-        }
+        if (acc?.type === "credit") upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:Math.max(0,(a.payable||0)-t.amt)} : a));
+        else if (t.acc) upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal+t.amt} : a));
       } else if (t.type === "income" && t.acc) {
         upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
       }
