@@ -873,8 +873,12 @@ export default function App() {
 
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
-  const moInc = useMemo(() => moTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amt, 0), [moTxns]);
-  const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + t.amt, 0), [moTxns]);
+  const moInc = useMemo(() => moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [moTxns]);
+  const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => {
+    // 代墊的話只算自己那份（總金額 - 代墊部分）
+    const ownAmt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
+    return s + ownAmt;
+  }, 0), [moTxns]);
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const alertAmt = useMemo(() => moTxns.filter(t => t.type === "expense" && ["食物","交通","家居"].includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
@@ -1009,9 +1013,8 @@ export default function App() {
 
     validProxies.forEach(pr => { upd("debts", p => [...p, { id:"d" + Date.now() + Math.random(), type:"receivable", person:pr.person, amt:+pr.amt, desc:`代墊：${nT.desc || nT.cat}`, date:nT.date, settled:false, note:"自動產生", srcTxnId:id }]); });
     if (nT.deferred && nT.deferMoAmt && t.type === "income") {
-      // 認列模式：把 txn 標記為 deferred（不計入總覽收入統計），只有每次認列才算收入
       upd("txns", p => p.map(x => x.id === id ? { ...x, type:"transfer", cat:"帳戶調整", desc:`待認列收入：${nT.desc || nT.cat}（共 ${fmt(t.amt)}）` } : x));
-      upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, totalAmt:t.amt, recognized:0, date:nT.date, acc:nT.acc }]);
+      upd("pools", p => [...p, { id:"p" + id, desc:nT.desc || nT.cat, cat:nT.cat, totalAmt:t.amt, recognized:0, date:nT.date, acc:nT.acc }]);
     }
     setNT(T0); close();
   };
@@ -1165,10 +1168,8 @@ export default function App() {
     if (!selPool || !recAmt) return;
     const a = +recAmt, rem = selPool.totalAmt - selPool.recognized;
     if (a > rem || a <= 0) return;
-    // 更新 pool 已認列金額
     upd("pools", p => p.map(x => x.id === selPool.id ? { ...x, recognized:x.recognized + a } : x));
-    // 記一筆收入（帳戶餘額已在最初記帳時加入，這裡只是讓收入統計正確，不再動餘額）
-    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:"家教", amt:a, desc:`認列：${selPool.desc}`, acc:"", date:TODAY, tags:"#認列" }]);
+    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:selPool.cat || "其他收入", amt:a, desc:`認列：${selPool.desc}`, acc:"", date:TODAY, tags:"#認列" }]);
     setRecAmt(""); close();
   };
 
@@ -2090,7 +2091,7 @@ export default function App() {
           </div>}
           {nT.type === "income" && <div style={{ marginBottom:12 }}>
             <button onClick={() => setNT(p => ({ ...p, deferred:!p.deferred }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.deferred ? `${C.teal}22` : C.card, color:nT.deferred ? C.teal : C.textSub, border:`1px solid ${nT.deferred ? C.teal : C.border}`, cursor:"pointer" }}>
-              <span>{nT.deferred ? "✅" : "⬜"}</span> 開啟分月認列（家教薪資）
+              <span>{nT.deferred ? "✅" : "⬜"}</span> 開啟分月認列（收入分期計算）
             </button>
             {nT.deferred && <div style={{ marginTop:8, padding:12, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}44` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -2315,15 +2316,18 @@ export default function App() {
                   if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
                   else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
                 }
-                // 3. 總覽記一筆（雙方都記）
+                // 3. 總覽記一筆
                 const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
                 upd("txns", p => [...p, {
                   id:Date.now(),
-                  type: isReceivable ? "income" : "expense",
+                  // 應收收款 = 只是錢回到你帳戶，不算收入（transfer）
+                  // 應付付款 = 真的花出去，算支出
+                  type: isReceivable ? "transfer" : "expense",
                   cat: "往來帳",
                   amt: thisPay,
                   desc,
                   acc: settleAcc || "",
+                  toAcc: isReceivable ? settleAcc : "",
                   date: TODAY,
                   tags: "#往來帳",
                 }]);
