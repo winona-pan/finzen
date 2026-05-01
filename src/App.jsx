@@ -2138,35 +2138,106 @@ export default function App() {
                 <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
               </Card>
 
-              {/* 使用手冊 - 可收合 */}
+              {/* 使用手冊 */}
               <Card style={{ padding:20, marginBottom:16 }}>
-                <button onClick={() => toggleSection("manual")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                <button onClick={() => toggleSection("manual")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:0, marginBottom: collapsed["manual"] ? 0 : 12 }}>
                   <SH title="📖 使用手冊" />
                   <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["manual"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
                 </button>
                 {!collapsed["manual"] && [{
-                  icon:"📊", title:"總覽", desc:"查看本月收支。點右下角 ✏️ 新增記帳。記帳時選帳戶，餘額自動連動。左滑刪除（自動還原餘額）、右滑編輯交易記錄。"
+                  key:"m_overview", icon:"📊", title:"總覽 — 每日記帳",
+                  steps:[
+                    "點右下角 ✏️ 開始記一筆收入或支出",
+                    "選擇類別、填金額、選帳戶 → 帳戶餘額自動更新",
+                    "說明欄會記憶同類別的歷史輸入，方便快速選取",
+                    "左滑記錄可刪除（帳戶餘額自動還原）",
+                    "右滑可編輯該筆記錄",
+                    "代墊：記支出時開啟「代墊」，填朋友名字和金額，系統自動拆成兩筆（自己那份 + 代墊轉帳），並在往來帳建立應收",
+                    "分月認列：收到一次性大額收入（如家教學費）可開啟，每月認列一部分，不影響月份統計",
+                  ]
                 },{
-                  icon:"👛", title:"錢包", desc:"管理所有帳戶。分為流動資產（現金/金融卡）、非流動資產（證券）、負債（信用卡）。點帳戶看交易細項；右滑或點 ✏️ 編輯餘額與圖示。帳戶轉帳、信用卡繳費在這裡操作。"
+                  key:"m_wallet", icon:"👛", title:"錢包 — 管理帳戶",
+                  steps:[
+                    "帳戶分為：流動資產（現金/金融卡）、負債（信用卡）、非流動資產（證券帳戶）",
+                    "點帳戶名稱 → 查看該帳戶的所有交易細項",
+                    "右滑帳戶 → 直接進入編輯（改餘額、改圖示、改名稱）",
+                    "編輯餘額時可填「調整說明」，記下為何調整",
+                    "信用卡：輸入「應付金額」（正數），點 Pay 繳費時選扣款帳戶",
+                    "帳戶轉帳：在錢包頁按「帳戶轉帳」，兩邊餘額自動更新",
+                    "訂閱管理：設定固定扣款，到期自動在總覽記帳（需重新開啟 App 觸發）",
+                    "基本開銷：水電費、房租等，可設每月/每週/每年，停用時不計月費",
+                  ]
                 },{
-                  icon:"📈", title:"投資追蹤", desc:"首次使用先點「📋 現有持股」登錄已有的股票（填代號、股數、總成本）。之後買賣用「＋買入」「賣出」，系統自動累計股數和成本。市價開 App 時自動更新，點個股可看損益明細。"
+                  key:"m_invest", icon:"📈", title:"投資 — 股票追蹤",
+                  steps:[
+                    "第一次使用：點「📋 現有持股」登錄目前持有的股票（代號不要加 .TW），填股數和總成本",
+                    "之後買入：點「＋買入」，選擇帳戶，填股數和均成本，自動累加不覆蓋",
+                    "賣出：點個股 → 賣出，可下拉選擇，自動帶入市價損益",
+                    "買入記錄在總覽為「轉帳↔」不算收支；賣出的損益才算收入/支出",
+                    "市價開啟 App 時自動更新，點個股看損益 / 今日行情 / 三大法人",
+                    "台股代號唯一不會撞，美股和台股用「市場」區分",
+                    "「計入未實現損益」開關：開 = 總資產用市值計算；關 = 用成本計算",
+                  ]
                 },{
-                  icon:"👥", title:"往來帳", desc:"記錄借貸往來。可設分期付款（2-48期），每次付款點「收一期／付一期」，自動扣/加帳戶餘額並在總覽記帳。結清時選擇帳戶，款項自動入帳。"
+                  key:"m_notes", icon:"👥", title:"往來帳 — 借貸管理",
+                  steps:[
+                    "別人欠我 💚：記錄應收款，錢包應收欄會增加",
+                    "我欠別人 🟡：記錄應付款，錢包應付欄會增加",
+                    "分期付款：新增時開啟「分期付款」，選幾期、每期多少",
+                    "收款/付款：點「收一期」或「付一期」，選帳戶，餘額自動更新，總覽記一筆",
+                    "應收收款不算收入（錢本來就是你的）；應付付款才算支出",
+                    "7天內到期顯示提醒，逾期顯示紅色警告",
+                    "結清後移至「已結清 ✅」區塊，可點 ✕ 刪除",
+                  ]
                 },{
-                  icon:"🎯", title:"目標", desc:"在圖表頁新增財務目標。設定目標金額和期限，可指定追蹤哪些帳戶（不選則用總資產）。快到期（30天內）進度條變橘色。總覽頁會顯示目標進度條。"
+                  key:"m_charts", icon:"🗂️", title:"圖表 — 收支分析",
+                  steps:[
+                    "圓餅圖：查看本月各類別支出/收入佔比，點類別名稱可篩選",
+                    "收支健康度：設定自訂區間，查看儲蓄率、支出佔收入比例",
+                    "資產成長：預設顯示本月每天的資產變化，可切換多月視圖",
+                    "帳戶調整和轉帳不計入資產成長（避免失真）",
+                    "往來帳收款不算收入，代墊只算自己那份",
+                    "目標管理：點「＋新增目標」，設定金額、期限、追蹤帳戶",
+                    "目標進度同步顯示在總覽頁頂部，30天內到期變橘色",
+                  ]
                 },{
-                  icon:"🗂️", title:"圖表", desc:"查看支出/收入圓餅圖、資產成長趨勢。右上角可切換月份或自訂範圍。圖表下方是目標管理區。"
+                  key:"m_settings", icon:"⚙️", title:"設定 — 個人化",
+                  steps:[
+                    "主題：深色🌙 / 淺色☀️ / 紫色💜 / 海洋🌊，即時切換",
+                    "類別管理：點類別標籤可改名稱和 emoji；點「＋新增」加自訂類別",
+                    "匯出備份：定期點「📤 匯出備份」存成 JSON 檔，換裝置或清除瀏覽器資料前必做",
+                    "匯入備份：點「📥 匯入備份」選 JSON 檔還原所有資料",
+                    "資料只存在你的瀏覽器，不會上傳任何伺服器",
+                  ]
                 },{
-                  icon:"⚙️", title:"設定", desc:"切換深色/淺色/紫色/海洋四種主題。類別管理可自訂名稱和 emoji。匯出備份儲存 JSON 檔，換裝置或清除資料前記得先備份！"
-                },{
-                  icon:"💡", title:"小技巧", desc:"代墊費用：記支出時開啟「代墊」，系統自動在往來帳建立應收。 類別「往來帳🤝」專門記收款/付款，不影響一般收支統計。投資頁切換「計入未實現損益」可決定總資產的計算方式。"
-                }].map((item, i, arr) => (
-                  <div key={i} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
-                    <div style={{ fontSize:22, flexShrink:0, marginTop:2 }}>{item.icon}</div>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{item.title}</div>
-                      <div style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{item.desc}</div>
-                    </div>
+                  key:"m_tips", icon:"💡", title:"常見問題 & 小技巧",
+                  steps:[
+                    "Q：記帳後帳戶沒更新？→ 確認記帳時有選帳戶",
+                    "Q：投資市價沒出現？→ 重新開啟 App，等幾秒讓市價載入",
+                    "Q：訂閱沒自動記帳？→ 需要關掉重開 App 才會觸發",
+                    "Q：往來帳收款為什麼不算收入？→ 那是別人還你本來就是你的錢，不是新收入",
+                    "小技巧：支出顏色是綠色、收入是紅色（台灣股市慣例，漲紅跌綠）",
+                    "小技巧：刪除記錄後帳戶餘額自動還原，不用手動調整",
+                    "小技巧：帳戶餘額調整時填說明，之後看細項才知道為何調整",
+                  ]
+                }].map((item) => (
+                  <div key={item.key} style={{ borderBottom:`1px solid ${C.border}`, marginBottom:4 }}>
+                    <button onClick={() => toggleSection(item.key)}
+                      style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"10px 0" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ fontSize:18 }}>{item.icon}</span>
+                        <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{item.title}</span>
+                      </div>
+                      <span style={{ fontSize:13, color:C.muted, display:"inline-block", transform:collapsed[item.key]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
+                    </button>
+                    {!collapsed[item.key] && <div style={{ paddingBottom:10 }}>
+                      {item.steps.map((step, si) => (
+                        <div key={si} style={{ display:"flex", gap:8, padding:"4px 0" }}>
+                          <span style={{ color:C.accent, fontWeight:900, fontSize:12, flexShrink:0, marginTop:1 }}>{si+1}.</span>
+                          <span style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{step}</span>
+                        </div>
+                      ))}
+                    </div>}
                   </div>
                 ))}
               </Card>
