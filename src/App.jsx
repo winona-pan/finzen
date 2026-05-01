@@ -871,28 +871,33 @@ export default function App() {
     if (stocks.length > 0) fetchAllPrices(stocks);
   }, [stocks.length]);
 
-  /* ── Auto exchange rate fetch every 30 min ── */
+  /* ── 匯率：優先讀 rates.json（GitHub Actions 每日更新），備用 API ── */
   useEffect(() => {
-    const CURRENCY_MAP = { USD:"USD",EUR:"EUR",JPY:"JPY",GBP:"GBP",HKD:"HKD",SGD:"SGD",CNY:"CNY",KRW:"KRW",AUD:"AUD",CAD:"CAD",CHF:"CHF",MYR:"MYR",THB:"THB" };
     const fetchRates = async () => {
+      // 方法1：讀 GitHub Pages 上的 rates.json（不受 rate limit 影響）
+      try {
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+        const res = await fetch(`${base}rates.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.USD && data.USD > 1) {
+            // rates.json 已有資料（格式：1外幣=N TWD）
+            upd("rates", () => ({ ...DEF_RATES, ...data }));
+            console.log(`✅ 匯率從 rates.json 載入（更新時間：${data._updated||"未知"}）`);
+            return;
+          }
+        }
+      } catch {}
+      // 方法2：直接打 API（備用）
+      const CURRENCY_MAP = { USD:"USD",EUR:"EUR",JPY:"JPY",GBP:"GBP",HKD:"HKD",SGD:"SGD",CNY:"CNY",KRW:"KRW",AUD:"AUD",CAD:"CAD",CHF:"CHF",MYR:"MYR",THB:"THB" };
       const toCurs = Object.keys(CURRENCY_MAP).join(",");
       const apis = [
-        // frankfurter.app - CORS enabled, free
         async () => {
           const r = await fetch(`https://api.frankfurter.app/latest?from=TWD&to=${toCurs}`, { signal:AbortSignal.timeout(6000) });
           const j = await r.json();
           if (!j.rates) throw new Error();
           const nr = { TWD:1 };
-          Object.entries(j.rates).forEach(([cur,rate]) => { nr[cur] = 1/rate; });
-          return nr;
-        },
-        // exchangerate-api fallback
-        async () => {
-          const r = await fetch("https://api.exchangerate-api.com/v4/latest/TWD", { signal:AbortSignal.timeout(6000) });
-          const j = await r.json();
-          if (!j.rates) throw new Error();
-          const nr = { TWD:1 };
-          ALL_CURS.forEach(cur => { if (cur!=="TWD" && j.rates[cur]) nr[cur] = 1/j.rates[cur]; });
+          Object.entries(j.rates).forEach(([cur,rate]) => { nr[cur] = +(1/rate).toFixed(6); });
           return nr;
         },
       ];
@@ -901,7 +906,8 @@ export default function App() {
       }
     };
     fetchRates();
-    const t = setInterval(fetchRates, 30*60*1000);
+    // 每天重新讀一次（GitHub Actions 每天更新 rates.json）
+    const t = setInterval(fetchRates, 24 * 60 * 60 * 1000);
     return () => clearInterval(t);
   }, []);
   const visA = useMemo(() => accs.filter(a => a.type !== "credit" && a.vis), [accs]);
