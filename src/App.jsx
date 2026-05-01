@@ -758,6 +758,114 @@ export default function App() {
     }
   }, [stocks, fetchPrice, upd]);
 
+  /* ── 自動記帳：訂閱 & 基本開銷 ── */
+  useEffect(() => {
+    if (!d || !d.subs) return;
+
+    // 計算某個項目從上次記帳到今天，應該有哪幾天/日期要記
+    const getDueDates = (item, lastDate) => {
+      const dates = [];
+      const today = new Date(TODAY);
+      const start = lastDate ? new Date(lastDate) : new Date(item.date || TODAY);
+
+      if (item.freq === "week") {
+        // 每週幾：從 start 後第一個那個星期X 開始，每7天
+        const wd = +(item.weekday || 1); // 0=日...6=六
+        let cur = new Date(start);
+        cur.setDate(cur.getDate() + 1); // 從次日開始
+        // 找到下一個那個星期X
+        while (cur.getDay() !== wd) cur.setDate(cur.getDate() + 1);
+        while (cur <= today) {
+          dates.push(cur.toISOString().slice(0, 10));
+          cur = new Date(cur);
+          cur.setDate(cur.getDate() + 7);
+        }
+      } else if (item.freq === "year") {
+        // 每年幾月幾號
+        const mo = +(item.yearMonth || 1) - 1;
+        const dy = +(item.day || 1);
+        let cur = new Date(start);
+        cur.setDate(cur.getDate() + 1);
+        // 找下一個到期年份
+        let yr = cur.getFullYear();
+        let candidate = new Date(yr, mo, dy);
+        if (candidate <= cur) candidate = new Date(yr + 1, mo, dy);
+        while (candidate <= today) {
+          dates.push(candidate.toISOString().slice(0, 10));
+          candidate = new Date(candidate.getFullYear() + 1, mo, dy);
+        }
+      } else {
+        // 每月幾號
+        const dy = +(item.day || 1);
+        let cur = new Date(start);
+        cur.setDate(cur.getDate() + 1);
+        let yr = cur.getFullYear(), mo = cur.getMonth();
+        let candidate = new Date(yr, mo, dy);
+        if (candidate <= cur) { mo++; if (mo > 11) { mo = 0; yr++; } candidate = new Date(yr, mo, dy); }
+        while (candidate <= today) {
+          dates.push(candidate.toISOString().slice(0, 10));
+          mo++; if (mo > 11) { mo = 0; yr++; }
+          candidate = new Date(yr, mo, dy);
+        }
+      }
+      return dates;
+    };
+
+    let newTxns = [];
+
+    // 訂閱
+    (d.subs || []).filter(s => s.active).forEach(s => {
+      const lastDate = s.lastBilled || null;
+      const dues = getDueDates(s, lastDate);
+      dues.forEach(date => {
+        newTxns.push({
+          id: Date.now() + Math.random(),
+          type: "expense", cat: s.cat || "訂閱",
+          amt: s.amt, desc: s.name,
+          acc: s.acc || "", date, tags: "#自動記帳",
+          autoSrc: s.id,
+        });
+      });
+      if (dues.length > 0) {
+        upd("subs", p => p.map(x => x.id === s.id ? { ...x, lastBilled: dues[dues.length - 1] } : x));
+      }
+    });
+
+    // 基本開銷
+    (d.bills || []).filter(b => b.active).forEach(b => {
+      const lastDate = b.lastBilled || null;
+      const dues = getDueDates(b, lastDate);
+      dues.forEach(date => {
+        newTxns.push({
+          id: Date.now() + Math.random(),
+          type: "expense", cat: b.cat || "家居",
+          amt: b.amt, desc: b.name,
+          acc: b.acc || "", date, tags: "#自動記帳",
+          autoSrc: b.id,
+        });
+      });
+      if (dues.length > 0) {
+        upd("bills", p => p.map(x => x.id === b.id ? { ...x, lastBilled: dues[dues.length - 1] } : x));
+      }
+    });
+
+    if (newTxns.length > 0) {
+      // 帳戶餘額也要扣
+      newTxns.forEach(t => {
+        if (t.acc) {
+          const acc = (d.accs || []).find(a => a.name === t.acc);
+          if (acc) {
+            if (acc.type === "credit") upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:(a.payable||0)+t.amt} : a));
+            else upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+          }
+        }
+      });
+      upd("txns", p => [...p, ...newTxns]);
+      console.log(`✅ 自動記帳 ${newTxns.length} 筆`);
+    }
+  // eslint-disable-next-line
+  }, []); // 只在 App 開啟時執行一次
+
   /* ── 資料載入後立刻抓股價（只抓一次，不自動輪詢）── */
   useEffect(() => {
     if (stocks.length > 0) fetchAllPrices(stocks);
@@ -1105,9 +1213,9 @@ export default function App() {
   };
 
   const addDebt = () => { if (!nD.person || !nD.amt) return; upd("debts", p => [...p, { ...nD, id:"d" + Date.now(), amt:+nD.amt, settled:false }]); setND(D0); close(); };
-  const addSub = () => { if (!nS.name || !nS.amt) return; upd("subs", p => [...p, { ...nS, id:"sub" + Date.now(), amt:+nS.amt, day:+nS.day, active:true }]); setNS(S0); close(); };
+  const addSub = () => { if (!nS.name || !nS.amt) return; upd("subs", p => [...p, { ...nS, id:"sub"+Date.now(), amt:+nS.amt, day:+nS.day, active:true, date:TODAY, lastBilled:null }]); setNS(S0); close(); };
   const saveSub = s => { upd("subs", p => p.map(x => x.id === s.id ? s : x)); close(); };
-  const addBill = () => { if (!nB.name || !nB.amt) return; upd("bills", p => [...(p || []), { ...nB, id:"bill" + Date.now(), amt:+nB.amt, day:+nB.day, active:false }]); setNB(B0); close(); };
+  const addBill = () => { if (!nB.name || !nB.amt) return; upd("bills", p => [...(p||[]), { ...nB, id:"bill"+Date.now(), amt:+nB.amt, day:+nB.day, active:false, date:TODAY, lastBilled:null }]); setNB(B0); close(); };
   const saveBill = b => { upd("bills", p => p.map(x => x.id === b.id ? b : x)); close(); };
   const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
   const [nG, setNG] = useState(G0);
@@ -1393,12 +1501,12 @@ export default function App() {
                 {/* ── 流動資產 ── */}
                 <button onClick={() => toggleSection("liquid")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["liquid"]?4:8, marginTop:4 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                    <span style={{ fontSize:11, fontWeight:900, letterSpacing:"0.08em", color:C.muted }}>流動資產</span>
+                    <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>流動資產</span>
                     <InfoBtn msg="隨時可使用的錢，如現金、銀行活存。用來應付日常支出與緊急備用金。" />
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.filter(a=>a.type!=="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
-                    <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["liquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["liquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                 </button>
                 {!collapsed["liquid"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }].map(grp => {
@@ -1445,12 +1553,12 @@ export default function App() {
                 {/* ── 負債（信用卡）── */}
                 <button onClick={() => toggleSection("credit")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["credit"]?4:8, marginTop:8 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                    <span style={{ fontSize:11, fontWeight:900, letterSpacing:"0.08em", color:C.muted }}>負債（信用卡）</span>
+                    <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>負債（信用卡）</span>
                     <InfoBtn msg="信用卡應付金額是你欠銀行的錢，已從總資產中扣除。" />
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:11, color:totDebt>0?C.expense:C.textSub }}>{totDebt>0?`-${fmt(totDebt)}`:fmt(0)}</span>
-                    <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["credit"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["credit"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                 </button>
                 {!collapsed["credit"] && accs.filter(a => a.type === "credit").length > 0 && <div>
@@ -1479,12 +1587,12 @@ export default function App() {
                 {/* ── 非流動資產 ── */}
                 <button onClick={() => toggleSection("nonliquid")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["nonliquid"]?4:8, marginTop:8 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                    <span style={{ fontSize:11, fontWeight:900, letterSpacing:"0.08em", color:C.muted }}>非流動資產</span>
+                    <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>非流動資產</span>
                     <InfoBtn msg="長期持有的資產，如股票、基金。不打算短期變現，目的是投資增值。" />
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.filter(a=>a.type==="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
-                    <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["nonliquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["nonliquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                 </button>
                 {!collapsed["nonliquid"] && [{ label:"證券帳戶", type:"investment" }].map(grp => {
@@ -1533,10 +1641,10 @@ export default function App() {
 
                 {/* Subscriptions */}
                 <button onClick={() => toggleSection("subs")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["subs"]?4:8, marginTop:4 }}>
-                  <span style={{ fontSize:11, fontWeight:900, letterSpacing:"0.08em", color:C.muted }}>訂閱管理</span>
+                  <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>訂閱管理</span>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:11, color:C.textSub }}>月費 {fmt(subsMo)}</span>
-                    <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["subs"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["subs"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                 </button>
                 {!collapsed["subs"] && <div>
@@ -1553,20 +1661,21 @@ export default function App() {
                     </SwipeRow>)}
                   </div>
                   <Btn onClick={() => setModal("addSub")} v="secondary" style={{ width:"100%" }}>＋ 新增訂閱</Btn>
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
                 </div>}
 
                 {/* Bills */}
                 <button onClick={() => toggleSection("bills")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["bills"]?4:8, marginTop:8 }}>
-                  <span style={{ fontSize:11, fontWeight:900, letterSpacing:"0.08em", color:C.muted }}>基本開銷</span>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>基本開銷</span>
+                    <InfoBtn msg="適合水電費、房租等固定支出。停用狀態不計入月費，但保留記錄。到期日自動記帳需重新開啟 App 才會觸發。" />
+                  </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     {billsMo > 0 && <span style={{ fontSize:11, color:C.textSub }}>月費 {fmt(billsMo)}</span>}
-                    <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["bills"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["bills"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                   </div>
                 </button>
                 {!collapsed["bills"] && <div>
-                  <div style={{ marginBottom:8, padding:"10px 14px", borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, fontSize:12, color:C.accentL }}>
-                    💡 適合水電費、房租等固定支出。停用狀態不計入月費。
-                  </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
                     {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => upd("bills", p => p.filter(x => x.id !== b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
@@ -1580,6 +1689,7 @@ export default function App() {
                     </SwipeRow>)}
                   </div>
                   <Btn onClick={() => setModal("addBill")} v="secondary" style={{ width:"100%" }}>＋ 新增基本開銷</Btn>
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
                 </div>}
 
                 {/* Data management */}
@@ -1896,7 +2006,7 @@ export default function App() {
                           </div>
                           {hasPrices && accPnl !== 0 && <div style={{ fontSize:11, color:pnlColor(accPnl, C) }}>{accPnl>0?"▲ +":"▼ "}{fmt(Math.abs(accPnl))}</div>}
                         </div>
-                        <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                        <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
                       </div>
                     </button>
                     {!isCollapsed && <Card style={{ overflow:"hidden" }}>
@@ -2026,7 +2136,7 @@ export default function App() {
               <Card style={{ padding:20, marginBottom:16 }}>
                 <button onClick={() => toggleSection("manual")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:0 }}>
                   <SH title="📖 使用手冊" />
-                  <span style={{ fontSize:12, color:C.muted, display:"inline-block", transform:collapsed["manual"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
+                  <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["manual"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
                 </button>
                 {!collapsed["manual"] && [{
                   icon:"📊", title:"總覽", desc:"查看本月收支。點右下角 ✏️ 新增記帳。記帳時選帳戶，餘額自動連動。左滑刪除（自動還原餘額）、右滑編輯交易記錄。"
