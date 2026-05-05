@@ -18,7 +18,7 @@ export default function ChartsPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, set
   nD, setND
 }) {
   return (
-    {tab === "charts" && (
+    {tab} "charts" && (
             <div style={{ padding:"12px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
