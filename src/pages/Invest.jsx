@@ -18,7 +18,7 @@ export default function InvestPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, set
   nD, setND
 }) {
   return (
-    {tab === "invest" && (
+    {tab} "invest" && (
             <div style={{ padding:"12px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>📈</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>投資追蹤</span></div>
