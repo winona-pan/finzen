@@ -1,0 +1,292 @@
+export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
+  cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
+  collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
+  isSingleMo, chartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
+  selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
+  selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
+  selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
+  nG, setNG, addGoal, editGoal, setEditGoal,
+  selPolicy, setSelPolicy, nPL, setNPL, addPolicy,
+  premAmt, setPremAmt, premAcc, setPremAcc,
+  surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
+  showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
+  nS, setNS, S0, selSub, setSelSub, saveSub, addSub,
+  nB, setNB, B0, selBill, setSelBill, saveBill, addBill,
+  nAcc, setNAcc, addAcc, payF, setPayF, doPayCred,
+  showHDP, setShowHDP, doBuy, doSell, doInit,
+  nD, setND, addDebt, editDebt, setEditDebt,
+  settleDebt, setSettleDebt, settleAcc, setSettleAcc,
+  settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+}) {
+  return (
+    <>
+        {modal === "buyStock" && <Sheet title="記錄買入" onClose={close}>
+          <Sl label="證券帳戶" value={buyF.acc} onChange={e => setBuyF(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type === "investment").map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</Sl>
+          {/* 記憶上次買入 */}
+          {stocks.length > 0 && <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>📌 重複買入（點選帶入）</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {[...new Map(stocks.map(s=>[s.ticker,s])).values()].map(s => (
+                <button key={s.ticker} onClick={() => setBuyF(p => ({ ...p, ticker:s.ticker, name:s.name, market:s.market, acc:p.acc||s.acc }))}
+                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:buyF.ticker===s.ticker?`${C.accent}30`:C.card, color:buyF.ticker===s.ticker?C.accentL:C.textSub, border:`1px solid ${buyF.ticker===s.ticker?C.accent:C.border}`, cursor:"pointer" }}>
+                  {s.ticker}
+                </button>
+              ))}
+            </div>
+          </div>}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div>
+              <Inp label="股票代號" placeholder="0050 / AAPL" value={buyF.ticker} onChange={e => setBuyF(p => ({ ...p, ticker:e.target.value.toUpperCase().replace(/\.TW$|\.US$/i,"") }))} />
+              {buyF.ticker.includes(".") && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>⚠️ 不需要加 .TW 或 .US</div>}
+            </div>
+            <Inp label="股票名稱" placeholder="元大台灣50" value={buyF.name} onChange={e => setBuyF(p => ({ ...p, name:e.target.value }))} />
+          </div>
+          <Sl label="市場" value={buyF.market} onChange={e => setBuyF(p => ({ ...p, market:e.target.value }))}><option value="TW">台股 TW</option><option value="US">美股 US</option></Sl>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <Inp label="股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value, totalCost:p.avgCost?String(Math.round(+e.target.value*+p.avgCost)):p.totalCost }))} />
+            <Inp label="均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value, totalCost:p.shares?String(Math.round(+p.shares*+e.target.value)):p.totalCost }))} />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <CalcInp label="投資總成本" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v, avgCost:p.shares&&+p.shares>0?String((+v/+p.shares).toFixed(2)):p.avgCost }))} />
+            <Inp label="手續費" type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value }))} />
+          </div>
+          <Sl label="從哪個帳戶扣款（選填）" value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— 不扣款 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <Btn style={{ flex:1 }} onClick={doBuy}>確認買入</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+          </div>
+        </Sheet>}
+
+        {modal === "sellStock" && (() => {
+          const st = stSum.find(s => s.id === sellF.stockId);
+          if (!st) return null;
+          return <Sheet title="賣出股票" onClose={close}>
+            {/* 下拉選擇持股 */}
+            <Fld label="選擇持股">
+              <select value={sellF.stockId} onChange={e => {
+                const s = stSum.find(x => x.id === e.target.value);
+                if (s) setSellF(p => ({ ...p, stockId:s.id, shares:String(s.totalSh), totalProceeds:s.curPrice>0?String(Math.round(s.curPrice*s.totalSh)):"", pnl:s.curPrice>0?String(Math.round(Math.abs(s.upnl))):"", pnlType:s.upnl>=0?"income":"expense" }));
+              }} style={iSt}>
+                {stSum.filter(s => s.totalSh > 0).map(s => (
+                  <option key={s.id} value={s.id}>{s.ticker} {s.name} · {s.totalSh}股 · {s.acc}</option>
+                ))}
+              </select>
+            </Fld>
+            <div style={{ padding:10, borderRadius:10, marginBottom:8, background:C.card, fontSize:12 }}>
+              <div style={{ fontWeight:900, fontSize:13, color:C.text, marginBottom:2 }}>{st.ticker} {st.name}</div>
+              <div style={{ color:C.textSub }}>持股 <strong style={{ color:C.accentL }}>{st.totalSh}股</strong> · 均成本 {fmt(Math.round(st.avgCost||0))}{st.curPrice>0?` · 現價 ${fmt(st.curPrice)}`:""}</div>
+            </div>
+            <Inp label="賣出股數" type="number" placeholder={String(st.totalSh)} value={sellF.shares} onChange={e => setSellF(p => ({ ...p, shares:e.target.value }))} />
+            <CalcInp label="賣出總金額" value={sellF.totalProceeds} onChange={v => setSellF(p => ({ ...p, totalProceeds:v }))} />
+            <Inp label="手續費（選填）" type="number" placeholder="0" value={sellF.fee||""} onChange={e => setSellF(p => ({ ...p, fee:e.target.value }))} />
+            {sellF.shares && <div style={{ marginBottom:12, padding:10, borderRadius:10, background:`${C.accent}10`, fontSize:12, color:C.textSub }}>
+              賣出後剩餘：<strong style={{ color:C.accentL }}>{Math.max(0, st.totalSh - +sellF.shares)}股</strong>
+            </div>}
+            <Fld label="損益記錄（手動）">
+              <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+                <button onClick={() => setSellF(p => ({ ...p, pnlType:"income" }))} style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, background:sellF.pnlType==="income"?`${C.income}28`:C.card, color:sellF.pnlType==="income"?C.income:C.muted, border:`1px solid ${sellF.pnlType==="income"?C.income:C.border}`, cursor:"pointer" }}>📈 獲利</button>
+                <button onClick={() => setSellF(p => ({ ...p, pnlType:"expense" }))} style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, background:sellF.pnlType==="expense"?`${C.expense}28`:C.card, color:sellF.pnlType==="expense"?C.expense:C.muted, border:`1px solid ${sellF.pnlType==="expense"?C.expense:C.border}`, cursor:"pointer" }}>📉 虧損</button>
+              </div>
+              <CalcInp label="損益金額" value={sellF.pnl} onChange={v => setSellF(p => ({ ...p, pnl:v }))} />
+              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>填入後會自動在總覽產生收支記錄</div>
+            </Fld>
+            <Sl label="款項回流帳戶" value={sellF.returnAcc} onChange={e => setSellF(p => ({ ...p, returnAcc:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+            <div style={{ display:"flex", gap:8, marginTop:8 }}>
+              <Btn style={{ flex:1 }} onClick={doSell}>確認賣出</Btn>
+              <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            </div>
+          </Sheet>;
+        })()}
+
+        {modal === "initStock" && <Sheet title="📋 登錄現有持股" onClose={close}>
+          <div style={{ padding:"10px 14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, fontSize:12, color:C.teal, marginBottom:16 }}>
+            💡 用於登錄你<strong>已經持有</strong>的股票，不會產生買入記錄，也不會扣款。<br/>之後的買賣再用「＋買入」和「賣出」記錄。
+          </div>
+          <Sl label="證券帳戶" value={buyF.acc} onChange={e => setBuyF(p => ({ ...p, acc:e.target.value }))}>
+            <option value="">— 選擇 —</option>
+            {accs.filter(a => a.type === "investment").map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+          </Sl>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <Inp label="股票代號" placeholder="0050 / AAPL" value={buyF.ticker} onChange={e => setBuyF(p => ({ ...p, ticker:e.target.value.toUpperCase() }))} />
+            <Inp label="股票名稱" placeholder="元大台灣50" value={buyF.name} onChange={e => setBuyF(p => ({ ...p, name:e.target.value }))} />
+          </div>
+          <Sl label="市場" value={buyF.market} onChange={e => setBuyF(p => ({ ...p, market:e.target.value }))}>
+            <option value="TW">台股 TW</option>
+            <option value="US">美股 US</option>
+          </Sl>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <Inp label="目前持股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value }))} />
+            <Inp label="平均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value }))} />
+          </div>
+          <CalcInp label="投資總成本（選填）" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v }))} />
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <Btn style={{ flex:1 }} onClick={() => {
+              if (!buyF.ticker || !buyF.shares) return;
+              // 直接建立持股，不產生任何 trade 記錄，純粹記錄現況
+              upd("stocks", p => {
+                const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
+                if (ex) {
+                  return p.map(s => s.id === ex.id ? {
+                    ...s,
+                    name: buyF.name || s.name,
+                    manualShares: +buyF.shares,
+                    manualAvgCost: buyF.avgCost ? +buyF.avgCost : s.manualAvgCost,
+                    manualTotalCost: buyF.totalCost ? +buyF.totalCost : s.manualTotalCost,
+                  } : s);
+                }
+                return [...p, {
+                  id: "s"+Date.now(), acc:buyF.acc,
+                  ticker:buyF.ticker, name:buyF.name||buyF.ticker,
+                  market:buyF.market, curPrice:0,
+                  manualShares: +buyF.shares,
+                  manualAvgCost: buyF.avgCost ? +buyF.avgCost : null,
+                  manualTotalCost: buyF.totalCost ? +buyF.totalCost : null,
+                  trades: [],
+                }];
+              });
+              // 同步更新證券帳戶餘額（加上投資總成本）
+              if (buyF.acc && buyF.totalCost) {
+                upd("accs", p => p.map(a => a.name === buyF.acc ? { ...a, bal: a.bal + +buyF.totalCost } : a));
+              }
+              setBuyF(BF0); close();
+            }}>登錄持股</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+          </div>
+        </Sheet>}
+
+        {modal === "stockDetail" && selStock && (() => {
+          const st = stSum.find(s => s.id === selStock.id) || selStock;
+          const hasPrice = st.curPrice > 0;
+          const pnl = hasPrice ? st.upnl : 0;
+          const pnlPct = st.totalCost > 0 && hasPrice ? (pnl / st.totalCost * 100) : 0;
+          const extra = st._extra || {};
+          const inst = extra.institutional || {};
+          const hasInst = inst.foreign !== undefined || inst.trust !== undefined;
+          const yahooUrl = `https://finance.yahoo.com/quote/${st.market==="TW"?st.ticker+".TW":st.ticker}/chart`;
+          const newsQuery = [st.ticker, st.name].filter(Boolean).join(" ");
+          const newsUrl = `https://news.google.com/search?q=${encodeURIComponent(newsQuery+" 股票")}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
+          return <Sheet title={`${st.ticker} ${st.name}`} onClose={close}>
+
+            {/* 市價損益摘要 */}
+            <Card style={{ padding:16, marginBottom:12, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:hasPrice?10:0 }}>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>市值</div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{hasPrice ? fmt(st.mv) : <span style={{ color:C.muted, fontSize:12 }}>載入中…</span>}</div></div>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>投入成本</div>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{fmt(st.totalCost)}</div></div>
+                <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>持股</div>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{st.totalSh} 股</div></div>
+              </div>
+              {hasPrice && <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
+                <div>
+                  <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>現價</div>
+                  <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(st.curPrice)}/股</div>
+                  <div style={{ fontSize:10, color:C.muted }}>均 {fmt(Math.round(st.avgCost||0))}/股</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>未實現損益</div>
+                  <div style={{ fontWeight:900, fontSize:16, color:pnlColor(pnl, C) }}>{pnl >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(pnl))}</div>
+                  <div style={{ fontSize:11, fontWeight:700, color:pnlColor(pnl, C) }}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%</div>
+                </div>
+              </div>}
+              {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>更新：{st.lastUpdated}</div>}
+            </Card>
+
+            {/* 今日行情 */}
+            {hasPrice && (extra.high || extra.low || extra.vol) && <Card style={{ padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:900, color:C.muted, marginBottom:8, letterSpacing:"0.08em" }}>今日行情</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+                {[{l:"最高", v:extra.high, c:C.income}, {l:"最低", v:extra.low, c:C.expense},
+                  {l:"成交量", v:extra.vol ? (extra.vol>1000?`${(extra.vol/1000).toFixed(0)}K`:extra.vol) : null, c:C.text},
+                  {l:"漲跌幅", v:extra.chgPct!==undefined?`${extra.chgPct>=0?"+":""}${extra.chgPct}%`:null, c:pnlColor(extra.chgPct||0,C)}
+                ].map(({l,v,c}) => v ? <div key={l}><div style={{ fontSize:10, color:C.textSub }}>{l}</div><div style={{ fontWeight:700, fontSize:13, color:c }}>{typeof v==="number"?fmt(v):v}</div></div> : null)}
+              </div>
+            </Card>}
+
+            {/* 三大法人 */}
+            {st.market === "TW" && <Card style={{ padding:14, marginBottom:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:11, fontWeight:900, color:C.muted, letterSpacing:"0.08em" }}>三大法人買賣超（千股）</div>
+                {extra.institutional_date && <div style={{ fontSize:10, color:C.muted }}>{extra.institutional_date ? `${extra.institutional_date.slice(0,4)}-${extra.institutional_date.slice(4,6)}-${extra.institutional_date.slice(6,8)}` : ""}</div>}
+              </div>
+              {hasInst
+                ? <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {[{label:"外資",val:inst.foreign},{label:"投信",val:inst.trust},{label:"自營商",val:inst.dealer}].map(({label,val}) => (
+                      <div key={label} style={{ textAlign:"center", padding:"10px 6px", borderRadius:10, background:val>0?`${C.income}15`:val<0?`${C.expense}15`:`${C.muted}10` }}>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:4 }}>{label}</div>
+                        <div style={{ fontWeight:900, fontSize:14, color:val>0?C.income:val<0?C.expense:C.muted }}>
+                          {val>0?"▲":val<0?"▼":"—"} {val!==undefined?Math.abs(val).toLocaleString():"—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
+            </Card>}
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+              <button onClick={() => {
+                  const sym = st.market==="TW" ? `TWSE:${st.ticker}` : st.ticker;
+                  window.open(`https://www.tradingview.com/chart/?symbol=${sym}`, "_blank");
+                }} style={{ padding:"10px", borderRadius:12, background:`${C.accent}20`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>📊 技術線圖</button>
+              <button onClick={() => window.open(newsUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>📰 個股新聞</button>
+              </div>
+
+            {/* 持股編輯 */}
+            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              <Inp label="股數（自動）" type="number" value={String(st.totalSh)}
+                onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, manualShares:+e.target.value} : s))} style={{...iSt, color:C.accentL}} />
+              <Inp label="均成本（自動）" type="number"
+                value={String(st.totalSh>0&&st.totalCost>0?(st.totalCost/st.totalSh).toFixed(2):(st.manualAvgCost||0))}
+                onChange={e => { const avg=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualAvgCost:avg,manualTotalCost:s.totalSh>0?Math.round(avg*s.totalSh):s.manualTotalCost}:s)); }} />
+            </div>
+            <Inp label="投資總成本（自動）" type="number" value={String(Math.round(st.totalCost||0))}
+              onChange={e => { const cost=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualTotalCost:cost,manualAvgCost:s.totalSh>0?+(cost/s.totalSh).toFixed(2):s.manualAvgCost}:s)); }} />
+
+            {/* 停損提醒 */}
+            <div style={{ padding:12, borderRadius:12, background:`${C.danger}10`, border:`1px solid ${C.danger}33`, margin:"10px 0" }}>
+              <div style={{ fontSize:11, fontWeight:900, color:C.danger, marginBottom:8 }}>🔴 停損提醒</div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:13, color:C.textSub, flexShrink:0 }}>虧損超過</span>
+                <input type="number" min="1" max="100" placeholder="15"
+                  value={st.stopLossPct || ""}
+                  onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:+e.target.value||null} : s))}
+                  style={{...iSt, width:70, flex:"none"}} />
+                <span style={{ fontSize:13, color:C.textSub, flexShrink:0 }}>% 時顯示警示</span>
+                {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))}
+                  style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
+              </div>
+              {st.stopLossPct && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
+                停損線：均成本 {fmt(Math.round(st.avgCost||0))} × (1−{st.stopLossPct}%) ≈ {fmt(Math.round((st.avgCost||0)*(1-st.stopLossPct/100)))} /股
+                {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ 已達停損！</span>}
+              </div>}
+            </div>
+            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, margin:"12px 0 8px" }}>交易紀錄</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
+              {(st.trades||[]).length===0&&!st.manualShares&&<div style={{ fontSize:12, color:C.muted, padding:"8px 0" }}>尚無買賣記錄</div>}
+              {st.manualShares>0&&<div style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
+                <span style={{ color:C.accentL }}>📋 現有持股 {st.manualShares}股</span>
+                <span style={{ fontWeight:700, color:C.accentL }}>{st.manualTotalCost?`成本 ${fmt(st.manualTotalCost)}`:st.manualAvgCost?`均 ${fmt(st.manualAvgCost)}/股`:""}</span>
+              </div>}
+              {(st.trades||[]).map(tr=><div key={tr.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:tr.type==="buy"?`${C.expense}12`:`${C.income}12` }}>
+                <span style={{ color:C.textSub }}>{tr.date} {tr.type==="buy"?"買入":"賣出"} {tr.shares}股</span>
+                <span style={{ fontWeight:700, color:tr.type==="buy"?C.expense:C.income }}>{tr.totalCost?fmt(tr.totalCost):tr.price?`NT$${Math.round(tr.price)}/股`:tr.totalProceeds?`回收 ${fmt(tr.totalProceeds)}`:""}</span>
+              </div>)}
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn v="warn" style={{ flex:1 }} onClick={() => {
+                const proceeds=hasPrice?String(Math.round(st.curPrice*st.totalSh)):"";
+                const autoPnl=hasPrice?String(Math.round(Math.abs(pnl))):"";
+                setSellF({stockId:st.id,shares:String(st.totalSh),totalProceeds:proceeds,fee:"",pnl:autoPnl,pnlType:pnl>=0?"income":"expense",returnAcc:""});
+                setModal("sellStock");
+              }}>賣出 {st.ticker}</Btn>
+            </div>
+            <Btn v="danger" style={{ width:"100%", marginTop:8 }} onClick={() => confirm(`確定刪除 ${st.ticker}？`,()=>{upd("stocks",p=>p.filter(s=>s.id!==st.id));close();})}>🗑 刪除此持股</Btn>
+          </Sheet>;
+        })()}
+    </>
+  );
+}
