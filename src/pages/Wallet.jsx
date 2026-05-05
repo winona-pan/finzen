@@ -18,7 +18,7 @@ export default function WalletPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, set
   nD, setND
 }) {
   return (
-    {tab === "wallet" && (
+    {tab} "wallet" && (
             <div>
               {wMode === "sort" && <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", background:`${C.accent}22`, borderBottom:`1px solid ${C.accent}55` }}>
                 <span style={{ fontSize:13, fontWeight:700, color:C.accentL }}>⠿ 拖曳調整順序</span>
