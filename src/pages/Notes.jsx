@@ -18,7 +18,7 @@ export default function NotesPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, setM
   nD, setND
 }) {
   return (
-    {tab === "notes" && (
+    {tab} "notes" && (
             <div style={{ padding:"12px 16px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>👥</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>往來帳</span></div>
