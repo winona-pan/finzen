@@ -18,7 +18,7 @@ export default function OverviewPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, s
   nD, setND
 }) {
   return (
-    <>
+    {tab === "overview" && (
             <div>
               <div style={{ position:"sticky", top:0, zIndex:20, background:`${C.bg}f2`, backdropFilter:"blur(16px)", padding:"12px 16px 8px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -124,6 +124,8 @@ export default function OverviewPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, s
                 })}
               </div>
             </div>
-    </>
+          )}
+
+          {/* ══ WALLET ══ */}
   );
 }
