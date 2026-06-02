@@ -1,4 +1,7 @@
-export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+import { useState } from "react";
+
+export default function WalletModals({ 
+  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -14,13 +17,60 @@ export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColo
   showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
   nS, setNS, S0, selSub, setSelSub, saveSub, addSub,
   nB, setNB, B0, selBill, setSelBill, saveBill, addBill,
-  nAcc, setNAcc, addAcc, payF, setPayF, doPayCred,
+  nAcc, setNAcc, addAcc: addAccFn, payF, setPayF,
   showHDP, setShowHDP, doBuy, doSell, doInit,
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
+  // 補上對應大腦缺漏的對講機通道
+  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog
 }) {
+
+  /* ── 補上 Claude 拆分檔案時嚴重漏掉的局部狀態 (Local States) ── */
+  const [curSearch, setCurSearch] = useState("");
+  const [localRates, setLocalRates] = useState(() => ({ ...rates }));
+  const [trFrom, setTrFrom] = useState("");
+  const [trTo, setTrTo] = useState("");
+  const [trAmt, setTrAmt] = useState("");
+  const [showAccEP, setShowAccEP] = useState(false);
+  const [showDP, setShowDP] = useState(false);
+  const [confirmDlg, setConfirmDlg] = useState(null);
+
+  /* ── 補上內部的轉帳處理函數 (doTransfer) ── */
+  const doTransfer = () => {
+    const a = +trAmt; if (!a || !trFrom || !trTo || trFrom === trTo) return;
+    upd("accs", p => p.map(ac => { 
+      if (ac.id === trFrom) return { ...ac, bal: ac.bal - a }; 
+      if (ac.id === trTo) return { ...ac, bal: ac.bal + a }; 
+      return ac; 
+    }));
+    // 寫入轉帳交易明細
+    upd("txns", p => [...p, {
+      id: Date.now(), type: "transfer", cat: "帳戶調整", amt: a,
+      desc: `轉帳：${accs.find(x=>x.id===trFrom)?.name} ➜ ${accs.find(x=>x.id===trTo)?.name}`,
+      acc: accs.find(x=>x.id===trFrom)?.name || "", toAcc: accs.find(x=>x.id===trTo)?.name || "",
+      date: TODAY, tags: "#轉帳"
+    }]);
+    setTrFrom(""); setTrTo(""); setTrAmt(""); close();
+  };
+
+  /* ── 補上內部的信用卡還款處理函數 (payCredit) ── */
+  const payCredit = () => {
+    const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
+    upd("accs", p => p.map(ac => { 
+      if (ac.id === payF.creditId) return { ...ac, payable: Math.max(0, (ac.payable || 0) - a) }; 
+      if (ac.id === payF.fromId) return { ...ac, bal: ac.bal - a }; 
+      return ac; 
+    }));
+    upd("txns", p => [...p, { 
+      id: Date.now(), type: "expense", cat: "帳戶調整", amt: a, 
+      desc: payF.note || "信用卡繳費", 
+      acc: accs.find(x => x.id === payF.fromId)?.name || "", date: payF.date, tags: "#繳費" 
+    }]);
+    setPayF({ creditId: "", fromId: "", amt: "", date: TODAY, note: "" }); close();
+  };
+
   return (
     <>
         {modal === "addAccType" && <Sheet title="新增項目" onClose={close}>
@@ -71,7 +121,6 @@ export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColo
           const moAdj = moTxns.filter(t => t.cat === "帳戶調整" && t.acc === selAcc.name);
           const moAdjTotal = moAdj.reduce((s, t) => s + (t.adjDiff || 0), 0);
           return <Sheet title={`編輯帳戶 — ${selAcc.name}`} onClose={close}>
-            {/* Icon picker */}
             <Fld label="圖示（點擊更換）">
               <button onClick={() => setShowAccEP(true)} style={{ width:56, height:56, borderRadius:16, background:C.card, border:`2px solid ${C.accent}`, fontSize:28, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                 {selAcc.icon || AT[selAcc.type] || "💳"}
@@ -136,19 +185,16 @@ export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColo
             .slice(0, 50);
           const isCredit = selAcc.type === "credit";
           return <Sheet title={`${selAcc.icon||AT[selAcc.type]||""} ${selAcc.name}`} onClose={close}>
-            {/* Balance summary */}
             <Card style={{ padding:16, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
               <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{isCredit ? "應付金額" : "目前餘額"}</div>
               <div style={{ fontWeight:900, fontSize:28, color:C.accentL }}>{isCredit ? fmt(selAcc.payable||0) : fmt(selAcc.bal, selAcc.cur)}</div>
               {selAcc.cur !== "TWD" && !isCredit && <div style={{ fontSize:13, color:C.muted }}>≈ {fmt(toTWD(selAcc.bal, selAcc.cur, rates))} TWD</div>}
               {isCredit && <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>信用額度 {fmt(selAcc.limit||0)} · 使用 {selAcc.limit>0?((selAcc.payable||0)/selAcc.limit*100).toFixed(0):0}%</div>}
             </Card>
-            {/* Action buttons */}
             <div style={{ display:"flex", gap:8, marginBottom:16 }}>
               <Btn style={{ flex:1 }} onClick={() => { close(); setTimeout(() => setModal("adjBal"), 50); }}>✏️ 編輯帳戶</Btn>
               {isCredit && <Btn v="teal" style={{ flex:1 }} onClick={() => { setPayF({ creditId:selAcc.id, fromId:"", amt:String(selAcc.payable||0), date:TODAY, note:"" }); close(); setTimeout(() => setModal("payCred"), 50); }}>💳 繳費</Btn>}
             </div>
-            {/* Transaction history */}
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>交易紀錄</div>
             {accTxns.length === 0 && <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>此帳戶尚無交易記錄</div>}
             <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
@@ -203,14 +249,12 @@ export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColo
         {showDP && <DatePicker value={chartRange} onChange={setChartRange} onClose={() => setShowDP(false)} />}
         {showHDP && <DatePicker value={healthRange} onChange={setHealthRange} onClose={() => setShowHDP(false)} />}
 
-        {/* ConfirmDialog - replaces window.confirm */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => { confirmDlg.onOk(); closeConfirm(); }} onCancel={closeConfirm} />}
 
         {modal === "addSub" && <Sheet title="新增訂閱" onClose={close}>
           <Inp label="名稱" placeholder="Netflix" value={nS.name} onChange={e => setNS(p => ({ ...p, name:e.target.value }))} />
           <CalcInp label="金額" value={nS.amt} onChange={v => setNS(p => ({ ...p, amt:v }))} />
           <Sl label="扣款帳戶" value={nS.acc} onChange={e => setNS(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          {/* 頻率選擇 */}
           <Fld label="扣款頻率">
             <div style={{ display:"flex", gap:8 }}>
               {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
@@ -360,17 +404,10 @@ export default function WalletModals({ C, modal, close, iSt, fmt, toTWD, pnlColo
                 </select></Fld>
                 <Inp label="日期（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
               </div>
-            : selBill.freq==="year"
-            ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
-                <Fld label="月份"><select value={selBill.yearMonth||"1"} onChange={e => setSelBill(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
-                  {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
-                </select></Fld>
-                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
-              </div>
             : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => saveBill(selBill)}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={saveBill}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); }}>🗑 刪除</Btn>
