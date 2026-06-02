@@ -2,7 +2,7 @@
 """
 FinZen 股價 + 法人資料自動更新腳本
 - 台股股價：Yahoo Finance v7（最穩定）
-- 三大法人：台灣證交所公開 JSON（免費、無需 Key）
+- 三大法人：台灣證交所公開 JSON（完整欄位修正版）
 - 美股：Yahoo Finance v7
 每次執行會更新 stock_prices.json
 """
@@ -20,7 +20,7 @@ US_STOCKS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA",
 # ─────────────────────────────────────────────────────────
 
 def req(url, timeout=12):
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; FinZen/1.0)", "Accept": "application/json"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "application/json"}
     try:
         r = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(r, timeout=timeout) as resp:
@@ -37,7 +37,6 @@ def fetch_yahoo(symbols_str):
            f"regularMarketVolume,shortName,longName,regularMarketChangePercent")
     raw = req(url)
     if not raw:
-        # 備用 query2
         url2 = url.replace("query1", "query2")
         raw = req(url2)
     if not raw:
@@ -53,7 +52,7 @@ def fetch_yahoo(symbols_str):
                 "high":   q.get("regularMarketDayHigh"),
                 "low":    q.get("regularMarketDayLow"),
                 "vol":    q.get("regularMarketVolume"),
-                "chgPct": round(q.get("regularMarketChangePercent", 0), 2),
+                "chgPct": round(q.get("regularMarketChangePercent", 0), 2) if q.get("regularMarketChangePercent") is not None else 0,
                 "name":   q.get("shortName") or q.get("longName") or sym,
             }
         return out
@@ -63,8 +62,7 @@ def fetch_yahoo(symbols_str):
 
 def fetch_institutional(date_str):
     """
-    抓取台股三大法人買賣超（證交所公開 JSON，無需 API Key）
-    date_str: "YYYYMMDD"
+    精確抓取台股三大法人買賣超淨額（修正證交所欄位索引與張數換算）
     """
     url = (f"https://www.twse.com.tw/rwd/zh/fund/T86"
            f"?date={date_str}&selectType=ALL&response=json")
@@ -78,17 +76,23 @@ def fetch_institutional(date_str):
         result = {}
         def parse(s):
             try:
-                return int(str(s).replace(",", "").replace("+", "").strip())
+                # 證交所公告為「股數」，除以 1000 換算為精確的「張數」
+                val = float(str(s).replace(",", "").replace("+", "").strip())
+                return round(val / 1000)
             except Exception:
                 return 0
+                
         for row in d.get("data", []):
-            if len(row) < 12:
+            if len(row) < 15:
                 continue
+            # 自動清洗股票代碼
             code = row[0].strip()
+            
+            # 修正證交所精確買賣超淨額欄位（第11欄外資、第12欄投信、第14欄自營商買賣超總計）
             result[code] = {
-                "foreign": parse(row[4]),   # 外資淨買賣超（千股）
-                "trust":   parse(row[7]),   # 投信淨
-                "dealer":  parse(row[10]),  # 自營商淨
+                "foreign": parse(row[11]),  # 外資自營商合計買賣超張數
+                "trust":   parse(row[12]),  # 投信買賣超張數
+                "dealer":  parse(row[14]),  # 自營商買賣超總計張數
             }
         return result, date_str
     except Exception as e:
@@ -100,38 +104,43 @@ def main():
     print(f"🕐 開始更新 {now_str}")
     prices = {}
 
-    # 讀取現有資料（保留上次成功的資料）
     try:
-        with open("stock_prices.json", "r") as f:
+        with open("stock_prices.json", "r", encoding="utf-8") as f:
             prices = json.load(f)
     except Exception:
         pass
 
-    # ── 三大法人（台股，15:30後才有當日資料） ──
+    # ── 抓取三大法人資料 ──
     print("🏛  抓取三大法人資料...")
     today = datetime.now().strftime("%Y%m%d")
     inst_data, inst_date = fetch_institutional(today)
     if not inst_data:
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-        inst_data, inst_date = fetch_institutional(yesterday)
-        if inst_data:
-            print(f"   ⚠ 使用前一交易日({inst_date})法人資料，共 {len(inst_data)} 支")
-        else:
-            print("   ❌ 法人資料取得失敗")
-    else:
-        print(f"   ✅ 取得 {len(inst_data)} 支台股法人資料（{inst_date}）")
+        # 如果還沒收盤公布，往回推 1-3 天尋找最近一交易日
+        for i in range(1, 4):
+            check_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
+            inst_data, inst_date = fetch_institutional(check_date)
+            if inst_data:
+                print(f"    ⚠ 使用最近交易日({inst_date})法人籌碼，共 {len(inst_data)} 支")
+                break
+                
+    if not inst_data:
+        print("    ❌ 全新法人資料取得失敗，將使用上次舊緩存")
+        # 繼承舊資料中的 inst_date 避免報錯
+        inst_date = prices.get("_meta", {}).get("institutional_date", today)
 
-    # ── 台股（批量） ──
+    # ── 台股處理 ──
     print(f"📈 抓取台股 ({len(TW_STOCKS)} 檔)...")
     tw_syms = ",".join(f"{s}.TW" for s in TW_STOCKS)
     tw_res = fetch_yahoo(tw_syms)
     for sym in TW_STOCKS:
         q = tw_res.get(f"{sym}.TW") or tw_res.get(sym)
         if q and q.get("price"):
+            # 取出該股票的法人資料，如果找不到就補 0
+            inst = inst_data.get(sym) or prices.get(sym, {}).get("institutional", {"foreign": 0, "trust": 0, "dealer": 0})
             entry = {
                 **q,
                 "market": "TW",
-                "institutional": inst_data.get(sym, {}),
+                "institutional": inst,
                 "institutional_date": inst_date,
                 "updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             }
@@ -142,7 +151,7 @@ def main():
         else:
             print(f"  ❌ {sym}: 抓取失敗")
 
-    # ── 美股（批量） ──
+    # ── 美股處理 ──
     print(f"🇺🇸 抓取美股 ({len(US_STOCKS)} 檔)...")
     us_syms = ",".join(US_STOCKS)
     us_res = fetch_yahoo(us_syms)
@@ -171,9 +180,8 @@ def main():
         json.dump(prices, f, ensure_ascii=False, indent=2)
 
     real = [k for k in prices if not k.startswith("_") and not k.endswith(".TW")]
-    print(f"\n✅ 完成！共更新 {len(real)} 檔股票")
+    print(f"\n✅ 完成！共更新 {len(real)} 檔股票資料")
 
-# ── 順便更新匯率 ──────────────────────────────────────────
 def fetch_rates():
     """抓取匯率（對 TWD），存入 rates.json"""
     TWD_CURS = ["USD","EUR","JPY","GBP","HKD","SGD","CNY","KRW","AUD","CAD","CHF","MYR","THB"]
@@ -194,10 +202,10 @@ def fetch_rates():
             rates = {"TWD": 1.0}
             for cur in TWD_CURS:
                 if cur in r and r[cur]:
-                    rates[cur] = round(1 / r[cur], 6)  # 換算成 1外幣=N TWD
+                    rates[cur] = round(1 / r[cur], 6)
             rates["_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            with open("rates.json", "w") as f:
-                json.dump(rates, f, indent=2)
+            with open("rates.json", "w", encoding="utf-8") as f:
+                json.dump(rates, f, ensure_ascii=False, indent=2)
             print(f"  ✅ 匯率更新完成（{len(rates)-1} 種貨幣）")
             return
         except Exception as e:
