@@ -1,4 +1,7 @@
-export default function TxnModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+import { useState } from "react";
+
+export default function TxnModals({ 
+  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -19,8 +22,70 @@ export default function TxnModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, 
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
+  // 接收大腦配送過來的共用 UI Atoms 元件與通道
+  Sheet, Inp, Sl, Fld, CalcInp, AutoInput, Btn, TP
 }) {
+
+  /* ── 補上漏掉的「核心記帳處理邏輯」函數 (addTxn) ── */
+  const addTxn = () => {
+    if (!nT.amt) return;
+    const id = Date.now();
+    const validProxies = nT.proxy ? nT.proxyList.filter(p => p.person && +p.amt > 0) : [];
+    const totalProxyAmt = validProxies.reduce((s, p) => s + +p.amt, 0);
+    const ownAmt = +nT.amt - totalProxyAmt;
+
+    if (validProxies.length > 0) {
+      // 拆成兩筆：自己支出 + 代墊往來
+      const ownTxn = { ...nT, id, amt: ownAmt, proxyAmt: 0, proxyFor: "", proxyList: [], desc: nT.desc || nT.cat };
+      const proxyTxn = {
+        ...nT, id: id + 1, type: "transfer", cat: "往來帳",
+        amt: totalProxyAmt, proxyAmt: totalProxyAmt,
+        proxyFor: validProxies.map(p => p.person).join("、"),
+        proxyList: validProxies,
+        desc: `代墊：${nT.desc || nT.cat}（${validProxies.map(p => `${p.person} ${fmt(+p.amt)}`).join("、")}）`,
+        tags: "#代墊",
+      };
+      upd("txns", p => [...p, ownTxn, proxyTxn]);
+
+      // 扣全額
+      const acc = accs.find(a => a.name === nT.acc);
+      if (acc) {
+        if (acc.type === "credit") {
+          upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable: (a.payable || 0) + (+nT.amt) } : a));
+        } else {
+          upd("accs", p => p.map(a => a.name === nT.acc ? { ...a, bal: a.bal - (+nT.amt) } : a));
+        }
+      }
+      // 建立應收帳款
+      validProxies.forEach(pr => {
+        upd("debts", p => [...p, { id: "d" + Date.now() + Math.random(), type: "receivable", person: pr.person, amt: +pr.amt, desc: `代墊：${nT.desc || nT.cat}`, date: nT.date, settled: false, srcTxnId: id }]);
+      });
+    } else {
+      // 無代墊普通記帳
+      const t = { ...nT, id, amt: +nT.amt, proxyAmt: 0, proxyFor: "", proxyList: [] };
+      upd("txns", p => [...p, t]);
+      const acc = accs.find(a => a.name === t.acc);
+      if (acc) {
+        if (t.type === "income") {
+          upd("accs", p => p.map(a => a.name === t.acc ? { ...a, bal: a.bal + t.amt } : a));
+        } else if (t.type === "expense") {
+          if (acc.type === "credit") {
+            upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable: (a.payable || 0) + t.amt } : a));
+          } else {
+            upd("accs", p => p.map(a => a.name === t.acc ? { ...a, bal: a.bal - t.amt } : a));
+          }
+        }
+      }
+    }
+
+    if (nT.deferred && nT.deferMoAmt && nT.type === "income") {
+      upd("txns", p => p.map(x => x.id === id ? { ...x, type: "transfer", cat: "帳戶調整", desc: `待認列收入：${nT.desc || nT.cat}（共 ${fmt(+nT.amt)}）` } : x));
+      upd("pools", p => [...p, { id: "p" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt: +nT.amt, recognized: 0, date: nT.date, acc: nT.acc }]);
+    }
+    setNT(T0); close();
+  };
+
   return (
     <>
         {modal === "addTxn" && <Sheet title="新增 / 補記" onClose={close}>
@@ -36,6 +101,7 @@ export default function TxnModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, 
           <AutoInput label="標籤（選填）" placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
           <Sl label="帳戶" value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇帳戶 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
           <Fld label={`日期${nT.date !== TODAY ? " 📅 補記 " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+          
           {nT.type === "expense" && <div style={{ marginBottom:12 }}>
             <button onClick={() => setNT(p => ({ ...p, proxy:!p.proxy }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.proxy ? `${C.warn}22` : C.card, color:nT.proxy ? C.warn : C.textSub, border:`1px solid ${nT.proxy ? C.warn : C.border}`, cursor:"pointer" }}>
               <span>{nT.proxy ? "✅" : "⬜"}</span> 含代墊款項（自動建立應收帳款）
@@ -51,6 +117,7 @@ export default function TxnModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, 
               <div style={{ fontSize:12, color:C.warn, marginTop:6 }}>✨ 自動在「往來帳」為每位對象建立應收記錄</div>
             </div>}
           </div>}
+
           {nT.type === "income" && <div style={{ marginBottom:12 }}>
             <button onClick={() => setNT(p => ({ ...p, deferred:!p.deferred }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.deferred ? `${C.teal}22` : C.card, color:nT.deferred ? C.teal : C.textSub, border:`1px solid ${nT.deferred ? C.teal : C.border}`, cursor:"pointer" }}>
               <span>{nT.deferred ? "✅" : "⬜"}</span> 開啟分月認列（收入分期計算）
