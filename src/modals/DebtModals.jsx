@@ -1,4 +1,7 @@
-export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+import { useState } from "react";
+
+export default function DebtModals({ 
+  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -19,8 +22,14 @@ export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor,
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
+  // 精確接收全域大腦分發過來的 UI 基礎元件
+  Sheet, Inp, Sl, Fld, CalcInp, Btn, TP
 }) {
+
+  // 補上表單重置時所需的預設常數，確保獨立封裝不報錯
+  const D0 = { type:"receivable", person:"", amt:"", desc:"", date:TODAY, note:"", installTotal:0, installAmt:"", installPaid:0, installPaidAmt:0 };
+
   return (
     <>
         {modal === "addDebt" && <Sheet title="新增往來帳" onClose={close}>
@@ -31,11 +40,13 @@ export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor,
           <CalcInp label="總金額" value={nD.amt} onChange={v => setND(p => ({ ...p, amt:v }))} />
           <Inp label="說明" placeholder="植村秀" value={nD.desc} onChange={e => setND(p => ({ ...p, desc:e.target.value }))} />
           <Fld label="日期"><input type="date" value={nD.date} onChange={e => setND(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+          
           {/* Installment option */}
           <button onClick={() => setND(p => ({ ...p, installTotal:p.installTotal>0?0:3, installAmt:p.amt?String(Math.round(+p.amt/3)):"" }))}
             style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nD.installTotal>0?`${C.warn}22`:C.card, color:nD.installTotal>0?C.warn:C.textSub, border:`1px solid ${nD.installTotal>0?C.warn:C.border}`, cursor:"pointer", marginBottom:12 }}>
             <span>{nD.installTotal>0?"✅":"⬜"}</span> 分期付款
           </button>
+          
           {nD.installTotal > 0 && <div style={{ padding:12, borderRadius:12, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:12 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <Fld label="分幾期">
@@ -47,8 +58,14 @@ export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor,
             </div>
             <div style={{ fontSize:12, color:nD.type==="receivable"?C.teal:C.warn }}>💡 {nD.type==="receivable"?"每次對方還錢點「收一期」":"每次付款點「付一期」"}，自動更新帳戶餘額</div>
           </div>}
+          
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addDebt}>新增</Btn>
+            <Btn style={{ flex:1 }} onClick={() => {
+              if (!nD.person || !nD.amt) return;
+              upd("debts", p => [...p, { ...nD, id:"d" + Date.now(), amt:+nD.amt, settled:false }]);
+              setND(D0);
+              close();
+            }}>新增</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
         </Sheet>}
@@ -74,7 +91,6 @@ export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor,
           const paidSoFar = d.installPaidAmt || 0;
           const remaining = d.amt - paidSoFar;
           const defaultPay = isInstall ? Math.min(eachAmt, remaining) : remaining;
-          // settleAmt: user can override the amount
           const thisPay = settleCustomAmt ? +settleCustomAmt : defaultPay;
           const isReceivable = d.type === "receivable";
           const newPaidCount = (d.installPaid||0) + 1;
@@ -86,7 +102,6 @@ export default function DebtModals({ C, modal, close, iSt, fmt, toTWD, pnlColor,
                 剩餘未付：{fmt(remaining)} {isInstall ? `（第 ${newPaidCount}/${d.installTotal} 期，預設每期 ${fmt(eachAmt)}）` : ""}
               </div>
             </div>
-            {/* 可手動輸入金額 */}
             <Fld label={`本次${isReceivable?"收款":"付款"}金額（可修改）`}>
               <input type="number" value={settleCustomAmt !== null ? settleCustomAmt : String(defaultPay)}
                 onChange={e => setSettleCustomAmt(e.target.value)}
