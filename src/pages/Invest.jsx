@@ -193,12 +193,10 @@ export default function InvestPage({ C, tab, iSt, fmt, toTWD, pnlColor, upd, set
 
               {invTab === "learn" && <div>
                 {[{
-                  section:"🌱 基礎觀念", key:"learn_basic",
+                  section:"🌱 入門", key:"learn_basic",
                   items:[
-                    { title:"什麼是複利？為什麼說是第八大奇蹟", tag:"入門", url:"https://rich01.com/compound-interest/" },
-                    { title:"通貨膨脹是什麼？為什麼錢放著會變薄", tag:"入門", url:"https://rich01.com/inflation-2/" },
-                    { title:"資產與負債的差別，富人思維的起點", tag:"入門", url:"https://rich01.com/assets-liabilities/" },
-                    { title:"緊急預備金要存多少才夠？", tag:"入門", url:"https://rich01.com/emergency-fund/" },
+                    { title:"新手入門", tag:"入門", url:"https://rich01.com/mr-market-for-new/" },
+                    
                   ]
                 },{
                   section:"📈 股票投資", key:"learn_stock",
