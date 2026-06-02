@@ -1,4 +1,7 @@
-export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+import { useState } from "react";
+
+export default function StockModals({ 
+  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -19,12 +22,19 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
+  // 接收全域共用 UI Atoms 元件
+  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg
 }) {
+
+  // 補上被 Claude 遺漏在 App.jsx 裡面的表單重置常數
+  const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"" };
+
   return (
     <>
         {modal === "buyStock" && <Sheet title="記錄買入" onClose={close}>
           <Sl label="證券帳戶" value={buyF.acc} onChange={e => setBuyF(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type === "investment").map(a => <option key={a.id} value={a.name}>{a.name}</option>)}</Sl>
+          
           {/* 記憶上次買入 */}
           {stocks.length > 0 && <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>📌 重複買入（點選帶入）</div>
@@ -37,6 +47,7 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
               ))}
             </div>
           </div>}
+          
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
             <div>
               <Inp label="股票代號" placeholder="0050 / AAPL" value={buyF.ticker} onChange={e => setBuyF(p => ({ ...p, ticker:e.target.value.toUpperCase().replace(/\.TW$|\.US$/i,"") }))} />
@@ -64,7 +75,6 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
           const st = stSum.find(s => s.id === sellF.stockId);
           if (!st) return null;
           return <Sheet title="賣出股票" onClose={close}>
-            {/* 下拉選擇持股 */}
             <Fld label="選擇持股">
               <select value={sellF.stockId} onChange={e => {
                 const s = stSum.find(x => x.id === e.target.value);
@@ -125,7 +135,6 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => {
               if (!buyF.ticker || !buyF.shares) return;
-              // 直接建立持股，不產生任何 trade 記錄，純粹記錄現況
               upd("stocks", p => {
                 const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
                 if (ex) {
@@ -147,7 +156,6 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                   trades: [],
                 }];
               });
-              // 同步更新證券帳戶餘額（加上投資總成本）
               if (buyF.acc && buyF.totalCost) {
                 upd("accs", p => p.map(a => a.name === buyF.acc ? { ...a, bal: a.bal + +buyF.totalCost } : a));
               }
@@ -165,12 +173,7 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
           const extra = st._extra || {};
           const inst = extra.institutional || {};
           const hasInst = inst.foreign !== undefined || inst.trust !== undefined;
-          const yahooUrl = `https://finance.yahoo.com/quote/${st.market==="TW"?st.ticker+".TW":st.ticker}/chart`;
-          const newsQuery = [st.ticker, st.name].filter(Boolean).join(" ");
-          const newsUrl = `https://news.google.com/search?q=${encodeURIComponent(newsQuery+" 股票")}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
           return <Sheet title={`${st.ticker} ${st.name}`} onClose={close}>
-
-            {/* 市價損益摘要 */}
             <Card style={{ padding:16, marginBottom:12, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:hasPrice?10:0 }}>
                 <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>市值</div>
@@ -195,7 +198,6 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
               {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>更新：{st.lastUpdated}</div>}
             </Card>
 
-            {/* 今日行情 */}
             {hasPrice && (extra.high || extra.low || extra.vol) && <Card style={{ padding:14, marginBottom:12 }}>
               <div style={{ fontSize:11, fontWeight:900, color:C.muted, marginBottom:8, letterSpacing:"0.08em" }}>今日行情</div>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
@@ -206,35 +208,25 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
               </div>
             </Card>}
 
-            {/* 三大法人 */}
             {st.market === "TW" && <Card style={{ padding:14, marginBottom:12 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:11, fontWeight:900, color:C.muted, letterSpacing:"0.08em" }}>三大法人買賣超（千股）</div>
                 {extra.institutional_date && <div style={{ fontSize:10, color:C.muted }}>{extra.institutional_date ? `${extra.institutional_date.slice(0,4)}-${extra.institutional_date.slice(4,6)}-${extra.institutional_date.slice(6,8)}` : ""}</div>}
               </div>
-              {hasInst
-                ? <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                    {[{label:"外資",val:inst.foreign},{label:"投信",val:inst.trust},{label:"自營商",val:inst.dealer}].map(({label,val}) => (
-                      <div key={label} style={{ textAlign:"center", padding:"10px 6px", borderRadius:10, background:val>0?`${C.income}15`:val<0?`${C.expense}15`:`${C.muted}10` }}>
-                        <div style={{ fontSize:10, color:C.textSub, marginBottom:4 }}>{label}</div>
-                        <div style={{ fontWeight:900, fontSize:14, color:val>0?C.income:val<0?C.expense:C.muted }}>
-                          {val>0?"▲":val<0?"▼":"—"} {val!==undefined?Math.abs(val).toLocaleString():"—"}
-                        </div>
+              {hasInst ? (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                  {[{label:"外資",val:inst.foreign},{label:"投信",val:inst.trust},{label:"自營商",val:inst.dealer}].map(({label,val}) => (
+                    <div key={label} style={{ textAlign:"center", padding:"10px 6px", borderRadius:10, background:val>0?`${C.income}15`:val<0?`${C.expense}15`:`${C.muted}10` }}>
+                      <div style={{ fontSize:10, color:C.textSub, marginBottom:4 }}>{label}</div>
+                      <div style={{ fontWeight:900, fontSize:14, color:val>0?C.income:val<0?C.expense:C.muted }}>
+                        {val>0?"▲":val<0?"▼":"—"} {val!==undefined?Math.abs(val).toLocaleString():"—"}
                       </div>
-                    ))}
-                  </div>
-                : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
             </Card>}
 
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-              <button onClick={() => {
-                  const sym = st.market==="TW" ? `TWSE:${st.ticker}` : st.ticker;
-                  window.open(`https://www.tradingview.com/chart/?symbol=${sym}`, "_blank");
-                }} style={{ padding:"10px", borderRadius:12, background:`${C.accent}20`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>📊 技術線圖</button>
-              <button onClick={() => window.open(newsUrl,"_blank")} style={{ padding:"10px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>📰 個股新聞</button>
-              </div>
-
-            {/* 持股編輯 */}
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <Inp label="股數（自動）" type="number" value={String(st.totalSh)}
@@ -246,7 +238,6 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
             <Inp label="投資總成本（自動）" type="number" value={String(Math.round(st.totalCost||0))}
               onChange={e => { const cost=+e.target.value; upd("stocks",p=>p.map(s=>s.id===st.id?{...s,manualTotalCost:cost,manualAvgCost:s.totalSh>0?+(cost/s.totalSh).toFixed(2):s.manualAvgCost}:s)); }} />
 
-            {/* 停損提醒 */}
             <div style={{ padding:12, borderRadius:12, background:`${C.danger}10`, border:`1px solid ${C.danger}33`, margin:"10px 0" }}>
               <div style={{ fontSize:11, fontWeight:900, color:C.danger, marginBottom:8 }}>🔴 停損提醒</div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -256,27 +247,15 @@ export default function StockModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                   onChange={e => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:+e.target.value||null} : s))}
                   style={{...iSt, width:70, flex:"none"}} />
                 <span style={{ fontSize:13, color:C.textSub, flexShrink:0 }}>% 時顯示警示</span>
-                {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))}
-                  style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
+                {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
               </div>
               {st.stopLossPct && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
                 停損線：均成本 {fmt(Math.round(st.avgCost||0))} × (1−{st.stopLossPct}%) ≈ {fmt(Math.round((st.avgCost||0)*(1-st.stopLossPct/100)))} /股
                 {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ 已達停損！</span>}
               </div>}
             </div>
-            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, margin:"12px 0 8px" }}>交易紀錄</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
-              {(st.trades||[]).length===0&&!st.manualShares&&<div style={{ fontSize:12, color:C.muted, padding:"8px 0" }}>尚無買賣記錄</div>}
-              {st.manualShares>0&&<div style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-                <span style={{ color:C.accentL }}>📋 現有持股 {st.manualShares}股</span>
-                <span style={{ fontWeight:700, color:C.accentL }}>{st.manualTotalCost?`成本 ${fmt(st.manualTotalCost)}`:st.manualAvgCost?`均 ${fmt(st.manualAvgCost)}/股`:""}</span>
-              </div>}
-              {(st.trades||[]).map(tr=><div key={tr.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, fontSize:12, background:tr.type==="buy"?`${C.expense}12`:`${C.income}12` }}>
-                <span style={{ color:C.textSub }}>{tr.date} {tr.type==="buy"?"買入":"賣出"} {tr.shares}股</span>
-                <span style={{ fontWeight:700, color:tr.type==="buy"?C.expense:C.income }}>{tr.totalCost?fmt(tr.totalCost):tr.price?`NT$${Math.round(tr.price)}/股`:tr.totalProceeds?`回收 ${fmt(tr.totalProceeds)}`:""}</span>
-              </div>)}
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
+            
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
               <Btn v="warn" style={{ flex:1 }} onClick={() => {
                 const proceeds=hasPrice?String(Math.round(st.curPrice*st.totalSh)):"";
                 const autoPnl=hasPrice?String(Math.round(Math.abs(pnl))):"";
