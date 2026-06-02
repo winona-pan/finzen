@@ -1,4 +1,7 @@
-export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+import { useState } from "react";
+
+export default function OtherModals({ 
+  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -7,8 +10,8 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
   selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
   selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
-  nG, setNG, addGoal, editGoal, setEditGoal,
-  selPolicy, setSelPolicy, nPL, setNPL, addPolicy,
+  nG, setNG, editGoal, setEditGoal,
+  selPolicy, setSelPolicy, nPL, setNPL,
   premAmt, setPremAmt, premAcc, setPremAcc,
   surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
@@ -19,8 +22,45 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
+  // 接收大腦配送過來的共用 UI 原子元件
+  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji
 }) {
+
+  /* ── 補上被 Claude 嚴重遺漏的類別管理相關局部 State (Local States) ── */
+  const [editCat, setEditCat] = useState(null); // {type, oldName, name, emoji}
+  const [showEditEP, setShowEditEP] = useState(false);
+  const [newCatType, setNewCatType] = useState("expense");
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatEmoji, setNewCatEmoji] = useState("📦");
+  const [showCatEP, setShowCatEP] = useState(false);
+
+  /* ── 補上保單與目標表單清空所需的初始化常數 ── */
+  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [] };
+  const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
+
+  /* ── 補上核心商務處理邏輯：新增理財目標 ── */
+  const addGoal = () => { 
+    if (!nG.name || !nG.target) return; 
+    upd("goals", p => [...(p || []), { ...nG, id: "g" + Date.now(), target: +nG.target }]); 
+    setNG(G0); close(); 
+  };
+
+  /* ── 補上核心商務處理邏輯：新增儲蓄保單 ── */
+  const addPolicy = () => { 
+    if (!nPL.name) return; 
+    upd("policies", p => [...(p || []), { ...nPL, id: "pl" + Date.now(), premium: +nPL.premium || 0, surrenderVal: +nPL.surrenderVal || 0 }]); 
+    setNPL(PL0); close(); 
+  };
+
+  /* ── 補上核心商務處理邏輯：內建新增自訂記帳類別處理函數 ── */
+  const addCat = () => { 
+    if (!newCatName.trim()) return; 
+    upd("cats", p => ({ ...p, [newCatType]: [...p[newCatType], newCatName.trim()] })); 
+    addCustomCE(newCatName.trim(), newCatEmoji); 
+    setNewCatName(""); setNewCatEmoji("📦"); 
+  };
+
   return (
     <>
         {modal === "addGoal" && <Sheet title="新增目標" onClose={close}>
@@ -61,7 +101,7 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
           <Fld label="目標期限">
             <input type="date" value={editGoal.deadline||""} onChange={e => setEditGoal(p => ({ ...p, deadline:e.target.value }))} style={iSt} />
             {editGoal.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
-              ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))} 天
+              ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}天
             </div>}
           </Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
@@ -77,7 +117,7 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
             <div style={{ marginTop:4, color:C.muted }}>醫療險、意外險等純保障型 → 放「基本開銷」設定每年自動記帳即可。</div>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:8 }}>
-            <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nPL.emoji}</button>
+            <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nPL.emoji || "🛡️"}</button>
             <div style={{ flex:1 }}><Inp label="保單名稱" placeholder="例：南山利率變動型年金" value={nPL.name} onChange={e => setNPL(p=>({...p,name:e.target.value}))} /></div>
           </div>
           <Inp label="保險公司" placeholder="例：南山人壽" value={nPL.insurer} onChange={e => setNPL(p=>({...p,insurer:e.target.value}))} />
@@ -124,7 +164,7 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
         {modal === "payPremium" && selPolicy && (() => {
           return <Sheet title={`繳保費 — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
-              <div style={{ fontSize:13, color:C.textSub }}>幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong>　已繳總額：<strong style={{ color:C.text }}>{selPolicy.cur&&selPolicy.cur!=="TWD"?`${selPolicy.cur} `:"NT$"}{(selPolicy.totalPaid||0).toLocaleString()}</strong></div>
+              <div style={{ fontSize:13, color:C.textSub }}>幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> 已繳總額：<strong style={{ color:C.text }}>{selPolicy.cur&&selPolicy.cur!=="TWD"?`${selPolicy.cur} `:"NT$"}{(selPolicy.totalPaid||0).toLocaleString()}</strong></div>
             </div>
             <CalcInp label={`本次繳費金額（${selPolicy.cur||"TWD"}）`} value={premAmt} onChange={v => setPremAmt(v)} />
             <Sl label="從哪個帳戶扣款" value={premAcc} onChange={e => setPremAcc(e.target.value)}>
@@ -135,15 +175,12 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
               <Btn style={{ flex:1 }} onClick={() => {
                 if (!premAmt || +premAmt <= 0) return;
                 const amt = +premAmt;
-                // 1. 已繳總額累加
                 upd("policies", p=>p.map(x=>x.id===selPolicy.id ? {...x, totalPaid:(x.totalPaid||0)+amt, lastPremium:amt} : x));
-                // 2. 帳戶餘額扣除
                 if (premAcc) {
                   const acc = accs.find(a=>a.name===premAcc);
                   if (acc?.type==="credit") upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, payable:(a.payable||0)+amt} : a));
                   else upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, bal:a.bal-amt} : a));
                 }
-                // 3. 總覽記一筆支出
                 upd("txns", p=>[...p, { id:Date.now(), type:"expense", cat:"保費", amt, desc:`${selPolicy.name} 保費`, acc:premAcc||"", date:TODAY, tags:"#保單" }]);
                 setPremAmt(""); setPremAcc(""); close();
               }}>確認繳費</Btn>
@@ -161,7 +198,7 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
           return <Sheet title={`解約 — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
               <div style={{ fontSize:13, color:C.textSub }}>
-                幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong>　
+                幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> 
                 已繳總保費：<strong style={{ color:C.text }}>{isForeign?`${selPolicy.cur} `:""}{totalPaid.toLocaleString()}</strong>
                 {isForeign && <span style={{ color:C.muted }}> ≈ {fmt(totalPaidTWD)}</span>}
               </div>
@@ -184,21 +221,11 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                 const amt = +surrenderAmt;
                 if (!amt) return;
                 const now = Date.now();
-                // 帳戶餘額加上領回金額（TWD）
                 if (surrenderAcc) upd("accs", p=>p.map(a=>a.name===surrenderAcc ? {...a, bal:a.bal+surrenderTWD} : a));
-                // 筆1：已繳保費本金回收（transfer）
-                // 筆2：損益（正=收入，負=支出）
                 upd("txns", p=>[...p,
-                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaidTWD,
-                    desc:`${selPolicy.name} 解約 — 本金回收${isForeign?` (${selPolicy.cur})`:""}`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
-                  ...(pnl !== 0 ? [{ id:now+1,
-                    type: pnl > 0 ? "income" : "expense",
-                    cat: pnl > 0 ? "投資收益" : "其他",
-                    amt: Math.abs(pnl),
-                    desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}${isForeign?` (${selPolicy.cur}換算)`:""}`,
-                    acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
+                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaidTWD, desc:`${selPolicy.name} 解約 — 本金回收${isForeign?` (${selPolicy.cur})`:""}`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
+                  ...(pnl !== 0 ? [{ id:now+1, type: pnl > 0 ? "income" : "expense", cat: pnl > 0 ? "投資收益" : "其他", amt: Math.abs(pnl), desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}${isForeign?` (${selPolicy.cur}換算)`:""}`, acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
                 ]);
-                // 刪除保單
                 upd("policies", p=>p.filter(x=>x.id!==selPolicy.id));
                 setSurrenderAmt(""); setSurrenderAcc(""); close();
               }}>確認解約</Btn>
@@ -223,7 +250,6 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                   </button>
                 ))}
               </div>
-              {/* Edit panel */}
               {editCat?.type === type && (
                 <div style={{ padding:12, borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}44`, marginBottom:10 }}>
                   <div style={{ fontSize:11, color:C.accentL, marginBottom:8, fontWeight:700 }}>編輯「{editCat.oldName}」</div>
@@ -238,9 +264,7 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                   <div style={{ display:"flex", gap:6 }}>
                     <button onClick={() => {
                       if (!editCat.name.trim()) return;
-                      // Update cats list (rename)
                       upd("cats", p => ({ ...p, [type]:p[type].map(c => c===editCat.oldName ? editCat.name.trim() : c) }));
-                      // Update customCE
                       addCustomCE(editCat.name.trim(), editCat.emoji);
                       if (editCat.name.trim() !== editCat.oldName) {
                         upd("customCE", p => { const n = {...(p||{})}; delete n[editCat.oldName]; n[editCat.name.trim()] = editCat.emoji; return n; });
@@ -255,7 +279,6 @@ export default function OtherModals({ C, modal, close, iSt, fmt, toTWD, pnlColor
                   {showEditEP && <EmojiPicker onSelect={e => { setEditCat(p => ({ ...p, emoji:e })); setShowEditEP(false); }} onClose={() => setShowEditEP(false)} />}
                 </div>
               )}
-              {/* 新增列 */}
               <div style={{ padding:10, borderRadius:12, background:`${C.accent}10`, border:`1px solid ${C.accent}33` }}>
                 <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
                   <button onClick={() => { setNewCatType(type); setShowCatEP(true); }}
