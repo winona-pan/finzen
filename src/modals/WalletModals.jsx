@@ -6,7 +6,7 @@ export default function WalletModals({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
-  isSingleMo, chartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
+  isSingleMo, chartRange, setChartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
   selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
   selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
@@ -22,7 +22,7 @@ export default function WalletModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0, chartRange, setChartRange, healthRange, setHealthRange,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0,
   // 共用 UI atoms 與資料
   CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card
 }) {
