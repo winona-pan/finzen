@@ -75,6 +75,13 @@ function fmt(n, cur = "TWD") {
 /* ── Constants ── */
 const CE = { 食物:"🍔",交通:"🚌",家居:"🏠",娛樂:"🎬",訂閱:"📱",薪資:"💰",家教:"📖",零用錢:"🏮",利息:"🏦",股息:"📈",紅包:"🧧",投資收益:"📈",教育:"🎓",醫療:"💊",美容:"💄",帳戶調整:"✨",其他:"📦",其他收入:"💴",往來帳:"🤝",股票:"📈" };
 const AT = { cash:"💰",debit:"🏦",investment:"📊",credit:"💳" };
+const EMOTIONS = [
+  { key:"plan", label:"計畫內", icon:"📋", color:"#4ade80" },
+  { key:"fomo", label:"追高/貪婪", icon:"🔥", color:"#f43f5e" },
+  { key:"panic", label:"恐慌/殺低", icon:"😰", color:"#f43f5e" },
+  { key:"herd", label:"聽消息/從眾", icon:"👥", color:"#f59e0b" },
+  { key:"bored", label:"手癢/衝動", icon:"🎲", color:"#f59e0b" },
+];
 const PASSIVE = ["利息","股息","紅包","投資收益"];
 const APP_VER = "2.2";
 const LEARN_DATA = [];
@@ -121,6 +128,7 @@ function checkVer() {
 /* ── UI Atoms ── */
 const getISt = () => ({ background:C.card, border:`1px solid ${C.border}`, color:C.text, borderRadius:10, padding:"9px 12px", fontSize:14, outline:"none", width:"100%", boxSizing:"border-box" });
 let iSt = getISt();
+let themeMode = "dark";
 function Card({ children, style = {} }) { return <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:16,...style }}>{children}</div>; }
 function SH({ title, right }) {
   return <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px",marginBottom:8 }}>
@@ -233,14 +241,14 @@ function DatePicker({ value, onChange, onClose }) {
     setS(fmt2(start)); setE(fmt2(end));
   };
   return <div style={{ position:"fixed", inset:0, zIndex:120, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.75)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
-    <div style={{ width:"100%", maxWidth:420, background:C.surface, borderRadius:"20px 20px 0 0", padding:20 }}>
+    <div style={{ width:"100%", maxWidth:420, maxHeight:"85dvh", overflowY:"auto", background:C.surface, borderRadius:"20px 20px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))" }}>
       <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:14 }}>選擇區間</div>
       <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
         {[{l:"本月",m:1},{l:"近3月",m:3},{l:"近6月",m:6},{l:"近12月",m:12}].map(o => <button key={o.l} onClick={() => quick(o.m)} style={{ padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>{o.l}</button>)}
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:"dark" }} /></div>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:"dark" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="light"?"light":"dark" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="light"?"light":"dark" }} /></div>
       </div>
       <div style={{ display:"flex", gap:8 }}>
         <button onClick={() => { onChange({ s, e }); onClose(); }} style={{ flex:1, padding:12, borderRadius:12, background:C.accent, color:"#fff", border:"none", fontWeight:900, cursor:"pointer" }}>確定</button>
@@ -348,7 +356,7 @@ function SwipeRow({ children, onDelete, onEdit, onClick }) {
         onMouseMove={e => { if (dragging.current) onMove(e.clientX); }}
         onMouseUp={onEnd}
         onMouseLeave={() => { if (dragging.current) onEnd(); }}
-        style={{ position:"relative", background:C.bg, transform:`translateX(${dx}px)`, transition: dragging.current ? "none" : "transform .2s", cursor:onClick?"pointer":"default" }}>
+        style={{ position:"relative", background:C.bg, transform:`translateX(${dx}px)`, transition: dragging.current ? "none" : "transform .2s", cursor:onClick?"pointer":"default", touchAction: ACT_W > 0 ? "pan-y" : "auto" }}>
         {children}
       </div>
     </div>
@@ -371,11 +379,30 @@ export default function App() {
     });
   }, []);
   const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
+  const watchlist = d.watchlist || [];
+  const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 冷靜清單：4 小時緩衝期
+  const addToWatchlist = useCallback((item) => {
+    upd("watchlist", p => [...(p || []), { id:"w" + Date.now(), ...item, addedAt: Date.now() }]);
+  }, [upd]);
+  const removeFromWatchlist = useCallback((id) => {
+    upd("watchlist", p => (p || []).filter(x => x.id !== id));
+  }, [upd]);
+
+  /* ── 交易頻率追蹤：近 7 天買賣次數，過於頻繁時提醒 ── */
+  const recentTradeCount = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    let count = 0;
+    stocks.forEach(s => (s.trades || []).forEach(t => { if (new Date(t.date).getTime() >= cutoff) count++; }));
+    return count;
+  }, [stocks]);
+  const TRADE_FREQ_WARN = 5;
+
 
   /* ── tabs / modal ── */
   const [tab, setTab] = useState("overview");
   const [theme, setTheme] = useState(() => localStorage.getItem("finzen_theme") || "dark");
   C = getC(theme);
+  themeMode = theme;
   iSt = getISt();
   const changeTheme = (t) => { localStorage.setItem("finzen_theme", t); setTheme(t); };
   const [modal, setModal] = useState(null);
@@ -435,9 +462,9 @@ export default function App() {
   const [nB, setNB] = useState(B0);
   const NA0 = { name:"",type:"debit",cur:"TWD",limit:"100000" };
   const [nAcc, setNAcc] = useState(NA0);
-  const BF0 = { acc:"",ticker:"",name:"",market:"TW",shares:"",avgCost:"",totalCost:"",fee:"0",curPrice:"",fromAcc:"" };
+  const BF0 = { acc:"",ticker:"",name:"",market:"TW",shares:"",avgCost:"",totalCost:"",fee:"0",curPrice:"",fromAcc:"",emotion:"",buyReason:"" };
   const [buyF, setBuyF] = useState(BF0);
-  const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"" });
+  const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
   const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
@@ -603,7 +630,7 @@ export default function App() {
   const doBuy = useCallback(() => {
     if (!buyF.ticker || !buyF.shares || !buyF.acc) return;
     const shares = +buyF.shares, totalCost = +buyF.totalCost || (shares * (+buyF.avgCost||0)) + (+buyF.fee||0);
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY };
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"" };
     upd("stocks", p => {
       const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
       if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
@@ -623,7 +650,7 @@ export default function App() {
     if (!sellF.stockId || !sellF.shares) return;
     const shares = +sellF.shares, proceeds = +sellF.totalProceeds || 0, fee = +sellF.fee || 0;
     const st = stocks.find(s => s.id === sellF.stockId);
-    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: shares>0?proceeds/shares:0, fee, date:TODAY }] } : s));
+    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: shares>0?proceeds/shares:0, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0 }] } : s));
     if (sellF.returnAcc && proceeds) {
       updMulti({
         accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
@@ -633,7 +660,7 @@ export default function App() {
     if (sellF.pnl && +sellF.pnl !== 0) {
       upd("txns", p => [...p, { id:Date.now()+1, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票" }]);
     }
-    setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"" }); close();
+    setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
   }, [sellF, stocks, upd, updMulti]);
 
   /* ── 以下為介面完整性保留的安全空實作（各檔案內已用 upd() 就地處理，不會被實際呼叫）── */
@@ -784,10 +811,11 @@ export default function App() {
 
   const netWorth = totAssets - totDebt - totPay + totRec;
   const allocPie = useMemo(() => {
-    const liquid    = visA.filter(a=>a.type!=="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0);
-    const nonLiquid = useMvForAssets && stTotMv > 0 ? stTotMv : visA.filter(a=>a.type==="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0);
-    return [{ name:"流動資產", value:liquid }, { name:"非流動資產", value:nonLiquid }].filter(x=>x.value>0);
-  }, [visA, rates, useMvForAssets, stTotMv]);
+    const typeLabel = { cash:"現金", debit:"金融卡", investment:"證券帳戶", credit:"信用卡" };
+    const byType = {};
+    visA.forEach(a => { byType[a.type] = (byType[a.type] || 0) + toTWD(a.bal, a.cur, rates); });
+    return Object.entries(byType).map(([type, value]) => ({ name: typeLabel[type] || type, value })).filter(x => x.value > 0);
+  }, [visA, rates]);
   const holdPie = useMemo(()=>stSum.filter(x=>x.totalSh>0).map(x=>({name:x.ticker, value:x.totalCost})),[stSum]);
 
   const invGrowth = useMemo(() => {
@@ -873,6 +901,18 @@ export default function App() {
     }
   }, [stocks, fetchDailyHistory]);
 
+  /* ── 情緒標記回顧：依情緒彙整買進/賣出次數與績效 ── */
+  const emotionReview = useMemo(() => {
+    const map = {};
+    EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
+    stocks.forEach(s => (s.trades || []).forEach(t => {
+      if (!t.emotion || !map[t.emotion]) return;
+      if (t.type === "buy") { map[t.emotion].buyCount++; map[t.emotion].buyTotal += (t.totalCost || 0); }
+      else if (t.type === "sell") { map[t.emotion].sellCount++; map[t.emotion].sellPnl += (t.pnl || 0); if ((t.pnl || 0) > 0) map[t.emotion].sellWin++; }
+    }));
+    return Object.values(map).filter(x => x.buyCount > 0 || x.sellCount > 0);
+  }, [stocks]);
+
   const stByAcc = useMemo(() => { const g = {}; stSum.forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
@@ -928,7 +968,8 @@ export default function App() {
     stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
     ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
-    dailyGrowth, loadingDaily, fetchDailyGrowth,
+    dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
+    watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
     useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
