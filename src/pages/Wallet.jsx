@@ -6,6 +6,9 @@ export default function WalletPage({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
   ALL_CURS, rates: _rates,
+  collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal,
+  selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy,
+  premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   // 補上大腦傳入或子組件內需要的漏網之魚
   InfoBtn, SH, Card, SwipeRow, Bdg, Btn
 }) {
@@ -16,6 +19,15 @@ export default function WalletPage({
   const [trTo, setTrTo] = useState("");
   const [trAmt, setTrAmt] = useState("");
   const [localRates, setLocalRates] = useState(() => ({ ...rates }));
+
+  /* ── 重新啟用訂閱/開銷時，把 lastBilled 重設為「上個月最後一天」，
+        讓自動記帳只從當月開始算，不補停用期間錯過的月份 ── */
+  const lastDayOfPrevMonth = () => {
+    const d = new Date(TODAY); d.setDate(0);
+    return d.toISOString().slice(0, 10);
+  };
+  const toggleSubActive = (s) => upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
+  const toggleBillActive = (b) => upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
 
   /* ── 補上漏掉的局部資料備份管理函數 ── */
   const exportData = () => { 
@@ -281,7 +293,7 @@ export default function WalletPage({
                       {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
                     </div></div>
                     <span style={{ fontWeight:900, fontSize:14, color:C.expense, marginRight:8 }}>{fmt(s.amt)}</span>
-                    <button onClick={e => { e.stopPropagation(); upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
+                    <button onClick={e => { e.stopPropagation(); toggleSubActive(s); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
                   </div>
                 </SwipeRow>)}
               </div>
@@ -309,7 +321,7 @@ export default function WalletPage({
                       {b.freq==="week" ? `每週${"日一二三四五六"[(+b.weekday)||1]}` : b.freq==="year" ? `每年${b.yearMonth||1}月${b.day}日` : `每月${b.day}日`}{b.active && <span style={{ color:C.warn }}> · 計算中</span>}
                     </div></div>
                     <span style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted, marginRight:8 }}>{fmt(b.amt)}</span>
-                    <button onClick={e => { e.stopPropagation(); upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active } : x)); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
+                    <button onClick={e => { e.stopPropagation(); toggleBillActive(b); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
                   </div>
                 </SwipeRow>)}
               </div>

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function ChartsPage({ 
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
-  chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth,
+  chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
   incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
   useMvForAssets, setUseMvForAssets, poolThisMo, fetchAllPrices, ALL_CURS, theme,
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
@@ -84,20 +84,35 @@ export default function ChartsPage({
           
           <Card style={{ padding:20, marginBottom:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div><div style={{ fontSize:11, color:C.textSub }}>資產成長</div><div style={{ fontWeight:900, fontSize:18, color:C.accentL }}>{fmt(totAssets)}</div></div>
+              <div><div style={{ fontSize:11, color:C.textSub }}>資產{assetView==="level"?"成長":"變動"}</div><div style={{ fontWeight:900, fontSize:18, color:C.accentL }}>{assetView==="level"?fmt(totAssets):fmt(changeData.reduce((s,x)=>s+(x.change||0),0))}</div></div>
               <button onClick={() => setShowDP(true)} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:10, background:`${C.accent}22`, color:C.accentL, border:`1px solid ${C.accent}44`, cursor:"pointer", fontSize:12, fontWeight:700 }}>📅 {rl(chartRange)} ▾</button>
             </div>
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              {[{v:"level",l:"資產水位"},{v:"change",l:"每期變動"}].map(o => <button key={o.v} onClick={() => setAssetView(o.v)} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:12, fontWeight:700, background:assetView===o.v?`${C.accent}28`:C.card, color:assetView===o.v?C.accentL:C.muted, border:`1px solid ${assetView===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>)}
+            </div>
             {chartData.length > 1 ? (
-              <ResponsiveContainer width="100%" height={150}>
-                <AreaChart data={chartData} margin={{ top:5, right:5, bottom:0, left:0 }}>
-                  <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                  <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
-                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
-                  <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
-                  <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              assetView === "level" ? (
+                <ResponsiveContainer width="100%" height={150}>
+                  <AreaChart data={chartData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
+                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
+                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
+                    <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height={150}>
+                  <LineChart data={changeData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
+                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
+                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [(v>=0?"+":"")+fmt(v), "淨變動"]} />
+                    <Line type="linear" dataKey="change" stroke={C.warn} strokeWidth={2.5} dot={{ r:3, fill:C.warn }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )
             ) : <div style={{ height:150, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:13 }}>記錄更多交易後顯示成長曲線</div>}
           </Card>
           

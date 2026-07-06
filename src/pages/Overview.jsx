@@ -5,7 +5,7 @@ export default function OverviewPage({
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
-  useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory,
+  useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools,
   // 接收大腦配送過來的共用 UI Atoms 元件
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
@@ -123,7 +123,7 @@ export default function OverviewPage({
                              : "-"}{fmt(t.amt)}
                           </div>
                           {t.type === "transfer" && t.toAcc && <div style={{ fontSize:11, color:C.muted }}>{t.acc} ➜ {t.toAcc}</div>}
-                          {t.proxyAmt > 0 && <div style={{ fontSize:11, color:C.warn}>代墊 {fmt(t.proxyAmt)}</div>}
+                          {t.proxyAmt > 0 && <div style={{ fontSize:11, color:C.warn }}>代墊 {fmt(t.proxyAmt)}</div>}
                         </div>
                       </div>
                     </SwipeRow>

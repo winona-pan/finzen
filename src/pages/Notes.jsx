@@ -5,7 +5,7 @@ export default function NotesPage({
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
-  setSettleDebt, setEditDebt, setND, 
+  setSettleDebt, setEditDebt, setND, setSettleAcc, setSettleCustomAmt,
   // 接收全域 UI Atoms 元件
   Card, SH, Bdg, Btn
 }) {
