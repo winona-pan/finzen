@@ -73,7 +73,7 @@ function fmt(n, cur = "TWD") {
 }
 
 /* ── Constants ── */
-const CE = { 食物:"🍔",交通:"🚌",家居:"🏠",娛樂:"🎬",訂閱:"📱",薪資:"💰",家教:"📖",零用錢:"🏮",利息:"🏦",股息:"📈",紅包:"🧧",投資收益:"📈",教育:"🎓",醫療:"💊",美容:"💄",帳戶調整:"✨",其他:"📦",其他收入:"💴",往來帳:"🤝" };
+const CE = { 食物:"🍔",交通:"🚌",家居:"🏠",娛樂:"🎬",訂閱:"📱",薪資:"💰",家教:"📖",零用錢:"🏮",利息:"🏦",股息:"📈",紅包:"🧧",投資收益:"📈",教育:"🎓",醫療:"💊",美容:"💄",帳戶調整:"✨",其他:"📦",其他收入:"💴",往來帳:"🤝",股票:"📈" };
 const AT = { cash:"💰",debit:"🏦",investment:"📊",credit:"💳" };
 const PASSIVE = ["利息","股息","紅包","投資收益"];
 const APP_VER = "2.2";
@@ -239,8 +239,8 @@ function DatePicker({ value, onChange, onClose }) {
         {[{l:"本月",m:1},{l:"近3月",m:3},{l:"近6月",m:6},{l:"近12月",m:12}].map(o => <button key={o.l} onClick={() => quick(o.m)} style={{ padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>{o.l}</button>)}
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={iSt} /></div>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={iSt} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:"dark" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:"dark" }} /></div>
       </div>
       <div style={{ display:"flex", gap:8 }}>
         <button onClick={() => { onChange({ s, e }); onClose(); }} style={{ flex:1, padding:12, borderRadius:12, background:C.accent, color:"#fff", border:"none", fontWeight:900, cursor:"pointer" }}>確定</button>
@@ -276,7 +276,24 @@ function CatPicker({ value, onChange, cats, ce, onAddCat }) {
 }
 
 /* ── EmojiPicker：簡易表情符號選擇面板 ── */
-const EMOJI_SET = ["🍔","🍜","☕","🍱","🍰","🚌","🚗","🚄","✈️","🏠","🏡","🎬","🎮","🎵","📱","📖","🎓","💊","💄","👕","🏦","💰","💳","📈","📉","🧧","🏮","✨","📦","🛡️","🎯","🐶","🐱","💡","🔧","🛒","🎁","⚽","🏀","🍺"];
+const EMOJI_SET = [
+  "🍔","🍜","🍕","🍣","🍱","🍰","🍩","🍞","🥗","🍺","🍷","☕","🧋","🍳",
+  "🚌","🚗","🚕","🚲","🛵","🚄","🚇","✈️","⛽","🅿️",
+  "🏠","🏡","🛋️","🛏️","🚿","🔌","💡","🧹","🔧","🪑",
+  "🎬","🎮","🎵","🎤","🎨","🎭","🎳","🎲","📺","🎸",
+  "📱","💻","⌚","📷","🎧","🖨️","🔋","💾",
+  "🎓","📖","✏️","📚","🧮","🖊️",
+  "💊","🏥","🩺","💉","🦷","🧴",
+  "💄","💅","💇","🧖","👗","🕶️",
+  "🏦","💰","💳","📈","📉","🧧","💸","🪙",
+  "🛡️","🎯","🧧","🏮","✨","📦","🎁",
+  "🐶","🐱","🐾","🐟",
+  "⚽","🏀","🎾","🏊","🚴","🏋️",
+  "👕","👖","👟","🧥","👜","🧢",
+  "✈️","🧳","🗺️","⛱️","🏕️","🚢",
+  "👶","🧸","🍼","🎀",
+  "🐾","🌱","🎄","🎉","💍","⚕️",
+];
 function EmojiPicker({ onSelect, onClose }) {
   return <div style={{ position:"fixed", inset:0, zIndex:210, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.7)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
     <div style={{ width:"100%", maxWidth:420, background:C.surface, borderRadius:"20px 20px 0 0", padding:20, maxHeight:"60dvh", overflowY:"auto" }}>
@@ -592,22 +609,32 @@ export default function App() {
       if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
       return [...p, { id:"s"+Date.now(), acc:buyF.acc, ticker:buyF.ticker, name:buyF.name||buyF.ticker, market:buyF.market, curPrice:0, trades:[trade] }];
     });
-    if (buyF.fromAcc) upd("accs", p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a));
+    if (buyF.fromAcc) {
+      updMulti({
+        accs: p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a),
+        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, date:TODAY, tags:"#股票" }],
+      });
+    }
     setBuyF(BF0); close();
-  }, [buyF, upd]);
+  }, [buyF, upd, updMulti]);
 
   /* ── 股票賣出 ── */
   const doSell = useCallback(() => {
     if (!sellF.stockId || !sellF.shares) return;
     const shares = +sellF.shares, proceeds = +sellF.totalProceeds || 0, fee = +sellF.fee || 0;
+    const st = stocks.find(s => s.id === sellF.stockId);
     upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: shares>0?proceeds/shares:0, fee, date:TODAY }] } : s));
-    if (sellF.returnAcc && proceeds) upd("accs", p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a));
+    if (sellF.returnAcc && proceeds) {
+      updMulti({
+        accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
+        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
+      });
+    }
     if (sellF.pnl && +sellF.pnl !== 0) {
-      const st = stocks.find(s => s.id === sellF.stockId);
-      upd("txns", p => [...p, { id:Date.now(), type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票" }]);
+      upd("txns", p => [...p, { id:Date.now()+1, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票" }]);
     }
     setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"" }); close();
-  }, [sellF, stocks, upd]);
+  }, [sellF, stocks, upd, updMulti]);
 
   /* ── 以下為介面完整性保留的安全空實作（各檔案內已用 upd() 就地處理，不會被實際呼叫）── */
   const doInit = useCallback(() => {}, []);
@@ -784,6 +811,68 @@ export default function App() {
     });
   }, [stocks, stTotMv, stTotCost]);
 
+  const [dailyGrowth, setDailyGrowth] = useState([]);
+  const [loadingDaily, setLoadingDaily] = useState(false);
+
+  /* ── 抓取單一標的每日收盤價（近一年，日線）── */
+  const fetchDailyHistory = useCallback(async (ticker, market) => {
+    const sym = market === "TW" ? `${ticker}.TW` : ticker;
+    const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y`;
+    const proxies = [
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    ];
+    for (const makeProxy of proxies) {
+      try {
+        const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        const raw = await r.text();
+        let d; try { const j = JSON.parse(raw); d = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
+        const result = d?.chart?.result?.[0];
+        const ts = result?.timestamp, closes = result?.indicators?.quote?.[0]?.close;
+        if (!ts || !closes) continue;
+        return ts.map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), close: closes[i] })).filter(x => x.close != null);
+      } catch { continue; }
+    }
+    return [];
+  }, []);
+
+  /* ── 依每日收盤價，組合出整體投資組合的每日市值走勢（波動明顯，非平滑估算）── */
+  const fetchDailyGrowth = useCallback(async () => {
+    const held = stocks.filter(s => (s.trades?.some(t => t.type === "buy")) || s.manualShares);
+    if (!held.length) { setDailyGrowth([]); return; }
+    setLoadingDaily(true);
+    try {
+      const histories = await Promise.all(held.map(s => fetchDailyHistory(s.ticker, s.market)));
+      const allDates = new Set();
+      histories.forEach(h => h.forEach(x => allDates.add(x.date)));
+      const dateList = [...allDates].sort();
+      if (!dateList.length) { setDailyGrowth([]); return; }
+      const result = dateList.map(date => {
+        let mv = 0;
+        held.forEach((s, i) => {
+          let shares = s.manualShares || 0;
+          (s.trades || []).forEach(t => {
+            if (t.date > date) return;
+            if (t.type === "buy") shares += t.shares;
+            else if (t.type === "sell") shares -= t.shares;
+          });
+          if (shares <= 0) return;
+          const hist = histories[i];
+          let price = null;
+          for (let j = hist.length - 1; j >= 0; j--) { if (hist[j].date <= date) { price = hist[j].close; break; } }
+          if (price != null) mv += shares * price;
+        });
+        return { date: date.slice(5), mv: Math.round(mv) };
+      }).filter(x => x.mv > 0);
+      setDailyGrowth(result);
+    } catch {
+      setDailyGrowth([]);
+    } finally {
+      setLoadingDaily(false);
+    }
+  }, [stocks, fetchDailyHistory]);
+
   const stByAcc = useMemo(() => { const g = {}; stSum.forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
@@ -839,6 +928,7 @@ export default function App() {
     stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
     ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
+    dailyGrowth, loadingDaily, fetchDailyGrowth,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
     useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
