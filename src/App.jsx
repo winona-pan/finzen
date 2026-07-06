@@ -605,7 +605,7 @@ export default function App() {
   const saveBill = useCallback(() => { if (!selBill) return; upd("bills", p => p.map(x => x.id === selBill.id ? selBill : x)); close(); }, [selBill, upd]);
   const addBill = useCallback(() => {
     if (!nB.name || !nB.amt) return;
-    upd("bills", p => [...(p||[]), { ...nB, id:"bill"+Date.now(), amt:+nB.amt, active:false }]);
+    upd("bills", p => [...(p||[]), { ...nB, id:"bill"+Date.now(), amt:+nB.amt, active:true }]);
     setNB(B0); close();
   }, [nB, upd]);
 
@@ -1032,6 +1032,9 @@ export default function App() {
         <StockModals {...p} />
         <DebtModals {...p} />
         <OtherModals {...p} />
+
+        {/* 確認刪除彈窗 */}
+        {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => { confirmDlg.onOk(); closeConfirm(); }} onCancel={closeConfirm} />}
       </div>
     </>
   );
