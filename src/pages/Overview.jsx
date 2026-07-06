@@ -7,15 +7,15 @@ export default function OverviewPage({
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools,
-  // 接收大腦配送過來的共用 UI Atoms 元件
+  // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
 
-  /* ── 補上總覽頁面專屬的搜尋框局部狀態 (Local States) ── */
+  /* ── 搜尋框局部狀態 ── */
   const [showSq, setShowSq] = useState(false);
   const [sq, setSq] = useState("");
 
-  /* ── 補上漏失的清單行底層樣式函數 (rowSt) ── */
+  /* ── 清單行樣式 ── */
   const rowSt = (i, border = true) => ({ 
     display: "flex", 
     alignItems: "center", 

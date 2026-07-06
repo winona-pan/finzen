@@ -9,11 +9,11 @@ export default function WalletPage({
   collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal,
   selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
-  // 補上大腦傳入或子組件內需要的漏網之魚
+  // 共用 UI atoms
   InfoBtn, SH, Card, SwipeRow, Bdg, Btn
 }) {
 
-  /* ── 補上漏掉的錢包局部排序與顯示狀態 (Local States) ── */
+  /* ── 局部狀態 ── */
   const [wMode, setWMode] = useState("normal");
   const [trFrom, setTrFrom] = useState("");
   const [trTo, setTrTo] = useState("");
@@ -29,7 +29,7 @@ export default function WalletPage({
   const toggleSubActive = (s) => upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
   const toggleBillActive = (b) => upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
 
-  /* ── 補上漏掉的局部資料備份管理函數 ── */
+  /* ── 資料匯出 ── */
   const exportData = () => { 
     const b = new Blob([JSON.stringify({ accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies }, null, 2)], { type:"application/json" }); 
     const u = URL.createObjectURL(b), a = document.createElement("a"); 
@@ -38,7 +38,7 @@ export default function WalletPage({
 
   return (
     <>
-      {/* 修正原本 Claude 寫錯的語法結構 {tab} "wallet" ➜ tab === "wallet" */}
+
       {tab === "wallet" && (
         <div>
           {wMode === "sort" && <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", background:`${C.accent}22`, borderBottom:`1px solid ${C.accent}55` }}>

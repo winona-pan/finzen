@@ -10,7 +10,7 @@ export default function NotesPage({
   Card, SH, Bdg, Btn
 }) {
 
-  // 補上被 Claude 漏在 App.jsx 裡面的表單初始化資料常數
+  // 表單預設值
   const D0 = { type:"receivable", person:"", amt:"", desc:"", date:TODAY, note:"", installTotal:0, installAmt:"", installPaid:0, installPaidAmt:0 };
 
   return (

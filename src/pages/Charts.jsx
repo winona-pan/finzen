@@ -21,7 +21,7 @@ export default function ChartsPage({
   Card, SH, Bdg, Btn, DatePicker
 }) {
 
-  /* ── 補上漏失的局部控制狀態與月份遞增/遞減邏輯 ── */
+  /* ── 局部狀態與月份切換 ── */
   const [showDP, setShowDP] = useState(false);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 }; });
   

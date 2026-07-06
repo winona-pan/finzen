@@ -17,7 +17,7 @@ export default function InvestPage({
   nG, setNG, editGoal, setEditGoal, nPL, setNPL,
   moDate, setMoDate, searchQ, setSearchQ, APP_VER, changeTheme, THEMES,
   showHDP, setShowHDP, nS, setNS, nB, setNB, sortMode, setSortMode, visMode, setVisMode, nD, setND,
-  // 關鍵！精確接收大腦配送過來的基礎 UI 元件
+  // 共用 UI atoms
   Card, SH, Bdg, SwipeRow, Btn, InfoBtn
 }) {
 
