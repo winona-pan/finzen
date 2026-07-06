@@ -153,7 +153,7 @@ function Btn({ children, onClick, v = "primary", sz = "md", style = {} }) {
 function TP({ active, color, onClick, children }) {
   return <button onClick={onClick} style={{ flex:1,padding:"10px 4px",borderRadius:12,fontSize:14,fontWeight:700,background:active ? `${color}28` : C.card,color:active ? color : C.muted,border:`1px solid ${active ? color : C.border}`,cursor:"pointer" }}>{children}</button>;
 }
-/* ── 修正 InfoBtn 這裡原先嚴重的 Claude 截斷語法錯誤 ── */
+/* ── 資訊提示按鈕 ── */
 function InfoBtn({ msg }) {
   const [show, setShow] = useState(false);
   return (
@@ -436,7 +436,7 @@ export default function App() {
   const [searchQ, setSearchQ] = useState("");
 
   /* ══════════════════════════════════════════════════════
-     v2.0 修復：補回被上一輪重構遺漏的核心邏輯與元件
+     核心商業邏輯與資料處理函式
   ══════════════════════════════════════════════════════ */
 
   /* ── 類別自訂表情符號（讀取 + 寫入）── */
@@ -832,7 +832,7 @@ export default function App() {
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y:y - 1, m:12 } : { y, m:m - 1 });
   const nextMo = () => setMonth(({ y, m }) => m === 12 ? { y:y + 1, m:1 } : { y, m:m + 1 });
 
-  /* ── 打包對講機 Props 通道物件 (把失聯的 UI Atoms 與函數全面捕齊) ── */
+  /* ── 統一組裝共用 props，傳給所有頁面與彈窗元件 ── */
   const p = {
     C, tab, setTab, iSt, fmt, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
     accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
@@ -855,7 +855,7 @@ export default function App() {
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     moDate, setMoDate, searchQ, setSearchQ,
-    // 關鍵！導出底層自定義 UI atoms 元件給外部區塊檔案使用，拒絕 undefined
+    // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji,
     InfoBtn, ConfirmDialog, Card, SH, Bdg, Btn, TP, SwipeRow
   };
@@ -895,7 +895,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 彈窗渲染區（功能全數抽離至 Modals 四肢檔案） */}
+        {/* 彈窗渲染區 */}
         <TxnModals {...p} />
         <WalletModals {...p} />
         <StockModals {...p} />
