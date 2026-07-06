@@ -27,7 +27,7 @@ export default function StockModals({
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg
 }) {
 
-  // 補上被 Claude 遺漏在 App.jsx 裡面的表單重置常數
+  // 表單重置預設值
   const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"" };
 
   return (

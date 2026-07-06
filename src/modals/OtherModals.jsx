@@ -23,11 +23,11 @@ export default function OtherModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
-  // 接收大腦配送過來的共用 UI 原子元件
+  // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji
 }) {
 
-  /* ── 補上被 Claude 嚴重遺漏的類別管理相關局部 State (Local States) ── */
+  /* ── 類別管理局部狀態 ── */
   const [editCat, setEditCat] = useState(null); // {type, oldName, name, emoji}
   const [showEditEP, setShowEditEP] = useState(false);
   const [newCatType, setNewCatType] = useState("expense");
@@ -35,25 +35,25 @@ export default function OtherModals({
   const [newCatEmoji, setNewCatEmoji] = useState("📦");
   const [showCatEP, setShowCatEP] = useState(false);
 
-  /* ── 補上保單與目標表單清空所需的初始化常數 ── */
+  /* ── 表單預設值 ── */
   const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [] };
   const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
 
-  /* ── 補上核心商務處理邏輯：新增理財目標 ── */
+  /* ── 新增理財目標 ── */
   const addGoal = () => { 
     if (!nG.name || !nG.target) return; 
     upd("goals", p => [...(p || []), { ...nG, id: "g" + Date.now(), target: +nG.target }]); 
     setNG(G0); close(); 
   };
 
-  /* ── 補上核心商務處理邏輯：新增儲蓄保單 ── */
+  /* ── 新增儲蓄保單 ── */
   const addPolicy = () => { 
     if (!nPL.name) return; 
     upd("policies", p => [...(p || []), { ...nPL, id: "pl" + Date.now(), premium: +nPL.premium || 0, surrenderVal: +nPL.surrenderVal || 0 }]); 
     setNPL(PL0); close(); 
   };
 
-  /* ── 補上核心商務處理邏輯：內建新增自訂記帳類別處理函數 ── */
+  /* ── 新增自訂記帳類別 ── */
   const addCat = () => { 
     if (!newCatName.trim()) return; 
     upd("cats", p => ({ ...p, [newCatType]: [...p[newCatType], newCatName.trim()] })); 

@@ -23,11 +23,11 @@ export default function TxnModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
-  // 接收大腦配送過來的共用 UI Atoms 元件與通道
+  // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, AutoInput, Btn, TP
 }) {
 
-  /* ── 補上漏掉的「核心記帳處理邏輯」函數 (addTxn) ── */
+  /* ── 新增交易（含代墊拆分、分月認列）── */
   const addTxn = () => {
     if (!nT.amt) return;
     const id = Date.now();

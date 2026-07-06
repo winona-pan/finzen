@@ -23,11 +23,11 @@ export default function DebtModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
-  // 精確接收全域大腦分發過來的 UI 基礎元件
+  // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, Btn, TP
 }) {
 
-  // 補上表單重置時所需的預設常數，確保獨立封裝不報錯
+  // 表單預設值
   const D0 = { type:"receivable", person:"", amt:"", desc:"", date:TODAY, note:"", installTotal:0, installAmt:"", installPaid:0, installPaidAmt:0 };
 
   return (

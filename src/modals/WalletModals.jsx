@@ -23,11 +23,11 @@ export default function WalletModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0, chartRange, setChartRange, healthRange, setHealthRange,
-  // 補上對應大腦缺漏的對講機通道
+  // 共用 UI atoms 與資料
   CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card
 }) {
 
-  /* ── 補上 Claude 拆分檔案時嚴重漏掉的局部狀態 (Local States) ── */
+  /* ── 局部狀態 ── */
   const [curSearch, setCurSearch] = useState("");
   const [localRates, setLocalRates] = useState(() => ({ ...rates }));
   const [trFrom, setTrFrom] = useState("");
@@ -38,7 +38,7 @@ export default function WalletModals({
   const [confirmDlg, setConfirmDlg] = useState(null);
   const closeConfirm = () => setConfirmDlg(null);
 
-  /* ── 補上內部的轉帳處理函數 (doTransfer) ── */
+  /* ── 帳戶轉帳處理 ── */
   const doTransfer = () => {
     const a = +trAmt; if (!a || !trFrom || !trTo || trFrom === trTo) return;
     upd("accs", p => p.map(ac => { 
@@ -56,7 +56,7 @@ export default function WalletModals({
     setTrFrom(""); setTrTo(""); setTrAmt(""); close();
   };
 
-  /* ── 補上內部的信用卡還款處理函數 (payCredit) ── */
+  /* ── 信用卡繳費處理 ── */
   const payCredit = () => {
     const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
     upd("accs", p => p.map(ac => { 
