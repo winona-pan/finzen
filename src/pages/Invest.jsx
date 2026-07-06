@@ -7,6 +7,7 @@ export default function InvestPage({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth,
+  dailyGrowth, loadingDaily, fetchDailyGrowth,
   incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
   useMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
@@ -21,9 +22,10 @@ export default function InvestPage({
   Card, SH, Bdg, SwipeRow, Btn, InfoBtn
 }) {
 
+  const [growthMode, setGrowthMode] = useState("monthly");
+
   return (
     <>
-      {/* 修正致命的語法錯誤：{tab} "invest" ➜ tab === "invest" */}
       {tab === "invest" && (
         <div style={{ padding:"12px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
@@ -85,27 +87,57 @@ export default function InvestPage({
                   {[{ v:"alloc", l:"資產配置" }, { v:"hold", l:"持股比例" }, { v:"growth", l:"投資成長" }].map(o => <button key={o.v} onClick={() => setInvPie(o.v)} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:12, fontWeight:700, background:invPie === o.v ? `${C.accent}30` : C.card, color:invPie === o.v ? C.accentL : C.muted, border:`1px solid ${invPie === o.v ? C.accent : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
                 </div>
                 {invPie === "growth"
-                  ? invGrowth.length > 1
-                    ? (
-                      <div>
-                        <ResponsiveContainer width="100%" height={180}>
-                          <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                            <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
-                            <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
-                            <Line type="monotone" dataKey="cost" stroke={theme==="light"?"#222":"#eee"} strokeWidth={2} dot={false} name="cost" />
-                            {stTotMv > 0 && <Line type="monotone" dataKey="mv" stroke={C.income} strokeWidth={2.5} dot={false} name="mv" />}
-                          </LineChart>
-                        </ResponsiveContainer>
-                        <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="light"?"#222":"#eee" }} />投入成本</div>
-                          {stTotMv > 0 && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:C.income }} />市值</div>}
-                        </div>
-                        {stTotMv === 0 && <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>市價載入後顯示市值曲線</div>}
+                  ? (
+                    <div>
+                      <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+                        <button onClick={() => setGrowthMode("monthly")} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="monthly"?`${C.accent}28`:C.card, color:growthMode==="monthly"?C.accentL:C.muted, border:`1px solid ${growthMode==="monthly"?C.accent:C.border}`, cursor:"pointer" }}>月度成本/市值</button>
+                        <button onClick={() => { setGrowthMode("daily"); if (!dailyGrowth.length && !loadingDaily) fetchDailyGrowth(); }} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="daily"?`${C.accent}28`:C.card, color:growthMode==="daily"?C.accentL:C.muted, border:`1px solid ${growthMode==="daily"?C.accent:C.border}`, cursor:"pointer" }}>每日收盤走勢</button>
                       </div>
-                    )
-                    : <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>需要至少兩筆買入記錄才能顯示成長圖</div>
+                      {growthMode === "monthly" ? (
+                        invGrowth.length > 1 ? (
+                          <div>
+                            <ResponsiveContainer width="100%" height={180}>
+                              <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                                <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
+                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
+                                <Line type="monotone" dataKey="cost" stroke={theme==="light"?"#222":"#eee"} strokeWidth={2} dot={false} name="cost" />
+                                {stTotMv > 0 && <Line type="monotone" dataKey="mv" stroke={C.income} strokeWidth={2.5} dot={false} name="mv" />}
+                              </LineChart>
+                            </ResponsiveContainer>
+                            <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="light"?"#222":"#eee" }} />投入成本</div>
+                              {stTotMv > 0 && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:C.income }} />市值</div>}
+                            </div>
+                            {stTotMv === 0 && <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>市價載入後顯示市值曲線</div>}
+                          </div>
+                        ) : <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>需要至少兩筆買入記錄才能顯示成長圖</div>
+                      ) : (
+                        loadingDaily ? (
+                          <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>讀取每日收盤價中…</div>
+                        ) : dailyGrowth.length > 1 ? (
+                          <div>
+                            <ResponsiveContainer width="100%" height={180}>
+                              <LineChart data={dailyGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                                <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(dailyGrowth.length/6)} />
+                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} domain={["auto","auto"]} />
+                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "市值"]} />
+                                <Line type="linear" dataKey="mv" stroke={C.income} strokeWidth={2} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                            <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>依實際每日收盤價計算的持股市值（近一年）</div>
+                          </div>
+                        ) : (
+                          <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>
+                            <div style={{ marginBottom:8 }}>尚無每日走勢資料</div>
+                            <button onClick={fetchDailyGrowth} style={{ padding:"6px 14px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:12, cursor:"pointer" }}>點此讀取</button>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )
                   : <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart></ResponsiveContainer>
                 }
                 
@@ -210,38 +242,38 @@ export default function InvestPage({
             <div>
               {[{
                 section:"🌱 入門", key:"learn_basic",
-                items:[{ title:"新手理財入門指南", tag:"入門", url:"https://rich01.com/mr-market-for-new/" }]
+                items:[
+                  { title:"股票新手入門教學懶人包 — 帶你買進第一支股票", tag:"入門", url:"https://rich01.com/learn-stock-all/" },
+                  { title:"美股新手入門教學懶人包 — 帶你買進第一支美股", tag:"入門", url:"https://rich01.com/us-stock-invest-all/" },
+                ]
               },{
                 section:"📈 股票投資", key:"learn_stock",
                 items:[
-                  { title:"股票是什麼？買股票就是買公司的一部分", tag:"基礎", url:"https://rich01.com/what-is-stock/" },
-                  { title:"ETF 是什麼？為什麼適合一般投資人", tag:"基礎", url:"https://rich01.com/etf-intro/" },
-                  { title:"0050 vs 0056，哪個適合你？", tag:"台股", url:"https://rich01.com/0050-vs-0056/" },
-                  { title:"定期定額投資法，降低進場時機風險", tag:"策略", url:"https://rich01.com/dollar-cost-averaging/" },
-                  { title:"股票的本益比（PE）怎麼看？", tag:"進階", url:"https://rich01.com/pe-ratio/" },
+                  { title:"股票分類文章總覽", tag:"索引", url:"https://rich01.com/category/learn-invest/stock-invest/" },
+                  { title:"股價淨值比（PBR）是什麼？跟本益比有什麼差別？", tag:"進階", url:"https://rich01.com/what-is-pb-ratio/" },
+                  { title:"初級市場 vs 次級市場是什麼？要怎麼交易", tag:"基礎", url:"https://rich01.com/centralized-order-market-vs-ipo/" },
+                  { title:"ROD / IOC / FOK 差在哪？逐筆交易懶人包", tag:"進階", url:"https://rich01.com/what-rod-ioc-fok/" },
+                ]
+              },{
+                section:"📊 ETF 與基金", key:"learn_etf",
+                items:[
+                  { title:"ETF 是什麼？怎麼買？ETF 新手入門教學", tag:"基礎", url:"https://rich01.com/etf0050/" },
+                  { title:"ETF 怎麼買？管道及注意事項（附圖解教學）", tag:"教學", url:"https://rich01.com/how-buy-etfs/" },
+                  { title:"ETF 投資懶人包：市場先生教學文章完整清單", tag:"索引", url:"https://rich01.com/learn-etf-all/" },
+                  { title:"ETF 分類文章總覽", tag:"索引", url:"https://rich01.com/category/learn-invest/etf-invest/" },
                 ]
               },{
                 section:"🏦 資產配置", key:"learn_alloc",
                 items:[
-                  { title:"資產配置是什麼？分散風險的核心概念", tag:"重要", url:"https://rich01.com/asset-allocation/" },
-                  { title:"股債配置：股票與債券的比例怎麼決定", tag:"策略", url:"https://rich01.com/stock-bond-allocation/" },
-                  { title:"全球分散投資：為什麼不要只買台股", tag:"策略", url:"https://rich01.com/global-diversification/" },
-                  { title:"懶人投資法：長期持有 ETF 的優缺點", tag:"策略", url:"https://rich01.com/passive-investing/" },
+                  { title:"資產配置投資策略是什麼？比例分配怎麼做？", tag:"重要", url:"https://rich01.com/how-asset-allocation-1/" },
+                  { title:"資產配置的「再平衡」是什麼意思？頻率多久一次？", tag:"策略", url:"https://rich01.com/what-asset-rebalancing/" },
+                  { title:"資產配置分類文章總覽", tag:"索引", url:"https://rich01.com/category/invest-master/asset-allocation/" },
                 ]
               },{
-                section:"🛡️ 風險管理", key:"learn_risk",
+                section:"💰 財務自由與退休規劃", key:"learn_plan",
                 items:[
-                  { title:"投資風險有哪些？如何評估自己的風險承受度", tag:"重要", url:"https://rich01.com/investment-risk/" },
-                  { title:"停損是什麼？設停損點的邏輯", tag:"策略", url:"https://rich01.com/stop-loss/" },
-                  { title:"不要把雞蛋放在同一個籃子裡", tag:"基礎", url:"https://rich01.com/diversification/" },
-                ]
-              },{
-                section:"💰 理財規劃", key:"learn_plan",
-                items:[
-                  { title:"50/30/20 法則：收入分配的簡單框架", tag:"入門", url:"https://rich01.com/50-30-20-rule/" },
-                  { title:"財務自由是什麼？FIRE 運動介紹", tag:"目標", url:"https://rich01.com/fire-movement/" },
-                  { title:"退休規劃：幾歲開始存才夠？", tag:"規劃", url:"https://rich01.com/retirement-planning/" },
-                  { title:"保險怎麼買？先保障再儲蓄的原則", tag:"規劃", url:"https://rich01.com/insurance-basic/" },
+                  { title:"FIRE 運動是什麼？你適合哪一種財富自由模式？", tag:"目標", url:"https://rich01.com/fire-5-types/" },
+                  { title:"4% 法則是什麼？如何用 4% 法則達成財務自由退休？", tag:"規劃", url:"https://rich01.com/four-percent-rule/" },
                 ]
               }].map(sec => (
                 <div key={sec.key} style={{ marginBottom:16 }}>

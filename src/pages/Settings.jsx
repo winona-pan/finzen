@@ -19,7 +19,6 @@ export default function SettingsPage({
 
   return (
     <>
-      {/* 修正致命大括號損壞：{tab === "settings" ➜ tab === "settings" */}
       {tab === "settings" && (
         <div>
           <div style={{ position:"sticky", top:0, zIndex:20, background:`${C.bg}f2`, backdropFilter:"blur(16px)", padding:"12px 16px 10px" }}>

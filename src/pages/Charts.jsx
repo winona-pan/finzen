@@ -38,7 +38,6 @@ export default function ChartsPage({
 
   return (
     <>
-      {/* 修正致命語法錯誤：{tab} "charts" ➜ tab === "charts" */}
       {tab === "charts" && (
         <div style={{ padding:"12px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>

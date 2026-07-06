@@ -15,7 +15,6 @@ export default function NotesPage({
 
   return (
     <>
-      {/* 修正語法損壞：{tab} "notes" ➜ tab === "notes" */}
       {tab === "notes" && (
         <div style={{ padding:"12px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
