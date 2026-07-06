@@ -33,6 +33,7 @@ export default function OtherModals({
   const [newCatType, setNewCatType] = useState("expense");
   const [newCatName, setNewCatName] = useState("");
   const [newCatEmoji, setNewCatEmoji] = useState("📦");
+  const [emojiTouched, setEmojiTouched] = useState(false);
   const [showCatEP, setShowCatEP] = useState(false);
 
   /* ── 表單預設值 ── */
@@ -58,7 +59,7 @@ export default function OtherModals({
     if (!newCatName.trim()) return; 
     upd("cats", p => ({ ...p, [newCatType]: [...p[newCatType], newCatName.trim()] })); 
     addCustomCE(newCatName.trim(), newCatEmoji); 
-    setNewCatName(""); setNewCatEmoji("📦"); 
+    setNewCatName(""); setNewCatEmoji("📦"); setEmojiTouched(false);
   };
 
   return (
@@ -286,7 +287,7 @@ export default function OtherModals({
                     {newCatType===type ? newCatEmoji : "📦"}
                   </button>
                   <input value={newCatType === type ? newCatName : ""}
-                    onChange={e => { setNewCatType(type); setNewCatName(e.target.value); setNewCatEmoji(guessEmoji(e.target.value)); }}
+                    onChange={e => { setNewCatType(type); setNewCatName(e.target.value); if (!emojiTouched) setNewCatEmoji(guessEmoji(e.target.value)); }}
                     placeholder={`新增${type === "expense" ? "支出" : "收入"}類別…`}
                     style={{ ...iSt, flex:1 }}
                     onKeyDown={e => { if (e.key === "Enter") { setNewCatType(type); addCat(); } }} />
@@ -294,7 +295,7 @@ export default function OtherModals({
                 <Btn sz="sm" style={{ width:"100%" }} onClick={() => { setNewCatType(type); addCat(); }}>＋ 新增</Btn>
               </div>
             </div>)}
-            {showCatEP && <EmojiPicker onSelect={e => setNewCatEmoji(e)} onClose={() => setShowCatEP(false)} />}
+            {showCatEP && <EmojiPicker onSelect={e => { setNewCatEmoji(e); setEmojiTouched(true); }} onClose={() => setShowCatEP(false)} />}
             <Btn v="secondary" style={{ width:"100%", marginTop:8 }} onClick={close}>關閉</Btn>
           </Sheet>}
     </>
