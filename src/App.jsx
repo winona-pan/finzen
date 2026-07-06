@@ -77,6 +77,8 @@ const CE = { 食物:"🍔",交通:"🚌",家居:"🏠",娛樂:"🎬",訂閱:"�
 const AT = { cash:"💰",debit:"🏦",investment:"📊",credit:"💳" };
 const PASSIVE = ["利息","股息","紅包","投資收益"];
 const APP_VER = "2.2";
+const LEARN_DATA = [];
+const MANUAL_DATA = [];
 const DATA_KEY = "finzen_v3";
 const VER_KEY = "finzen_ver";
 
@@ -182,6 +184,160 @@ function ConfirmDialog({ msg, onOk, onCancel }) {
   );
 }
 
+/* ── CalcInp：支援 + - * / 快速心算的金額輸入框 ── */
+function CalcInp({ label, value, onChange }) {
+  const [raw, setRaw] = useState(value || "");
+  useEffect(() => { setRaw(value || ""); }, [value]);
+  const evaluate = (expr) => {
+    if (!/^[0-9+\-*/.\s]+$/.test(expr)) return null;
+    try { const r = Function(`"use strict";return (${expr})`)(); return isFinite(r) ? r : null; } catch { return null; }
+  };
+  const commit = () => {
+    const r = evaluate(raw);
+    if (r != null) { setRaw(String(r)); onChange(String(r)); } else onChange(raw);
+  };
+  return <Fld label={label}>
+    <input value={raw} inputMode="decimal" placeholder="0 或 100+50"
+      onChange={e => setRaw(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === "Enter") { commit(); e.target.blur(); } }}
+      style={iSt} />
+  </Fld>;
+}
+
+/* ── AutoInput：帶歷史紀錄下拉建議的輸入框 ── */
+function AutoInput({ label, value, onChange, placeholder, history = [] }) {
+  const [focus, setFocus] = useState(false);
+  const filtered = (history || []).filter(h => !value || h.toLowerCase().includes(String(value).toLowerCase())).slice(0, 6);
+  return <Fld label={label}>
+    <div style={{ position:"relative" }}>
+      <input value={value || ""} placeholder={placeholder} style={iSt}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocus(true)}
+        onBlur={() => setTimeout(() => setFocus(false), 150)} />
+      {focus && filtered.length > 0 && <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:60, marginTop:4, background:C.card, border:`1px solid ${C.borderL}`, borderRadius:10, overflow:"hidden", boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+        {filtered.map((h,i) => <div key={i} onMouseDown={() => { onChange(h); setFocus(false); }} style={{ padding:"9px 12px", fontSize:13, color:C.text, cursor:"pointer", borderTop:i>0?`1px solid ${C.border}`:"none" }}>{h}</div>)}
+      </div>}
+    </div>
+  </Fld>;
+}
+
+/* ── DatePicker：簡易日期區間選擇（月份快捷 + 自訂區間）── */
+function DatePicker({ value, onChange, onClose }) {
+  const [s, setS] = useState(value?.s || TODAY);
+  const [e, setE] = useState(value?.e || TODAY);
+  const quick = (months) => {
+    const end = new Date(TODAY), start = new Date(end);
+    start.setMonth(start.getMonth() - months + 1); start.setDate(1);
+    const fmt2 = dt => dt.toISOString().slice(0,10);
+    setS(fmt2(start)); setE(fmt2(end));
+  };
+  return <div style={{ position:"fixed", inset:0, zIndex:120, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.75)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
+    <div style={{ width:"100%", maxWidth:420, background:C.surface, borderRadius:"20px 20px 0 0", padding:20 }}>
+      <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:14 }}>選擇區間</div>
+      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+        {[{l:"本月",m:1},{l:"近3月",m:3},{l:"近6月",m:6},{l:"近12月",m:12}].map(o => <button key={o.l} onClick={() => quick(o.m)} style={{ padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>{o.l}</button>)}
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={iSt} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={iSt} /></div>
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        <button onClick={() => { onChange({ s, e }); onClose(); }} style={{ flex:1, padding:12, borderRadius:12, background:C.accent, color:"#fff", border:"none", fontWeight:900, cursor:"pointer" }}>確定</button>
+        <button onClick={onClose} style={{ padding:"12px 20px", borderRadius:12, background:C.card, color:C.text, border:`1px solid ${C.border}`, fontWeight:700, cursor:"pointer" }}>取消</button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ── CatPicker：分類選擇（含新增分類）── */
+function CatPicker({ value, onChange, cats, ce, onAddCat }) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmoji, setNewEmoji] = useState("📦");
+  const [showEP, setShowEP] = useState(false);
+  return <Fld label="分類">
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+      {cats.map(cat => <button key={cat} type="button" onClick={() => onChange(cat)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:value===cat?`${C.accent}30`:C.card, border:`1px solid ${value===cat?C.accent:C.border}`, cursor:"pointer" }}>
+        <span style={{ fontSize:20 }}>{ce[cat]||"📦"}</span>
+        <span style={{ fontSize:11, color:value===cat?C.accentL:C.textSub }}>{cat.length>3?cat.slice(0,3)+"…":cat}</span>
+      </button>)}
+      <button type="button" onClick={() => setAdding(p=>!p)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:"pointer" }}>
+        <span style={{ fontSize:20 }}>➕</span><span style={{ fontSize:11, color:C.accentL }}>新增</span>
+      </button>
+    </div>
+    {adding && <div style={{ marginTop:8, padding:10, borderRadius:10, background:`${C.accent}10`, border:`1px solid ${C.accent}33`, display:"flex", gap:8, alignItems:"center" }}>
+      <button type="button" onClick={() => setShowEP(true)} style={{ width:36, height:36, borderRadius:10, background:C.card, border:`2px solid ${C.accent}`, fontSize:18, cursor:"pointer", flexShrink:0 }}>{newEmoji}</button>
+      <input value={newName} onChange={ev => setNewName(ev.target.value)} placeholder="新分類名稱" style={{ ...iSt, flex:1 }} />
+      <button type="button" onClick={() => { if (!newName.trim()) return; onAddCat(newName.trim(), newEmoji); onChange(newName.trim()); setNewName(""); setNewEmoji("📦"); setAdding(false); }} style={{ padding:"8px 12px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, cursor:"pointer", flexShrink:0 }}>加入</button>
+      {showEP && <EmojiPicker onSelect={em => { setNewEmoji(em); setShowEP(false); }} onClose={() => setShowEP(false)} />}
+    </div>}
+  </Fld>;
+}
+
+/* ── EmojiPicker：簡易表情符號選擇面板 ── */
+const EMOJI_SET = ["🍔","🍜","☕","🍱","🍰","🚌","🚗","🚄","✈️","🏠","🏡","🎬","🎮","🎵","📱","📖","🎓","💊","💄","👕","🏦","💰","💳","📈","📉","🧧","🏮","✨","📦","🛡️","🎯","🐶","🐱","💡","🔧","🛒","🎁","⚽","🏀","🍺"];
+function EmojiPicker({ onSelect, onClose }) {
+  return <div style={{ position:"fixed", inset:0, zIndex:210, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.7)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
+    <div style={{ width:"100%", maxWidth:420, background:C.surface, borderRadius:"20px 20px 0 0", padding:20, maxHeight:"60dvh", overflowY:"auto" }}>
+      <div style={{ fontWeight:900, fontSize:14, color:C.text, marginBottom:12 }}>選擇圖示</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:8 }}>
+        {EMOJI_SET.map(em => <button key={em} onClick={() => onSelect(em)} style={{ fontSize:22, padding:8, borderRadius:10, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer" }}>{em}</button>)}
+      </div>
+    </div>
+  </div>;
+}
+/* ── guessEmoji：依名稱關鍵字猜測合適的表情符號 ── */
+function guessEmoji(name) {
+  const s = (name || "").toLowerCase();
+  const table = [
+    [["food","餐","飯","食","吃"], "🍔"], [["coffee","咖啡"], "☕"], [["car","車","交通","捷運","公車"], "🚌"],
+    [["house","房","租","水電"], "🏠"], [["movie","電影","娛樂","遊戲"], "🎬"], [["sub","訂閱"], "📱"],
+    [["health","醫","藥"], "💊"], [["beauty","美","妝"], "💄"], [["edu","學","課"], "🎓"],
+    [["salary","薪"], "💰"], [["gift","紅包","禮"], "🧧"], [["stock","股","投資"], "📈"],
+  ];
+  for (const [keys, emoji] of table) if (keys.some(k => s.includes(k))) return emoji;
+  return "📦";
+}
+
+/* ── SwipeRow：左滑顯示編輯/刪除按鈕，點擊內容觸發 onClick ── */
+function SwipeRow({ children, onDelete, onEdit, onClick }) {
+  const [dx, setDx] = useState(0);
+  const startX = useRef(0);
+  const dragging = useRef(false);
+  const ACT_W = (onEdit ? 56 : 0) + (onDelete ? 56 : 0);
+  const onStart = (clientX) => { startX.current = clientX; dragging.current = true; };
+  const onMove = (clientX) => {
+    if (!dragging.current) return;
+    const diff = clientX - startX.current;
+    setDx(Math.max(-ACT_W, Math.min(0, diff)));
+  };
+  const onEnd = () => {
+    dragging.current = false;
+    setDx(prev => (prev < -ACT_W / 2 ? -ACT_W : 0));
+  };
+  return (
+    <div style={{ position:"relative", overflow:"hidden" }}>
+      {ACT_W > 0 && <div style={{ position:"absolute", top:0, right:0, bottom:0, display:"flex" }}>
+        {onEdit && <button onClick={() => { setDx(0); onEdit(); }} style={{ width:56, background:C.warn, border:"none", color:"#fff", fontSize:18, cursor:"pointer" }}>✏️</button>}
+        {onDelete && <button onClick={() => { setDx(0); onDelete(); }} style={{ width:56, background:C.danger, border:"none", color:"#fff", fontSize:18, cursor:"pointer" }}>🗑</button>}
+      </div>}
+      <div
+        onClick={() => { if (dx === 0 && onClick) onClick(); }}
+        onTouchStart={e => onStart(e.touches[0].clientX)}
+        onTouchMove={e => onMove(e.touches[0].clientX)}
+        onTouchEnd={onEnd}
+        onMouseDown={e => onStart(e.clientX)}
+        onMouseMove={e => { if (dragging.current) onMove(e.clientX); }}
+        onMouseUp={onEnd}
+        onMouseLeave={() => { if (dragging.current) onEnd(); }}
+        style={{ position:"relative", background:C.bg, transform:`translateX(${dx}px)`, transition: dragging.current ? "none" : "transform .2s", cursor:onClick?"pointer":"default" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const pnlColor = (val, C) => val > 0 ? C.income : val < 0 ? C.expense : C.textSub;
 
 /* ══════════════════════════════════════════════════════
@@ -266,6 +422,196 @@ export default function App() {
   const [buyF, setBuyF] = useState(BF0);
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
+  const [initF, setInitF] = useState({});
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
+  const [nG, setNG] = useState(G0);
+  const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
+  const [nPL, setNPL] = useState(PL0);
+  const [selPolicy, setSelPolicy] = useState(null);
+  const [premAmt, setPremAmt] = useState("");
+  const [premAcc, setPremAcc] = useState("");
+  const [surrenderAmt, setSurrenderAmt] = useState("");
+  const [surrenderAcc, setSurrenderAcc] = useState("");
+  const [moDate, setMoDate] = useState(TODAY);
+  const [searchQ, setSearchQ] = useState("");
+
+  /* ══════════════════════════════════════════════════════
+     v2.0 修復：補回被上一輪重構遺漏的核心邏輯與元件
+  ══════════════════════════════════════════════════════ */
+
+  /* ── 類別自訂表情符號（讀取 + 寫入）── */
+  const ceMap = useMemo(() => ({ ...CE, ...(d.customCE || {}) }), [d.customCE]);
+  const addCustomCE = useCallback((name, emoji) => {
+    upd("customCE", prev => ({ ...(prev || {}), [name]: emoji }));
+  }, [upd]);
+
+  /* ── 說明 / 標籤 自動完成歷史（依類別分組，最新在前，去重）── */
+  const descHistory = useMemo(() => {
+    const seen = new Set(); const out = [];
+    for (let i = txns.length - 1; i >= 0; i--) {
+      const v = (txns[i].desc || "").trim();
+      if (v && !seen.has(v)) { seen.add(v); out.push(v); }
+      if (out.length >= 20) break;
+    }
+    return out;
+  }, [txns]);
+  const descHistoryByCat = useMemo(() => {
+    const map = {};
+    for (let i = txns.length - 1; i >= 0; i--) {
+      const t = txns[i]; const v = (t.desc || "").trim();
+      if (!v) continue;
+      if (!map[t.cat]) map[t.cat] = [];
+      if (map[t.cat].length < 8 && !map[t.cat].includes(v)) map[t.cat].push(v);
+    }
+    return map;
+  }, [txns]);
+  const tagsHistory = useMemo(() => {
+    const seen = new Set(); const out = [];
+    for (let i = txns.length - 1; i >= 0; i--) {
+      const v = (txns[i].tags || "").trim();
+      if (v && !seen.has(v)) { seen.add(v); out.push(v); }
+      if (out.length >= 15) break;
+    }
+    return out;
+  }, [txns]);
+
+  /* ── 帳戶餘額 + 交易紀錄 同時寫入的原子化工具（避免 React 非同步 state 批次問題）── */
+  const updMulti = useCallback((patch) => {
+    setD(prev => {
+      const next = { ...prev };
+      Object.keys(patch).forEach(key => {
+        next[key] = typeof patch[key] === "function" ? patch[key](prev[key]) : patch[key];
+      });
+      saveData(next);
+      return next;
+    });
+  }, []);
+
+  /* ── 編輯既有交易：先還原舊帳戶餘額影響，再套用新的（單次 updMulti 原子完成）── */
+  const saveTxn = useCallback((edited) => {
+    if (!edited) return;
+    const old = txns.find(t => t.id === edited.id);
+    updMulti({
+      txns: prevTxns => prevTxns.map(t => t.id === edited.id ? { ...edited, amt:+edited.amt } : t),
+      accs: prevAccs => prevAccs.map(a => {
+        let bal = a.bal, payable = a.payable;
+        if (old) {
+          if (old.acc === a.name) {
+            if (old.type === "income") bal -= old.amt;
+            else if (old.type === "expense") { if (a.type === "credit") payable = (payable||0) - old.amt; else bal += old.amt; }
+          }
+        }
+        if (edited.acc === a.name) {
+          const amt = +edited.amt;
+          if (edited.type === "income") bal += amt;
+          else if (edited.type === "expense") { if (a.type === "credit") payable = (payable||0) + amt; else bal -= amt; }
+        }
+        return (bal !== a.bal || payable !== a.payable) ? { ...a, bal, payable } : a;
+      })
+    });
+    close();
+  }, [txns, updMulti]);
+
+  /* ── 刪除交易：還原對帳戶的影響 ── */
+  const delTxn = useCallback((id) => {
+    const t = txns.find(x => x.id === id);
+    updMulti({
+      txns: prevTxns => prevTxns.filter(x => x.id !== id),
+      accs: prevAccs => !t || !t.acc ? prevAccs : prevAccs.map(a => {
+        if (a.name !== t.acc) return a;
+        if (t.type === "income") return { ...a, bal: a.bal - t.amt };
+        if (t.type === "expense") return a.type === "credit" ? { ...a, payable:(a.payable||0)-t.amt } : { ...a, bal:a.bal+t.amt };
+        return a;
+      })
+    });
+    close();
+  }, [txns, updMulti]);
+
+  /* ── 帳戶餘額調整（初次設定 / 對帳差異，皆不計入收支）── */
+  const adjBal = useCallback((acc, newBalStr, isFirst, desc) => {
+    const newB = +newBalStr, diff = newB - acc.bal;
+    updMulti({
+      accs: prevAccs => prevAccs.map(a => a.id === acc.id ? { ...a, bal:newB } : a),
+      txns: prevTxns => isFirst ? prevTxns : [...prevTxns, {
+        id: Date.now(), type:"adjust", cat:"帳戶調整", amt:Math.abs(diff), adjDiff:diff,
+        desc: desc || (diff > 0 ? "餘額調增" : "餘額調減"), acc:acc.name, date:TODAY, tags:"#調整",
+      }]
+    });
+  }, [updMulti]);
+
+  /* ── 待認列收入池：認列本次金額 ── */
+  const doRecognize = useCallback(() => {
+    if (!selPool || !recAmt) return;
+    const amt = Math.min(+recAmt, selPool.totalAmt - selPool.recognized);
+    if (amt <= 0) return;
+    upd("pools", p => p.map(x => x.id === selPool.id ? { ...x, recognized: x.recognized + amt } : x));
+    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:selPool.cat||"其他收入", amt, desc:`認列：${selPool.desc}`, acc:selPool.acc||"", date:TODAY, tags:"#認列" }]);
+    setRecAmt(""); setSelPool(null);
+  }, [selPool, recAmt, upd]);
+
+  /* ── 訂閱：編輯 / 新增 ── */
+  const saveSub = useCallback((sub) => { upd("subs", p => p.map(x => x.id === sub.id ? sub : x)); close(); }, [upd]);
+  const addSub = useCallback(() => {
+    if (!nS.name || !nS.amt) return;
+    upd("subs", p => [...p, { ...nS, id:"sub"+Date.now(), amt:+nS.amt, active:true }]);
+    setNS(S0); close();
+  }, [nS, upd]);
+
+  /* ── 基本開銷：編輯 / 新增 ── */
+  const saveBill = useCallback(() => { if (!selBill) return; upd("bills", p => p.map(x => x.id === selBill.id ? selBill : x)); close(); }, [selBill, upd]);
+  const addBill = useCallback(() => {
+    if (!nB.name || !nB.amt) return;
+    upd("bills", p => [...(p||[]), { ...nB, id:"bill"+Date.now(), amt:+nB.amt, active:false }]);
+    setNB(B0); close();
+  }, [nB, upd]);
+
+  /* ── 新增帳戶 ── */
+  const addAcc = useCallback(() => {
+    if (!nAcc.name) return;
+    upd("accs", p => [...p, { id:"a"+Date.now(), name:nAcc.name, type:nAcc.type, cur:nAcc.cur||"TWD", bal:0, vis:true, order:p.length, ...(nAcc.type==="credit"?{ payable:0, limit:+nAcc.limit||0 }:{}) }]);
+    setNAcc(NA0); close();
+  }, [nAcc, upd]);
+
+  /* ── 信用卡繳費（供其餘檔案共用，Wallet 內建同名邏輯優先）── */
+  const doPayCred = useCallback(() => {
+    const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
+    updMulti({
+      accs: p => p.map(ac => ac.id === payF.creditId ? { ...ac, payable:Math.max(0,(ac.payable||0)-a) } : ac.id === payF.fromId ? { ...ac, bal:ac.bal-a } : ac),
+      txns: p => [...p, { id:Date.now(), type:"expense", cat:"帳戶調整", amt:a, desc:payF.note||"信用卡繳費", acc:accs.find(x=>x.id===payF.fromId)?.name||"", date:payF.date, tags:"#繳費" }]
+    });
+    setPayF({ creditId:"", fromId:"", amt:"", date:TODAY, note:"" }); close();
+  }, [payF, accs, updMulti]);
+
+  /* ── 股票買入 ── */
+  const doBuy = useCallback(() => {
+    if (!buyF.ticker || !buyF.shares || !buyF.acc) return;
+    const shares = +buyF.shares, totalCost = +buyF.totalCost || (shares * (+buyF.avgCost||0)) + (+buyF.fee||0);
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY };
+    upd("stocks", p => {
+      const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
+      if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
+      return [...p, { id:"s"+Date.now(), acc:buyF.acc, ticker:buyF.ticker, name:buyF.name||buyF.ticker, market:buyF.market, curPrice:0, trades:[trade] }];
+    });
+    if (buyF.fromAcc) upd("accs", p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a));
+    setBuyF(BF0); close();
+  }, [buyF, upd]);
+
+  /* ── 股票賣出 ── */
+  const doSell = useCallback(() => {
+    if (!sellF.stockId || !sellF.shares) return;
+    const shares = +sellF.shares, proceeds = +sellF.totalProceeds || 0, fee = +sellF.fee || 0;
+    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: shares>0?proceeds/shares:0, fee, date:TODAY }] } : s));
+    if (sellF.returnAcc && proceeds) upd("accs", p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a));
+    if (sellF.pnl && +sellF.pnl !== 0) {
+      const st = stocks.find(s => s.id === sellF.stockId);
+      upd("txns", p => [...p, { id:Date.now(), type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票" }]);
+    }
+    setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"" }); close();
+  }, [sellF, stocks, upd]);
+
+  /* ── 以下為介面完整性保留的安全空實作（各檔案內已用 upd() 就地處理，不會被實際呼叫）── */
+  const doInit = useCallback(() => {}, []);
+  const addDebt = useCallback(() => {}, []);
 
   /* ── 讀取股價 ── */
   const fetchPrice = useCallback(async (ticker, market) => {
@@ -479,6 +825,9 @@ export default function App() {
     return result;
   }, [txns, chartRange, isSingleMo, totAssets]);
 
+  const [assetView, setAssetView] = useState("level");
+  const changeData = useMemo(() => chartData.map((d, i) => ({ ...d, change: i === 0 ? 0 : Math.round(d.assets - chartData[i - 1].assets) })), [chartData]);
+
   const rl = r => { if (!r.s || !r.e) return "—"; if (r.s === r.e) return r.s; const s = new Date(r.s), e = new Date(r.e); if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) return `${s.getFullYear()}/${s.getMonth() + 1}月`; return `${r.s.slice(5)}~${r.e.slice(5)}`; };
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y:y - 1, m:12 } : { y, m:m - 1 });
   const nextMo = () => setMonth(({ y, m }) => m === 12 ? { y:y + 1, m:1 } : { y, m:m + 1 });
@@ -489,19 +838,26 @@ export default function App() {
     accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
     stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
     ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
-    chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth,
+    chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
-    useMvForAssets, setUseMvForAssets, poolThisMo, fetchAllPrices, ALL_CURS, theme,
+    useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
     invTab, setInvTab, invPie, setInvPie, selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
-    selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc, recAmt, setRecAmt,
-    nG, setNG, editGoal, setEditGoal, nPL, setNPL, selPolicy, setSelPolicy,
+    initF, setInitF, selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
+    selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
+    nG, setNG, G0, editGoal, setEditGoal, nPL, setNPL, PL0, selPolicy, setSelPolicy,
     premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
-    APP_VER, changeTheme, THEMES, showHDP, setShowHDP, nS, setNS, S0, nB, setNB, B0, nD, setND, D0,
-    settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
-    selTxn, setSelTxn, sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools,
+    showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
+    APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
+    nS, setNS, S0, saveSub, addSub, nB, setNB, B0, saveBill, addBill,
+    nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit,
+    nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
+    selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
+    sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
+    moDate, setMoDate, searchQ, setSearchQ,
     // 關鍵！導出底層自定義 UI atoms 元件給外部區塊檔案使用，拒絕 undefined
-    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, InfoBtn, ConfirmDialog, Card, SH, Bdg, Btn, SwipeRow, theme
+    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji,
+    InfoBtn, ConfirmDialog, Card, SH, Bdg, Btn, TP, SwipeRow
   };
 
   return (
