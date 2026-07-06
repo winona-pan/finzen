@@ -83,18 +83,17 @@ export default function WalletPage({
             </div>
 
             {/* Account groups */}
-            {/* ── 流動資產 ── */}
-            <button onClick={() => toggleSection("liquid")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["liquid"]?4:8, marginTop:4 }}>
+            {/* ── 資產（暫不拆分流動／非流動，之後再設計）── */}
+            <button onClick={() => toggleSection("assets")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["assets"]?4:8, marginTop:4 }}>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>流動資產</span>
-                <InfoBtn msg="隨時可使用的錢，如現金、銀行活存。用來應付日常支出與緊急備用金。" />
+                <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>資產</span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.filter(a=>a.type!=="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
-                <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["liquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
+                <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
-            {!collapsed["liquid"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }].map(grp => {
+            {!collapsed["assets"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
               const items = accs.filter(a => a.type === grp.type);
               const all = accs.filter(a => a.type === grp.type);
               const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
@@ -167,58 +166,6 @@ export default function WalletPage({
                 })}
               </Card>
             </div>}
-
-            {/* ── 非流動資產 ── */}
-            <button onClick={() => toggleSection("nonliquid")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["nonliquid"]?4:8, marginTop:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>非流動資產</span>
-                <InfoBtn msg="長期持有的資產，如股票、基金。不打算短期變現，目的是投資增值。" />
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.filter(a=>a.type==="investment").reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
-                <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["nonliquid"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
-              </div>
-            </button>
-            {!collapsed["nonliquid"] && [{ label:"證券帳戶", type:"investment" }].map(grp => {
-              const items = accs.filter(a => a.type === grp.type);
-              const all = accs.filter(a => a.type === grp.type);
-              const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
-              if (!all.length) return null;
-              const moveAcc = (id, dir) => {
-                const sorted = [...all], idx = sorted.findIndex(a => a.id === id), swapIdx = idx + dir;
-                if (swapIdx < 0 || swapIdx >= sorted.length) return;
-                const o1 = sorted[idx].order, o2 = sorted[swapIdx].order;
-                upd("accs", p => p.map(a => { if (a.id === sorted[idx].id) return { ...a, order:o2 }; if (a.id === sorted[swapIdx].id) return { ...a, order:o1 }; return a; }));
-              };
-              return <div key={grp.type}>
-                <SH title={grp.label} right={fmt(total)} />
-                <Card style={{ overflow:"hidden" }}>
-                  {all.map((a, i) => (
-                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => upd("accs", p => p.filter(x => x.id !== a.id))); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, opacity:a.vis?1:0.45 }}>
-                        {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }}>
-                          <button onClick={e => { e.stopPropagation(); moveAcc(a.id, -1); }} disabled={i === 0} style={{ width:24, height:22, borderRadius:6, background:i === 0 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === 0 ? "default" : "pointer", color:i === 0 ? C.muted : C.accentL, fontSize:13 }}>▲</button>
-                          <button onClick={e => { e.stopPropagation(); moveAcc(a.id, 1); }} disabled={i === all.length - 1} style={{ width:24, height:22, borderRadius:6, background:i === all.length - 1 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === all.length - 1 ? "default" : "pointer", color:i === all.length - 1 ? C.muted : C.accentL, fontSize:13 }}>▼</button>
-                        </div>}
-                        <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{a.icon || AT[a.type] || "💳"}</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <div style={{ fontWeight:700, fontSize:14, color:a.vis?C.text:C.muted }}>{a.name}</div>
-                            {!a.vis && <span style={{ fontSize:11, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>已隱藏</span>}
-                          </div>
-                          <div style={{ fontSize:12, color:C.muted }}>{a.cur}</div>
-                        </div>
-                        <div style={{ textAlign:"right" }}>
-                          <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(a.bal, a.cur)}</div>
-                          {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted }}>≈{fmt(toTWD(a.bal, a.cur, rates))}</div>}
-                        </div>
-                        <span style={{ color:C.muted, fontSize:13, marginLeft:4 }}>✏️</span>
-                      </div>
-                    </SwipeRow>
-                  ))}
-                </Card>
-              </div>;
-            })}
 
             {/* ── 儲蓄險/投資型保單 ── */}
             {(policies||[]).length > 0 && <div style={{ marginBottom:8 }}>

@@ -11,7 +11,8 @@ export default function InvestPage({
   incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
   useMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
-  invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA,
+  invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA, EMOTIONS, emotionReview,
+  watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
@@ -37,11 +38,43 @@ export default function InvestPage({
           </div>
           
           <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20 }}>
-            {[{ v:"holdings", l:"持股" }, { v:"news", l:"新聞" }, { v:"learn", l:"學習" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
+            {[{ v:"holdings", l:"持股" }, { v:"review", l:"情緒回顧" }, { v:"news", l:"新聞" }, { v:"learn", l:"學習" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
           </div>
           
           {invTab === "holdings" && (
             <div>
+              {recentTradeCount > TRADE_FREQ_WARN && (
+                <Card style={{ padding:14, marginBottom:14, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
+                  <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:4 }}>⚠️ 交易有點頻繁</div>
+                  <div style={{ fontSize:12, color:C.textSub, lineHeight:1.5 }}>近 7 天你已經買賣了 {recentTradeCount} 次，留意一下是不是進出太密集、有點失去紀律。</div>
+                </Card>
+              )}
+
+              {watchlist.length > 0 && (
+                <Card style={{ padding:16, marginBottom:16 }}>
+                  <div style={{ fontSize:13, fontWeight:900, color:C.text, marginBottom:10 }}>🧊 冷靜清單</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {watchlist.map(w => {
+                      const elapsed = Date.now() - w.addedAt;
+                      const ready = elapsed >= COOLDOWN_MS;
+                      const remainMin = Math.ceil((COOLDOWN_MS - elapsed) / 60000);
+                      const remainH = Math.floor(remainMin / 60), remainM = remainMin % 60;
+                      return (
+                        <div key={w.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{w.ticker} {w.name}</div>
+                            {w.note && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{w.note}</div>}
+                            <div style={{ fontSize:11, color:ready?C.income:C.muted, marginTop:2, fontWeight:ready?700:400 }}>{ready ? "✅ 冷靜期已過，可以下單了" : `還要等 ${remainH > 0 ? `${remainH}小時` : ""}${remainM}分鐘`}</div>
+                          </div>
+                          {ready && <button onClick={() => { setBuyF(p => ({ ...p, ticker:w.ticker, name:w.name, market:w.market, acc:w.acc || p.acc })); removeFromWatchlist(w.id); setModal("buyStock"); }} style={{ padding:"6px 12px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>前往買入</button>}
+                          <button onClick={() => removeFromWatchlist(w.id)} style={{ padding:"6px 8px", borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:"pointer", flexShrink:0 }}>移除</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
               <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
                   <div>
@@ -222,6 +255,50 @@ export default function InvestPage({
             </div>
           )}
           
+          {invTab === "review" && (
+            <div>
+              <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+                每次買賣時標記當下的心態，累積夠多筆之後，這裡會告訴你「衝動下的單」跟「計畫內的單」績效差多少——用數據戳破自己的僥倖心理。
+              </div>
+              {emotionReview.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>
+                  還沒有標記過情緒的交易紀錄<br/>下次買賣股票時，記得選一下當下的心態
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {emotionReview.map(em => {
+                    const winRate = em.sellCount > 0 ? (em.sellWin / em.sellCount * 100) : null;
+                    const avgPnl = em.sellCount > 0 ? em.sellPnl / em.sellCount : null;
+                    return (
+                      <Card key={em.key} style={{ padding:16 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                          <span style={{ fontSize:20 }}>{em.icon}</span>
+                          <span style={{ fontWeight:900, fontSize:14, color:C.text }}>{em.label}</span>
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                          <div>
+                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>買進次數</div>
+                            <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{em.buyCount} 次{em.buyTotal > 0 ? `　${fmt(em.buyTotal)}` : ""}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>賣出勝率</div>
+                            <div style={{ fontWeight:700, fontSize:14, color:winRate===null?C.muted:winRate>=50?C.income:C.expense }}>{winRate===null ? "尚無資料" : `${winRate.toFixed(0)}% (${em.sellWin}/${em.sellCount})`}</div>
+                          </div>
+                        </div>
+                        {avgPnl !== null && (
+                          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                            <span style={{ fontSize:11, color:C.textSub }}>平均每筆損益</span>
+                            <span style={{ fontWeight:900, fontSize:14, color:pnlColor(avgPnl, C) }}>{avgPnl >= 0 ? "+" : ""}{fmt(Math.round(avgPnl))}</span>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {invTab === "news" && (
             <div>
               <div style={{ fontSize:12, color:C.teal, marginBottom:12 }}>📰 點擊新聞標題開啟原始頁面</div>
