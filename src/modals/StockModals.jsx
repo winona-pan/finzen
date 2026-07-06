@@ -22,13 +22,34 @@ export default function StockModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview,
+  watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS,
   // 接收全域共用 UI Atoms 元件
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg
 }) {
 
   // 表單重置預設值
   const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"" };
+
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  /* ── 追高偵測：今日漲幅過大，或買進價明顯高於現有均成本 ── */
+  const existingBuyStock = stocks.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
+  const existingBuySum = existingBuyStock ? stSum.find(s => s.id === existingBuyStock.id) : null;
+  const buyChgPct = existingBuyStock?._extra?.chgPct;
+  const priceEntered = +buyF.avgCost || 0;
+  const isChasingHigh = (buyChgPct !== undefined && buyChgPct > 3) || (existingBuySum?.avgCost > 0 && priceEntered > existingBuySum.avgCost * 1.08);
+
+  const handleConfirmBuy = () => {
+    if (isChasingHigh && !(buyF.buyReason || "").trim()) { setAttemptedSubmit(true); return; }
+    setAttemptedSubmit(false);
+    doBuy();
+  };
+  const handleCooldown = () => {
+    if (!buyF.ticker) return;
+    addToWatchlist({ ticker:buyF.ticker, name:buyF.name, market:buyF.market, acc:buyF.acc, note:buyF.buyReason || "" });
+    setBuyF(BF0); setAttemptedSubmit(false); close();
+  };
 
   return (
     <>
@@ -65,10 +86,30 @@ export default function StockModals({
             <Inp label="手續費" type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value }))} />
           </div>
           <Sl label="從哪個帳戶扣款（選填）" value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— 不扣款 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
+          <Fld label="這筆是什麼心態下買的？（選填，事後回顧用）">
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {EMOTIONS.map(em => <button key={em.key} onClick={() => setBuyF(p => ({ ...p, emotion:p.emotion===em.key?"":em.key }))} style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:buyF.emotion===em.key?`${em.color}28`:C.card, color:buyF.emotion===em.key?em.color:C.muted, border:`1px solid ${buyF.emotion===em.key?em.color:C.border}`, cursor:"pointer" }}>{em.icon} {em.label}</button>)}
+            </div>
+          </Fld>
+
+          {isChasingHigh && <div style={{ padding:12, borderRadius:12, marginBottom:4, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
+            <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:6 }}>🔥 追高警示</div>
+            <div style={{ fontSize:12, color:C.textSub, marginBottom:8, lineHeight:1.5 }}>
+              {buyChgPct !== undefined && buyChgPct > 3 ? `今天已經上漲 ${buyChgPct.toFixed(1)}%，` : ""}
+              {existingBuySum?.avgCost > 0 && priceEntered > existingBuySum.avgCost * 1.08 ? `目前買價比你的均成本（${fmt(Math.round(existingBuySum.avgCost))}）高出不少，` : ""}
+              先寫下這筆為什麼還要買，冷靜想清楚再送出。
+            </div>
+            <textarea value={buyF.buyReason || ""} onChange={e => setBuyF(p => ({ ...p, buyReason:e.target.value }))} placeholder="例如：基本面轉強、長線布局、非短期追價…" rows={2} style={{ ...iSt, resize:"none", fontFamily:"inherit" }} />
+            {attemptedSubmit && !(buyF.buyReason || "").trim() && <div style={{ fontSize:11, color:C.expense, marginTop:6, fontWeight:700 }}>請先寫下理由才能送出</div>}
+          </div>}
+
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={doBuy}>確認買入</Btn>
+            <Btn style={{ flex:1 }} onClick={handleConfirmBuy}>確認買入</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
+          {buyF.ticker && <button onClick={handleCooldown} style={{ width:"100%", marginTop:8, padding:10, borderRadius:12, background:"transparent", border:`1px dashed ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+            🧊 先別急，加入冷靜清單（{COOLDOWN_MS/3600000} 小時後再決定）
+          </button>}
         </Sheet>}
 
         {modal === "sellStock" && (() => {
@@ -104,6 +145,11 @@ export default function StockModals({
               <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>填入後會自動在總覽產生收支記錄</div>
             </Fld>
             <Sl label="款項回流帳戶" value={sellF.returnAcc} onChange={e => setSellF(p => ({ ...p, returnAcc:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+            <Fld label="這筆是什麼心態下賣的？（選填，事後回顧用）">
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {EMOTIONS.map(em => <button key={em.key} onClick={() => setSellF(p => ({ ...p, emotion:p.emotion===em.key?"":em.key }))} style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:sellF.emotion===em.key?`${em.color}28`:C.card, color:sellF.emotion===em.key?em.color:C.muted, border:`1px solid ${sellF.emotion===em.key?em.color:C.border}`, cursor:"pointer" }}>{em.icon} {em.label}</button>)}
+              </div>
+            </Fld>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
               <Btn style={{ flex:1 }} onClick={doSell}>確認賣出</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
