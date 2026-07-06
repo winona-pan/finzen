@@ -22,9 +22,9 @@ export default function WalletModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0, chartRange, setChartRange, healthRange, setHealthRange,
   // 補上對應大腦缺漏的對講機通道
-  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog
+  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card
 }) {
 
   /* ── 補上 Claude 拆分檔案時嚴重漏掉的局部狀態 (Local States) ── */
@@ -36,6 +36,7 @@ export default function WalletModals({
   const [showAccEP, setShowAccEP] = useState(false);
   const [showDP, setShowDP] = useState(false);
   const [confirmDlg, setConfirmDlg] = useState(null);
+  const closeConfirm = () => setConfirmDlg(null);
 
   /* ── 補上內部的轉帳處理函數 (doTransfer) ── */
   const doTransfer = () => {
