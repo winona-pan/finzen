@@ -254,25 +254,6 @@ export default function StockModals({
               </div>
             </Card>}
 
-            {st.market === "TW" && <Card style={{ padding:14, marginBottom:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                <div style={{ fontSize:11, fontWeight:900, color:C.muted, letterSpacing:"0.08em" }}>三大法人買賣超（千股）</div>
-                {extra.institutional_date && <div style={{ fontSize:10, color:C.muted }}>{extra.institutional_date ? `${extra.institutional_date.slice(0,4)}-${extra.institutional_date.slice(4,6)}-${extra.institutional_date.slice(6,8)}` : ""}</div>}
-              </div>
-              {hasInst ? (
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                  {[{label:"外資",val:inst.foreign},{label:"投信",val:inst.trust},{label:"自營商",val:inst.dealer}].map(({label,val}) => (
-                    <div key={label} style={{ textAlign:"center", padding:"10px 6px", borderRadius:10, background:val>0?`${C.income}15`:val<0?`${C.expense}15`:`${C.muted}10` }}>
-                      <div style={{ fontSize:10, color:C.textSub, marginBottom:4 }}>{label}</div>
-                      <div style={{ fontWeight:900, fontSize:14, color:val>0?C.income:val<0?C.expense:C.muted }}>
-                        {val>0?"▲":val<0?"▼":"—"} {val!==undefined?Math.abs(val).toLocaleString():"—"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"8px 0" }}>資料計算中（通常 15:30 後更新）</div>}
-            </Card>}
-
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <Inp label="股數（自動）" type="number" value={String(st.totalSh)}
