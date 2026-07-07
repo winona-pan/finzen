@@ -13,6 +13,10 @@ export default function InvestPage({
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
   invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA, EMOTIONS, emotionReview,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
+  tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
+  watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks,
+  dailyPnlHeatmap, sectorPie, updateStockMeta,
+  dividendEst, loadingDiv, fetchDividendEstimate,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
@@ -37,8 +41,8 @@ export default function InvestPage({
             </div>
           </div>
           
-          <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20 }}>
-            {[{ v:"holdings", l:"持股" }, { v:"review", l:"情緒回顧" }, { v:"news", l:"新聞" }, { v:"learn", l:"學習" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:1, padding:"8px 4px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer" }}>{t.l}</button>)}
+          <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+            {[{ v:"holdings", l:"持股" }, { v:"perf", l:"績效" }, { v:"watch", l:"自選股" }, { v:"news", l:"新聞" }, { v:"learn", l:"學習" }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:"0 0 auto", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer", whiteSpace:"nowrap" }}>{t.l}</button>)}
           </div>
           
           {invTab === "holdings" && (
@@ -252,17 +256,147 @@ export default function InvestPage({
                 );
               })}
               {stSum.length === 0 && <div style={{ padding:"40px 0", textAlign:"center", color:C.muted }}><div style={{ fontSize:38, marginBottom:8 }}>📊</div>尚無持股，點右上角「＋買入」</div>}
+
+              {sectorPie.length > 1 && (
+                <Card style={{ padding:16, marginBottom:16 }}>
+                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>產業/類股分佈</div>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart><Pie data={sectorPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{sectorPie.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10, justifyContent:"center" }}>
+                    {sectorPie.map((item, i) => {
+                      const total = sectorPie.reduce((s,x)=>s+x.value,0);
+                      const pct = total > 0 ? (item.value/total*100).toFixed(1) : "0";
+                      return <div key={i} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                        <div style={{ width:10, height:10, borderRadius:3, background:PIE[i%PIE.length], flexShrink:0 }}/>
+                        <span style={{ fontSize:12, color:C.text, fontWeight:700 }}>{item.name}</span>
+                        <span style={{ fontSize:11, color:C.muted }}>{pct}%</span>
+                      </div>;
+                    })}
+                  </div>
+                  <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊到個股詳細頁設定「產業別」即可分類</div>
+                </Card>
+              )}
+
+              {Object.keys(dailyPnlHeatmap).length > 0 && (
+                <Card style={{ padding:16 }}>
+                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(15, 1fr)", gap:3 }}>
+                    {Array.from({ length:90 }).map((_, i) => {
+                      const d = new Date(); d.setDate(d.getDate() - (89 - i));
+                      const key = d.toISOString().slice(0,10);
+                      const val = dailyPnlHeatmap[key] || 0;
+                      const intensity = Math.min(Math.abs(val) / 2000, 1);
+                      const bg = val > 0 ? `rgba(74,222,128,${0.15+intensity*0.7})` : val < 0 ? `rgba(244,63,94,${0.15+intensity*0.7})` : C.border;
+                      return <div key={i} title={`${key}: ${val>=0?"+":""}${Math.round(val)}`} style={{ aspectRatio:"1", borderRadius:3, background:bg }} />;
+                    })}
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:10, color:C.muted }}>
+                    <span>綠＝淨收入　紅＝淨支出</span>
+                    <span>顏色越深代表金額越大</span>
+                  </div>
+                </Card>
+              )}
             </div>
           )}
           
-          {invTab === "review" && (
+          {invTab === "perf" && (
             <div>
-              <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-                每次買賣時標記當下的心態，累積夠多筆之後，這裡會告訴你「衝動下的單」跟「計畫內的單」績效差多少——用數據戳破自己的僥倖心理。
+              {/* 勝率 / 賺賠比 */}
+              <Card style={{ padding:16, marginBottom:14 }}>
+                <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>勝率與賺賠比</div>
+                {tradeStats.totalSells === 0 ? (
+                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有賣出紀錄</div>
+                ) : (
+                  <div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>勝率</div>
+                        <div style={{ fontWeight:900, fontSize:18, color:tradeStats.winRate>=50?C.income:C.expense }}>{tradeStats.winRate.toFixed(0)}%</div>
+                        <div style={{ fontSize:10, color:C.muted }}>{tradeStats.wins} 勝 / {tradeStats.losses} 敗</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>賺賠比</div>
+                        <div style={{ fontWeight:900, fontSize:18, color:C.text }}>{tradeStats.winLossRatio ? `${tradeStats.winLossRatio.toFixed(2)} : 1` : "—"}</div>
+                        <div style={{ fontSize:10, color:C.muted }}>平均賺 {fmt(Math.round(tradeStats.avgWin))} / 平均賠 {fmt(Math.round(Math.abs(tradeStats.avgLoss)))}</div>
+                      </div>
+                    </div>
+                    {tradeStats.avgR != null && (
+                      <div style={{ paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>平均 R 值（{tradeStats.rCount} 筆有設停損）</div>
+                        <div style={{ fontWeight:900, fontSize:16, color:tradeStats.avgR>=0?C.income:C.expense }}>{tradeStats.avgR>=0?"+":""}{tradeStats.avgR.toFixed(2)} R</div>
+                      </div>
+                    )}
+                    {tradeStats.disciplinedCount > 0 && (
+                      <div style={{ marginTop:10, padding:10, borderRadius:10, background:tradeStats.brokeStopCount>0?`${C.warn}15`:`${C.income}15` }}>
+                        <div style={{ fontSize:11, color:C.textSub }}>停損紀律</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:tradeStats.brokeStopCount>0?C.warn:C.income, marginTop:2 }}>
+                          {tradeStats.disciplinedCount} 筆有設停損，其中 {tradeStats.brokeStopCount} 筆賣出時已經跌破停損價才賣
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+
+              {/* 最大回撤 */}
+              <Card style={{ padding:16, marginBottom:14 }}>
+                <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:6, letterSpacing:"0.05em" }}>最大回撤</div>
+                {maxDrawdown ? (
+                  <div>
+                    <div style={{ fontWeight:900, fontSize:20, color:C.expense }}>-{maxDrawdown.pct.toFixed(1)}%</div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>資產從高點回落的最大幅度（{maxDrawdown.source==="daily"?"依每日市值":"依月資產估算"}）</div>
+                  </div>
+                ) : <div style={{ fontSize:12, color:C.muted }}>資料不足，先到「持股」分頁讀取每日走勢</div>}
+              </Card>
+
+              {/* 與大盤比較 */}
+              <Card style={{ padding:16, marginBottom:14 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>與大盤（0050）比較</div>
+                  <button onClick={fetchBenchmarkCompare} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingBenchmark?"讀取中…":"重新整理"}</button>
+                </div>
+                {benchmarkData.length > 1 ? (
+                  <div>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <LineChart data={benchmarkData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                        <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(benchmarkData.length/6)} />
+                        <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v}%`} />
+                        <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n)=>[`${v}%`, n==="portfolio"?"我的投組":"0050"]} />
+                        <Line type="linear" dataKey="portfolio" stroke={C.accent} strokeWidth={2.5} dot={false} name="portfolio" />
+                        <Line type="linear" dataKey="benchmark" stroke={C.muted} strokeWidth={2} dot={false} strokeDasharray="4 3" name="benchmark" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textSub }}><div style={{ width:14, height:2, background:C.accent }} />我的投組</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textSub }}><div style={{ width:14, height:2, background:C.muted }} />0050</div>
+                    </div>
+                  </div>
+                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"14px 0" }}>{loadingBenchmark?"讀取中…":"點右上角「重新整理」讀取比較資料"}</div>}
+              </Card>
+
+              {/* 股息估算 */}
+              <Card style={{ padding:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>股息估算（近一年已發放）</div>
+                  <button onClick={fetchDividendEstimate} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingDiv?"讀取中…":"重新整理"}</button>
+                </div>
+                {dividendEst.length > 0 ? (
+                  <div>
+                    <div style={{ fontWeight:900, fontSize:18, color:C.income, marginBottom:8 }}>{fmt(Math.round(dividendEst.reduce((s,x)=>s+x.annualDiv,0)))} / 年</div>
+                    {dividendEst.map(x => <div key={x.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"4px 0", color:C.textSub }}><span>{x.ticker}</span><span>{fmt(Math.round(x.annualDiv))}</span></div>)}
+                    <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊依過去 12 個月實際配息估算，非未來預測</div>
+                  </div>
+                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{loadingDiv?"讀取中…":"點「重新整理」讀取股息資料"}</div>}
+              </Card>
+
+              <div style={{ fontSize:11, color:C.muted, margin:"18px 0 10px", lineHeight:1.6 }}>
+                每次買賣時標記當下的心態，累積夠多筆之後，下面會告訴你「衝動下的單」跟「計畫內的單」績效差多少。
               </div>
               {emotionReview.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>
-                  還沒有標記過情緒的交易紀錄<br/>下次買賣股票時，記得選一下當下的心態
+                <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>
+                  還沒有標記過情緒的交易紀錄
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -294,6 +428,35 @@ export default function InvestPage({
                       </Card>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {invTab === "watch" && (
+            <div>
+              <WatchStockAdder addWatchStock={addWatchStock} C={C} iSt={iSt} />
+              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+                <button onClick={refreshWatchStocks} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>🔄 更新報價</button>
+              </div>
+              {watchStocks.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>還沒有自選股，上面加一支想追蹤的股票吧</div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {watchStocks.map(w => (
+                    <SwipeRow key={w.id} onDelete={() => confirm(`移除自選股「${w.ticker}」？`, () => removeWatchStock(w.id))}>
+                      <Card style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <div>
+                          <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>
+                          <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmt(w.curPrice) : "—"}</div>
+                          {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
+                        </div>
+                      </Card>
+                    </SwipeRow>
+                  ))}
                 </div>
               )}
             </div>
@@ -385,5 +548,28 @@ export default function InvestPage({
         </div>
       )}
     </>
+  );
+}
+
+/* ── 自選股新增小表單 ── */
+function WatchStockAdder({ addWatchStock, C, iSt }) {
+  const [ticker, setTicker] = useState("");
+  const [name, setName] = useState("");
+  const [market, setMarket] = useState("TW");
+  const add = () => {
+    if (!ticker.trim()) return;
+    addWatchStock({ ticker:ticker.trim().toUpperCase(), name:name.trim(), market, curPrice:0 });
+    setTicker(""); setName("");
+  };
+  return (
+    <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+      <input value={ticker} onChange={e => setTicker(e.target.value)} placeholder="代號 如 2330" style={{ ...iSt, flex:1 }} />
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="名稱（選填）" style={{ ...iSt, flex:1 }} />
+      <select value={market} onChange={e => setMarket(e.target.value)} style={{ ...iSt, flex:"0 0 64px" }}>
+        <option value="TW">TW</option>
+        <option value="US">US</option>
+      </select>
+      <button onClick={add} style={{ padding:"0 14px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, cursor:"pointer" }}>加入</button>
+    </div>
   );
 }
