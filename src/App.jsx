@@ -650,7 +650,18 @@ export default function App() {
     if (!sellF.stockId || !sellF.shares) return;
     const shares = +sellF.shares, proceeds = +sellF.totalProceeds || 0, fee = +sellF.fee || 0;
     const st = stocks.find(s => s.id === sellF.stockId);
-    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: shares>0?proceeds/shares:0, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0 }] } : s));
+    const sellPrice = shares > 0 ? proceeds / shares : 0;
+    const stSumEntry = st ? { avgCost: (() => {
+      const buys = (st.trades||[]).filter(t=>t.type==="buy");
+      const bSh = buys.reduce((s,t)=>s+t.shares,0);
+      const cost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0),0);
+      return bSh > 0 ? cost / bSh : 0;
+    })() } : null;
+    const entryPrice = stSumEntry?.avgCost || 0;
+    const stopLoss = (st?.stopLossPct && entryPrice > 0) ? entryPrice * (1 - st.stopLossPct / 100) : null;
+    const rValue = (stopLoss != null && entryPrice > 0 && entryPrice !== stopLoss) ? (sellPrice - entryPrice) / Math.abs(entryPrice - stopLoss) : null;
+    const brokeDiscipline = stopLoss != null ? (entryPrice > stopLoss ? sellPrice < stopLoss : sellPrice > stopLoss) : false;
+    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: sellPrice, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0, entryPrice, stopLoss, rValue, brokeDiscipline }] } : s));
     if (sellF.returnAcc && proceeds) {
       updMulti({
         accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
@@ -662,6 +673,11 @@ export default function App() {
     }
     setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
   }, [sellF, stocks, upd, updMulti]);
+
+  /* ── 更新個股的停損價 / 產業別標記 ── */
+  const updateStockMeta = useCallback((stockId, patch) => {
+    upd("stocks", p => p.map(s => s.id === stockId ? { ...s, ...patch } : s));
+  }, [upd]);
 
   /* ── 以下為介面完整性保留的安全空實作（各檔案內已用 upd() 就地處理，不會被實際呼叫）── */
   const doInit = useCallback(() => {}, []);
@@ -901,6 +917,121 @@ export default function App() {
     }
   }, [stocks, fetchDailyHistory]);
 
+  /* ══════════════════════════════════════════════════════
+     績效分析 / 風控 / 觀察清單 / 視覺化
+  ══════════════════════════════════════════════════════ */
+
+  /* ── 勝率、賺賠比、平均R值 ── */
+  const tradeStats = useMemo(() => {
+    const sells = [];
+    stocks.forEach(s => (s.trades || []).forEach(t => { if (t.type === "sell") sells.push({ ...t, ticker:s.ticker, name:s.name }); }));
+    const wins = sells.filter(t => (t.pnl || 0) > 0);
+    const losses = sells.filter(t => (t.pnl || 0) < 0);
+    const winRate = sells.length ? (wins.length / sells.length * 100) : null;
+    const avgWin = wins.length ? wins.reduce((s,t)=>s+t.pnl,0) / wins.length : 0;
+    const avgLoss = losses.length ? losses.reduce((s,t)=>s+t.pnl,0) / losses.length : 0;
+    const winLossRatio = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : null;
+    const rTrades = sells.filter(t => t.rValue != null);
+    const avgR = rTrades.length ? rTrades.reduce((s,t)=>s+t.rValue,0) / rTrades.length : null;
+    const disciplined = sells.filter(t => t.stopLoss != null);
+    const brokeStop = disciplined.filter(t => t.brokeDiscipline);
+    return { totalSells:sells.length, wins:wins.length, losses:losses.length, winRate, avgWin, avgLoss, winLossRatio, avgR, rCount:rTrades.length, disciplinedCount:disciplined.length, brokeStopCount:brokeStop.length, sells };
+  }, [stocks]);
+
+  /* ── 最大回撤（優先用每日市值序列，沒有的話退回月度資產序列）── */
+  const maxDrawdown = useMemo(() => {
+    const series = dailyGrowth.length > 3 ? dailyGrowth.map(d => d.mv) : chartData.map(d => d.assets);
+    if (series.length < 2) return null;
+    let peak = series[0], maxDD = 0;
+    series.forEach(v => { if (v > peak) peak = v; const dd = peak > 0 ? (peak - v) / peak * 100 : 0; if (dd > maxDD) maxDD = dd; });
+    return { pct:maxDD, source: dailyGrowth.length > 3 ? "daily" : "monthly" };
+  }, [dailyGrowth, chartData]);
+
+  /* ── 與大盤（0050）績效比較 ── */
+  const [benchmarkData, setBenchmarkData] = useState([]);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
+  const fetchBenchmarkCompare = useCallback(async () => {
+    if (!dailyGrowth.length) { await fetchDailyGrowth(); }
+    setLoadingBenchmark(true);
+    try {
+      const hist = await fetchDailyHistory("0050", "TW");
+      if (!hist.length || !dailyGrowth.length) { setBenchmarkData([]); return; }
+      const startDate = dailyGrowth[0]?.date;
+      const base = dailyGrowth[0]?.mv || 1;
+      const benchBase = hist.find(h => h.date.slice(5) >= startDate)?.close || hist[0].close;
+      const merged = dailyGrowth.map(d => {
+        let benchPrice = null;
+        for (let j = hist.length - 1; j >= 0; j--) { if (hist[j].date.slice(5) <= d.date) { benchPrice = hist[j].close; break; } }
+        return { date:d.date, portfolio: Math.round((d.mv / base - 1) * 1000) / 10, benchmark: benchPrice ? Math.round((benchPrice / benchBase - 1) * 1000) / 10 : null };
+      });
+      setBenchmarkData(merged);
+    } catch { setBenchmarkData([]); }
+    finally { setLoadingBenchmark(false); }
+  }, [dailyGrowth, fetchDailyHistory, fetchDailyGrowth]);
+
+  /* ── 自選股（尚未持有，追蹤價格用）── */
+  const watchStocks = d.watchStocks || [];
+  const addWatchStock = useCallback((item) => upd("watchStocks", p => [...(p||[]), { id:"ws"+Date.now(), ...item }]), [upd]);
+  const removeWatchStock = useCallback((id) => upd("watchStocks", p => (p||[]).filter(x=>x.id!==id)), [upd]);
+  const refreshWatchStocks = useCallback(() => { if (watchStocks.length) fetchAllPrices(watchStocks); }, [watchStocks, fetchAllPrices]);
+
+  /* ── 每日損益熱力圖（近 90 天，依交易記帳的淨收支）── */
+  const dailyPnlHeatmap = useMemo(() => {
+    const map = {};
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    txns.forEach(t => {
+      if (new Date(t.date).getTime() < cutoff) return;
+      if (t.type !== "income" && t.type !== "expense") return;
+      if (t.cat === "帳戶調整") return;
+      map[t.date] = (map[t.date] || 0) + (t.type === "income" ? t.amt : -t.amt);
+    });
+    return map;
+  }, [txns]);
+
+  /* ── 產業/類股分佈（依手動標記的 sector）── */
+  const sectorPie = useMemo(() => {
+    const map = {};
+    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || "未分類"; map[key] = (map[key] || 0) + (s.mv > 0 ? s.mv : s.totalCost); } });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
+  }, [stSum]);
+
+  /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
+  const [dividendEst, setDividendEst] = useState([]);
+  const [loadingDiv, setLoadingDiv] = useState(false);
+  const fetchDividendEstimate = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0);
+    if (!held.length) { setDividendEst([]); return; }
+    setLoadingDiv(true);
+    try {
+      const results = await Promise.all(held.map(async s => {
+        const sym = s.market === "TW" ? `${s.ticker}.TW` : s.ticker;
+        const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y&events=div`;
+        const proxies = [
+          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+          (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        ];
+        for (const makeProxy of proxies) {
+          try {
+            const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
+            if (!r.ok) continue;
+            const raw = await r.text();
+            let d2; try { const j = JSON.parse(raw); d2 = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
+            const divs = d2?.chart?.result?.[0]?.events?.dividends;
+            if (!divs) return { ...s, lastDiv:0, annualDiv:0 };
+            const vals = Object.values(divs).map(x => x.amount).filter(Boolean);
+            if (!vals.length) return { ...s, lastDiv:0, annualDiv:0 };
+            const lastDiv = vals[vals.length - 1];
+            const annualDiv = vals.reduce((sum, v) => sum + v, 0);
+            return { ...s, lastDiv, annualDiv: annualDiv * s.totalSh };
+          } catch { continue; }
+        }
+        return { ...s, lastDiv:0, annualDiv:0 };
+      }));
+      setDividendEst(results.filter(x => x.annualDiv > 0));
+    } catch { setDividendEst([]); }
+    finally { setLoadingDiv(false); }
+  }, [stSum]);
+
   /* ── 情緒標記回顧：依情緒彙整買進/賣出次數與績效 ── */
   const emotionReview = useMemo(() => {
     const map = {};
@@ -970,6 +1101,10 @@ export default function App() {
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
     dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
     watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
+    tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
+    watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks,
+    dailyPnlHeatmap, sectorPie, updateStockMeta,
+    dividendEst, loadingDiv, fetchDividendEstimate,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
     useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
