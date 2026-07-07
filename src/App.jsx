@@ -938,15 +938,6 @@ export default function App() {
     return { totalSells:sells.length, wins:wins.length, losses:losses.length, winRate, avgWin, avgLoss, winLossRatio, avgR, rCount:rTrades.length, disciplinedCount:disciplined.length, brokeStopCount:brokeStop.length, sells };
   }, [stocks]);
 
-  /* ── 最大回撤（優先用每日市值序列，沒有的話退回月度資產序列）── */
-  const maxDrawdown = useMemo(() => {
-    const series = dailyGrowth.length > 3 ? dailyGrowth.map(d => d.mv) : chartData.map(d => d.assets);
-    if (series.length < 2) return null;
-    let peak = series[0], maxDD = 0;
-    series.forEach(v => { if (v > peak) peak = v; const dd = peak > 0 ? (peak - v) / peak * 100 : 0; if (dd > maxDD) maxDD = dd; });
-    return { pct:maxDD, source: dailyGrowth.length > 3 ? "daily" : "monthly" };
-  }, [dailyGrowth, chartData]);
-
   /* ── 與大盤（0050）績效比較 ── */
   const [benchmarkData, setBenchmarkData] = useState([]);
   const [loadingBenchmark, setLoadingBenchmark] = useState(false);
@@ -1087,6 +1078,15 @@ export default function App() {
 
   const [assetView, setAssetView] = useState("level");
   const changeData = useMemo(() => chartData.map((d, i) => ({ ...d, change: i === 0 ? 0 : Math.round(d.assets - chartData[i - 1].assets) })), [chartData]);
+
+  /* ── 最大回撤（優先用每日市值序列，沒有的話退回月度資產序列）── */
+  const maxDrawdown = useMemo(() => {
+    const series = dailyGrowth.length > 3 ? dailyGrowth.map(d => d.mv) : chartData.map(d => d.assets);
+    if (series.length < 2) return null;
+    let peak = series[0], maxDD = 0;
+    series.forEach(v => { if (v > peak) peak = v; const dd = peak > 0 ? (peak - v) / peak * 100 : 0; if (dd > maxDD) maxDD = dd; });
+    return { pct:maxDD, source: dailyGrowth.length > 3 ? "daily" : "monthly" };
+  }, [dailyGrowth, chartData]);
 
   const rl = r => { if (!r.s || !r.e) return "—"; if (r.s === r.e) return r.s; const s = new Date(r.s), e = new Date(r.e); if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) return `${s.getFullYear()}/${s.getMonth() + 1}月`; return `${r.s.slice(5)}~${r.e.slice(5)}`; };
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y:y - 1, m:12 } : { y, m:m - 1 });
