@@ -22,7 +22,7 @@ export default function StockModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview, updateStockMeta,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS,
   // 接收全域共用 UI Atoms 元件
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg
@@ -39,6 +39,11 @@ export default function StockModals({
   const buyChgPct = existingBuyStock?._extra?.chgPct;
   const priceEntered = +buyF.avgCost || 0;
   const isChasingHigh = (buyChgPct !== undefined && buyChgPct > 3) || (existingBuySum?.avgCost > 0 && priceEntered > existingBuySum.avgCost * 1.08);
+
+  /* ── 部位大小風控：這筆買進佔總資產的比重 ── */
+  const buyTotalCost = +buyF.totalCost || ((+buyF.shares||0) * (+buyF.avgCost||0)) + (+buyF.fee||0);
+  const posPct = totAssets > 0 ? (buyTotalCost / totAssets * 100) : 0;
+  const isOverConcentrated = posPct > 20;
 
   const handleConfirmBuy = () => {
     if (isChasingHigh && !(buyF.buyReason || "").trim()) { setAttemptedSubmit(true); return; }
@@ -91,6 +96,10 @@ export default function StockModals({
               {EMOTIONS.map(em => <button key={em.key} onClick={() => setBuyF(p => ({ ...p, emotion:p.emotion===em.key?"":em.key }))} style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:buyF.emotion===em.key?`${em.color}28`:C.card, color:buyF.emotion===em.key?em.color:C.muted, border:`1px solid ${buyF.emotion===em.key?em.color:C.border}`, cursor:"pointer" }}>{em.icon} {em.label}</button>)}
             </div>
           </Fld>
+
+          {isOverConcentrated && <div style={{ padding:12, borderRadius:12, marginBottom:4, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
+            <div style={{ fontSize:12, fontWeight:900, color:C.warn }}>⚠️ 這筆會佔總資產約 {posPct.toFixed(1)}%，部位偏重，注意分散風險</div>
+          </div>}
 
           {isChasingHigh && <div style={{ padding:12, borderRadius:12, marginBottom:4, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
             <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:6 }}>🔥 追高警示</div>
@@ -281,6 +290,20 @@ export default function StockModals({
                 {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ 已達停損！</span>}
               </div>}
             </div>
+
+            <Fld label="產業別（選填，用於資產配置圖）">
+              <input value={st.sector || ""} onChange={e => updateStockMeta(st.id, { sector:e.target.value })} placeholder="例如：半導體、金融、ETF…" style={iSt} />
+            </Fld>
+
+            {totAssets > 0 && (() => {
+              const posPct = ((hasPrice ? st.mv : st.totalCost) / totAssets * 100);
+              return (
+                <div style={{ padding:10, borderRadius:10, background:posPct > 20 ? `${C.warn}15` : `${C.card}`, border:`1px solid ${posPct > 20 ? C.warn+"55" : C.border}`, marginBottom:4 }}>
+                  <div style={{ fontSize:11, color:C.textSub }}>這檔佔總資產比重</div>
+                  <div style={{ fontSize:14, fontWeight:900, color:posPct > 20 ? C.warn : C.text }}>{posPct.toFixed(1)}%{posPct > 20 ? "　⚠️ 部位偏重，注意集中風險" : ""}</div>
+                </div>
+              );
+            })()}
             
             <div style={{ display:"flex", gap:8, marginTop:12 }}>
               <Btn v="warn" style={{ flex:1 }} onClick={() => {
