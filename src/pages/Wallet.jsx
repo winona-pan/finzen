@@ -140,34 +140,37 @@ export default function WalletPage({
                   const myBuckets = buckets.filter(b => b.accId === a.id).sort((x,y) => (x.order||0)-(y.order||0));
                   if (!myBuckets.length) return null;
                   return <div key={a.id + "_bk"} style={{ margin:"4px 0 8px", paddingLeft:8 }}>
-                    {myBuckets.map((b, bi) => (
-                      <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
-                        {editingBucket === b.id ? (
-                          <div style={{ padding:"8px 12px", background:`${C.accent}08`, borderRadius:10 }}>
-                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                              <button onClick={() => setBucketEPFor(b.id)} style={{ width:32, height:32, borderRadius:9, background:C.card, border:`1px solid ${C.border}`, fontSize:15, cursor:"pointer", flexShrink:0 }}>{b.emoji}</button>
-                              <input value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px" }} />
-                              <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:80, padding:"6px 8px" }} />
-                            </div>
-                            <button onClick={() => setEditingBucket(null)} style={{ width:"100%", marginTop:6, padding:6, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
+                    {myBuckets.map((b, bi) => {
+                      const bucketRowContent = editingBucket === b.id ? (
+                        <div style={{ padding:"8px 12px", background:`${C.accent}08`, borderRadius:10 }}>
+                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                            <button onClick={() => setBucketEPFor(b.id)} style={{ width:32, height:32, borderRadius:9, background:C.card, border:`1px solid ${C.border}`, fontSize:15, cursor:"pointer", flexShrink:0 }}>{b.emoji}</button>
+                            <input value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px" }} />
+                            <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:80, padding:"6px 8px" }} />
                           </div>
-                        ) : (
-                          <div onClick={() => setEditingBucket(b.id)} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", opacity:b.vis===false?0.4:1, cursor:"pointer" }}>
-                            {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }} onClick={e=>e.stopPropagation()}>
-                              <button onClick={() => moveBucket(a.id, b.id, -1)} disabled={bi===0} style={{ width:20, height:18, borderRadius:5, background:bi===0?C.muted+"22":C.accent+"33", border:"none", cursor:bi===0?"default":"pointer", color:bi===0?C.muted:C.accentL, fontSize:11 }}>▲</button>
-                              <button onClick={() => moveBucket(a.id, b.id, 1)} disabled={bi===myBuckets.length-1} style={{ width:20, height:18, borderRadius:5, background:bi===myBuckets.length-1?C.muted+"22":C.accent+"33", border:"none", cursor:bi===myBuckets.length-1?"default":"pointer", color:bi===myBuckets.length-1?C.muted:C.accentL, fontSize:11 }}>▼</button>
-                            </div>}
-                            <span style={{ fontSize:12, color:C.muted }}>└</span>
-                            <span style={{ fontSize:15 }}>{b.emoji}</span>
-                            <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
-                            {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
-                            <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
-                            {(b.history||[]).length > 1 && <button onClick={e => { e.stopPropagation(); setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>📈</button>}
-                            <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
-                          </div>
-                        )}
-                      </SwipeRow>
-                    ))}
+                          <button onClick={() => setEditingBucket(null)} style={{ width:"100%", marginTop:6, padding:6, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
+                        </div>
+                      ) : (
+                        <div onClick={() => wMode !== "sort" && setEditingBucket(b.id)} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", opacity:b.vis===false?0.4:1, cursor:wMode==="sort"?"default":"pointer" }}>
+                          {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }}>
+                            <button onClick={() => moveBucket(a.id, b.id, -1)} disabled={bi===0} style={{ width:20, height:18, borderRadius:5, background:bi===0?C.muted+"22":C.accent+"33", border:"none", cursor:bi===0?"default":"pointer", color:bi===0?C.muted:C.accentL, fontSize:11 }}>▲</button>
+                            <button onClick={() => moveBucket(a.id, b.id, 1)} disabled={bi===myBuckets.length-1} style={{ width:20, height:18, borderRadius:5, background:bi===myBuckets.length-1?C.muted+"22":C.accent+"33", border:"none", cursor:bi===myBuckets.length-1?"default":"pointer", color:bi===myBuckets.length-1?C.muted:C.accentL, fontSize:11 }}>▼</button>
+                          </div>}
+                          <span style={{ fontSize:12, color:C.muted }}>└</span>
+                          <span style={{ fontSize:15 }}>{b.emoji}</span>
+                          <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
+                          {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
+                          <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
+                          {(b.history||[]).length > 1 && <button onClick={e => { e.stopPropagation(); setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>📈</button>}
+                          <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
+                        </div>
+                      );
+                      return wMode === "sort" ? (
+                        <div key={b.id}>{bucketRowContent}</div>
+                      ) : (
+                        <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>{bucketRowContent}</SwipeRow>
+                      );
+                    })}
                   </div>;
                 })}
                 {bucketEPFor && <EmojiPicker onSelect={e => { updateBucket(bucketEPFor, { emoji:e }); setBucketEPFor(null); }} onClose={() => setBucketEPFor(null)} />}

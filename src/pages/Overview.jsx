@@ -140,7 +140,7 @@ export default function OverviewPage({
                 </div>
                 <Card style={{ overflow:"hidden" }}>
                   {dayT.map((t, i) => (
-                    <SwipeRow key={t.id} onDelete={() => confirm("確定刪除此筆交易？", () => delTxn(t.id))} onEdit={() => { setSelTxn({ ...t }); setModal("editTxn"); }} onClick={() => { setSelTxn({ ...t }); setModal("txnDet"); }}>
+                    <SwipeRow key={t.id} onDelete={() => confirm(debts.some(x=>x.srcTxnId===t.id && !x.settled) ? "確定刪除此筆交易？連動的代墊應收款也會一併刪除" : "確定刪除此筆交易？", () => delTxn(t.id))} onEdit={() => { setSelTxn({ ...t }); setModal("editTxn"); }} onClick={() => { setSelTxn({ ...t }); setModal("txnDet"); }}>
                       <div style={rowSt(i, true)}>
                         <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{ceMap[t.cat] || "📦"}</div>
                         <div style={{ flex:1, minWidth:0 }}>
