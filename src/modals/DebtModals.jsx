@@ -147,7 +147,7 @@ export default function DebtModals({
                   }
                   if (settleAcc && thisPay) {
                     if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
-                    else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
+                    else upd("accs", p => p.map(a => a.name===settleAcc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+thisPay} : {...a, bal:a.bal-thisPay}) : a));
                   }
                   const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
                   upd("txns", p => [...p, {

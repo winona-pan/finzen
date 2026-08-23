@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function WalletModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -7,7 +8,7 @@ export default function WalletModals({
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
   isSingleMo, chartRange, setChartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
-  buckets, addBucket, updateBucket, deleteBucket,
+  buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, growthBucket,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
   selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
   selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
@@ -40,6 +41,9 @@ export default function WalletModals({
   const [editingBucketId, setEditingBucketId] = useState(null);
   const [bucketEPFor, setBucketEPFor] = useState(null);
   const [accDetailMonth, setAccDetailMonth] = useState(null);
+  const [bkFrom, setBkFrom] = useState(null);
+  const [bkTo, setBkTo] = useState(null);
+  const [bkAmt, setBkAmt] = useState("");
   useEffect(() => { setAccDetailMonth(null); }, [selAcc?.id]);
   const closeConfirm = () => setConfirmDlg(null);
 
@@ -64,15 +68,17 @@ export default function WalletModals({
   /* ── 信用卡繳費處理 ── */
   const payCredit = () => {
     const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
+    const creditAcc = accs.find(x => x.id === payF.creditId);
+    const fromAcc = accs.find(x => x.id === payF.fromId);
     upd("accs", p => p.map(ac => { 
       if (ac.id === payF.creditId) return { ...ac, payable: Math.max(0, (ac.payable || 0) - a) }; 
       if (ac.id === payF.fromId) return { ...ac, bal: ac.bal - a }; 
       return ac; 
     }));
     upd("txns", p => [...p, { 
-      id: Date.now(), type: "expense", cat: "帳戶調整", amt: a, 
+      id: Date.now(), type: "transfer", cat: "帳戶調整", amt: a, 
       desc: payF.note || "信用卡繳費", 
-      acc: accs.find(x => x.id === payF.fromId)?.name || "", date: payF.date, tags: "#繳費" 
+      acc: fromAcc?.name || "", toAcc: creditAcc?.name || "", date: payF.date, tags: "#繳費" 
     }]);
     setPayF({ creditId: "", fromId: "", amt: "", date: TODAY, note: "" }); close();
   };
@@ -476,6 +482,71 @@ export default function WalletModals({
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); })}>🗑 刪除</Btn>
         </Sheet>}
+
+        {modal === "bucketTransfer" && (() => {
+          const bucketLabel = (b) => { const acc = accs.find(a=>a.id===b.accId); return `${b.emoji} ${acc?.name||""}・${b.name}`; };
+          const from = buckets.find(b => b.id === bkFrom) || buckets[0];
+          const to = buckets.find(b => b.id === bkTo);
+          const crossAcc = from && to && from.accId !== to.accId;
+          return <Sheet title="子帳戶互轉" onClose={close}>
+            <Sl label="從" value={bkFrom || (buckets[0]?.id||"")} onChange={e => setBkFrom(e.target.value)}>
+              {buckets.map(b => <option key={b.id} value={b.id}>{bucketLabel(b)}（{fmt(b.allocated)}）</option>)}
+            </Sl>
+            <Sl label="到" value={bkTo || ""} onChange={e => setBkTo(e.target.value)}>
+              <option value="">— 選擇 —</option>
+              {buckets.filter(b => b.id !== (bkFrom||buckets[0]?.id)).map(b => <option key={b.id} value={b.id}>{bucketLabel(b)}（{fmt(b.allocated)}）</option>)}
+            </Sl>
+            <CalcInp label="金額" value={bkAmt} onChange={setBkAmt} />
+            {crossAcc && <div style={{ fontSize:12, color:C.warn, marginTop:-6, marginBottom:10 }}>⚠️ 這兩個子帳戶屬於不同銀行帳戶，會實際搬動現金餘額並記一筆轉帳交易</div>}
+            <div style={{ display:"flex", gap:8, marginTop:8 }}>
+              <Btn style={{ flex:1 }} onClick={() => {
+                const f = buckets.find(b=>b.id===(bkFrom||buckets[0]?.id)), t = buckets.find(b=>b.id===bkTo);
+                if (!f || !t || !bkAmt || +bkAmt<=0) return;
+                confirm(`確定從「${f.name}」轉 ${fmt(+bkAmt)} 到「${t.name}」？`, () => {
+                  transferBucket(f.id, t.id, bkAmt);
+                  setBkFrom(null); setBkTo(null); setBkAmt(""); close();
+                }, "確認轉帳");
+              }}>確認</Btn>
+              <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            </div>
+          </Sheet>;
+        })()}
+        {modal === "bucketGrowth" && (() => {
+          const b = buckets.find(x => x.id === growthBucket);
+          if (!b) return null;
+          const hist = [...(b.history||[])].sort((a,bb) => a.date.localeCompare(bb.date));
+          const data = [];
+          if (hist.length) {
+            const start = new Date(hist[0].date), end = new Date(TODAY);
+            let hi = 0, curVal = hist[0].allocated;
+            for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate()+1)) {
+              const dateStr = cur.toISOString().slice(0,10);
+              while (hi < hist.length && hist[hi].date <= dateStr) { curVal = hist[hi].allocated; hi++; }
+              data.push({ m: `${cur.getMonth()+1}/${cur.getDate()}`, v: curVal });
+            }
+          }
+          const months = hist.map(h => h.date);
+          const first = data[0]?.v || 0, last = data[data.length-1]?.v || 0;
+          const chg = last - first;
+          return <Sheet title={`${b.emoji} ${b.name} 成長趨勢`} onClose={close}>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, color:C.textSub }}>目前金額</div>
+              <div style={{ fontWeight:900, fontSize:24, color:C.accentL }}>{fmt(b.allocated)}</div>
+              {data.length > 1 && <div style={{ fontSize:12, color:chg>=0?C.income:C.expense, marginTop:2 }}>{chg>=0?"+":""}{fmt(chg)}（從 {months[0]} 至今）</div>}
+            </div>
+            {data.length > 1 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={data} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                  <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(data.length / 6) - 1)} />
+                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/10000).toFixed(1)}萬`} />
+                  <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[fmt(v),"金額"]} />
+                  <Line type="monotone" dataKey="v" stroke={C.accent} strokeWidth={2.5} dot={{ r:3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div style={{ padding:"30px 0", textAlign:"center", color:C.muted, fontSize:13 }}>還沒有足夠的歷史紀錄，之後每次改金額都會累積軌跡</div>}
+          </Sheet>;
+        })()}
     </>
   );
 }

@@ -2,7 +2,8 @@ import { useState } from "react";
 
 export default function TxnModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
-  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
+  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -215,7 +216,7 @@ export default function TxnModals({
                     const diff = newRec - p.recognized;
                     confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
                       upd("pools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec } : x));
-                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`認列調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`認列調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"income", recognizedDiff:diff }]);
                       setEditPool(null);
                     }, "確認調整");
                   }}>儲存</Btn>
@@ -255,7 +256,7 @@ export default function TxnModals({
                     const newMonthly = Math.round(newTotal / (p.installments || 12));
                     confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
                       upd("expensePools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec, monthlyAmt:newMonthly } : x));
-                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`分攤調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`分攤調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"expense", recognizedDiff:diff }]);
                       setEditPool(null);
                     }, "確認調整");
                   }}>儲存</Btn>
@@ -266,6 +267,66 @@ export default function TxnModals({
             <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.warn }} /></div>
           </div>)}
         </Sheet>}
+        {modal === "savingsTarget" && (() => {
+          const target = curSavingsTarget;
+          return <Sheet title="設定這個月的存錢目標" onClose={close}>
+            <SavingsTargetForm
+              ym={curYm} target={target} accs={accs} buckets={buckets}
+              setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
+              confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt}
+              Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn}
+            />
+            <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>下個月（{nextYm}）也可以先想好</div>
+              <SavingsTargetForm
+                ym={nextYm} target={nextSavingsTarget} accs={accs} buckets={buckets}
+                setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
+                confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt}
+                Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn}
+              />
+            </div>
+          </Sheet>;
+        })()}
     </>
+  );
+}
+
+/* ── 單一月份的存錢目標設定小表單 ── */
+function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, removeSavingsTarget, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn }) {
+  const [kind, setKind] = useState(target?.bucketId ? "bucket" : "acc");
+  const [accId, setAccId] = useState(target?.accId || (accs[0]?.id || ""));
+  const [bucketId, setBucketId] = useState(target?.bucketId || (buckets[0]?.id || ""));
+  const [amount, setAmount] = useState(target ? String(target.amount) : "");
+  const [note, setNote] = useState(target?.note || "");
+  return (
+    <div>
+      {buckets.length > 0 && (
+        <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+          {[{v:"acc",l:"存到帳戶"},{v:"bucket",l:"存到子帳戶"}].map(o => (
+            <button key={o.v} onClick={() => setKind(o.v)} style={{ flex:1, padding:"6px 4px", borderRadius:10, fontSize:12, fontWeight:700, background:kind===o.v?`${C.accent}28`:C.card, color:kind===o.v?C.accentL:C.muted, border:`1px solid ${kind===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
+          ))}
+        </div>
+      )}
+      {kind === "acc" ? (
+        <Sl label="目標帳戶" value={accId} onChange={e => setAccId(e.target.value)}>
+          {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Sl>
+      ) : (
+        <Sl label="目標子帳戶" value={bucketId} onChange={e => setBucketId(e.target.value)}>
+          {buckets.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
+        </Sl>
+      )}
+      <CalcInp label="目標金額" value={amount} onChange={setAmount} />
+      <Inp label="備註（選填）" value={note} onChange={e => setNote(e.target.value)} placeholder="例如：這個月獎金多，多存一點" />
+      <div style={{ display:"flex", gap:8, marginTop:8 }}>
+        <Btn style={{ flex:1 }} onClick={() => {
+          if (!amount || +amount <= 0) return;
+          confirm(`確定設定 ${ym} 存錢目標 ${fmt(+amount)}？`, () => {
+            setSavingsTarget(ym, kind==="acc"?accId:null, kind==="bucket"?bucketId:null, amount, note);
+          }, "確認設定");
+        }}>{target?"更新目標":"設定目標"}</Btn>
+        {target && <Btn v="danger" onClick={() => confirm(`確定移除 ${ym} 的存錢目標？`, () => removeSavingsTarget(ym), "確認移除")}>移除</Btn>}
+      </div>
+    </div>
   );
 }

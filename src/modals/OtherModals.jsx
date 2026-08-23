@@ -88,12 +88,15 @@ export default function OtherModals({
           </Fld>
           {buckets.length > 0 && <Fld label="或指定子帳戶（願望、旅費等）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {buckets.map(b => (
-                <button key={b.id} onClick={() => setNG(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
-                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(nG.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:(nG.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(nG.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:"pointer" }}>
-                  {b.emoji} {b.name}
-                </button>
-              ))}
+              {buckets.map(b => {
+                const parentSelected = (nG.accIds||[]).includes(b.accId);
+                return (
+                  <button key={b.id} disabled={parentSelected} onClick={() => setNG(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
+                    style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(nG.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:parentSelected?C.muted:(nG.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(nG.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:parentSelected?"not-allowed":"pointer", opacity:parentSelected?0.4:1 }}>
+                    {b.emoji} {b.name}{parentSelected?"（母帳戶已選）":""}
+                  </button>
+                );
+              })}
             </div>
           </Fld>}
           {stocks.length > 0 && (nG.accIds||[]).some(id => accs.find(a=>a.id===id)?.type==="investment") && (
@@ -136,12 +139,15 @@ export default function OtherModals({
           </Fld>
           {buckets.length > 0 && <Fld label="或指定子帳戶（願望、旅費等）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {buckets.map(b => (
-                <button key={b.id} onClick={() => setEditGoal(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
-                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(editGoal.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:"pointer" }}>
-                  {b.emoji} {b.name}
-                </button>
-              ))}
+              {buckets.map(b => {
+                const parentSelected = (editGoal.accIds||[]).includes(b.accId);
+                return (
+                  <button key={b.id} disabled={parentSelected} onClick={() => setEditGoal(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
+                    style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(editGoal.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:parentSelected?C.muted:(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:parentSelected?"not-allowed":"pointer", opacity:parentSelected?0.4:1 }}>
+                    {b.emoji} {b.name}{parentSelected?"（母帳戶已選）":""}
+                  </button>
+                );
+              })}
             </div>
           </Fld>}
           {stocks.length > 0 && (editGoal.accIds||[]).some(id => accs.find(a=>a.id===id)?.type==="investment") && (
