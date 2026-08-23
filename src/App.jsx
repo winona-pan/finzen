@@ -26,48 +26,48 @@ const THEMES = {
     name:"深色", icon:"🌙",
   },
   nordic: {
-    bg:"#f7f5f0", surface:"#ffffff", card:"#fdfcfa",
-    border:"#e5e0d8", borderL:"#d4cdc0",
-    income:"#c9584a", expense:"#7a9b76",
-    accent:"#6b8caf", accentL:"#527396", accentD:"#3f5870",
-    warn:"#c9a227", teal:"#6a9c96",
-    text:"#3a3630", textSub:"#7a7468", muted:"#b5ada0", danger:"#c94f3f",
+    bg:"#e6ebf0", surface:"#f2f6f9", card:"#ffffff",
+    border:"#c4d0da", borderL:"#a3b5c2",
+    income:"#c85a4a", expense:"#6b9e64",
+    accent:"#3d6e8f", accentL:"#2f5670", accentD:"#234253",
+    warn:"#c9982f", teal:"#4f9088",
+    text:"#26313a", textSub:"#5f7280", muted:"#9cb0bc", danger:"#c1442e",
     name:"北歐風", icon:"🌲",
   },
   mediterranean: {
-    bg:"#fbf6ec", surface:"#ffffff", card:"#fffdf7",
-    border:"#ecdfc4", borderL:"#ddc99f",
-    income:"#d4634a", expense:"#7c9c6b",
-    accent:"#3d7ea6", accentL:"#2f6b91", accentD:"#234f6a",
-    warn:"#e0a13a", teal:"#4a9ca0",
-    text:"#3d3226", textSub:"#8a7a5f", muted:"#c9b58e", danger:"#c1442e",
+    bg:"#fbe6bf", surface:"#fff3dc", card:"#fffaf0",
+    border:"#eec988", borderL:"#dbab55",
+    income:"#d8542f", expense:"#7a9a3e",
+    accent:"#12707f", accentL:"#0d5865", accentD:"#08404b",
+    warn:"#d67f12", teal:"#1f8f92",
+    text:"#402c14", textSub:"#7a5a30", muted:"#c9a568", danger:"#c1442e",
     name:"地中海風", icon:"🌊",
   },
   korean: {
-    bg:"#fdf7f9", surface:"#ffffff", card:"#fffbfc",
-    border:"#f3dfe6", borderL:"#eac6d3",
-    income:"#e0637f", expense:"#7fb8a4",
-    accent:"#d4879f", accentL:"#c26f89", accentD:"#a85870",
-    warn:"#e0b04a", teal:"#8fc4b8",
-    text:"#4a3b40", textSub:"#9b8085", muted:"#d9bfc7", danger:"#d1476a",
+    bg:"#f6e2ee", surface:"#fcedf5", card:"#ffffff",
+    border:"#eabdd8", borderL:"#dd97c0",
+    income:"#d43a68", expense:"#4aa88c",
+    accent:"#b8447e", accentL:"#9c3568", accentD:"#7d2952",
+    warn:"#d99a3e", teal:"#4a9d92",
+    text:"#38222e", textSub:"#7a5468", muted:"#cf9fba", danger:"#d1476a",
     name:"韓式", icon:"🌸",
   },
   japanese: {
-    bg:"#f5f1e8", surface:"#fdfaf3", card:"#ffffff",
-    border:"#e0d8c3", borderL:"#cbbfa0",
-    income:"#b23b3b", expense:"#5f7a5c",
-    accent:"#3f5c6e", accentL:"#32495a", accentD:"#263a48",
-    warn:"#b8860b", teal:"#4f7d78",
-    text:"#332e26", textSub:"#6b6152", muted:"#a89d85", danger:"#a3372f",
+    bg:"#e8dcbe", surface:"#f2e8cc", card:"#faf3e2",
+    border:"#d0ba86", borderL:"#b89c60",
+    income:"#a02e2e", expense:"#4a6e42",
+    accent:"#22404f", accentL:"#182e3a", accentD:"#0f2028",
+    warn:"#a87418", teal:"#356b60",
+    text:"#241f14", textSub:"#5c4f34", muted:"#a68f60", danger:"#a3372f",
     name:"日式", icon:"🍃",
   },
   american: {
-    bg:"#f7f5f2", surface:"#ffffff", card:"#ffffff",
-    border:"#dcdad5", borderL:"#c5c2ba",
-    income:"#c8272c", expense:"#2e7d4f",
-    accent:"#1e3a5f", accentL:"#2c5282", accentD:"#152744",
-    warn:"#c98a1f", teal:"#2f7d78",
-    text:"#1f2937", textSub:"#5b6472", muted:"#a3aab5", danger:"#c8272c",
+    bg:"#eef1f6", surface:"#f8fafc", card:"#ffffff",
+    border:"#c6cfda", borderL:"#a3b1c2",
+    income:"#c8202a", expense:"#1e7a44",
+    accent:"#173864", accentL:"#0f2848", accentD:"#0a1c33",
+    warn:"#c07716", teal:"#146860",
+    text:"#182230", textSub:"#4c5a6c", muted:"#96a5b6", danger:"#c8202a",
     name:"美式", icon:"🦅",
   },
 };
@@ -391,10 +391,15 @@ function StockPriceChart({ ticker, market, fetchStockRange }) {
   const [range, setRange] = useState("1mo");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const reqId = useRef(0);
   const load = useCallback(async (r) => {
-    setLoading(true);
+    const myId = ++reqId.current;
+    setLoading(true); setFailed(false);
     const res = await fetchStockRange(ticker, market, r);
+    if (myId !== reqId.current) return; // 舊請求，已經被更新的請求取代，忽略結果
     setData(res);
+    setFailed(res.length <= 1);
     setLoading(false);
   }, [ticker, market, fetchStockRange]);
   useEffect(() => { load(range); }, [range, ticker]);
@@ -420,7 +425,12 @@ function StockPriceChart({ ticker, market, fetchStockRange }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-      ) : <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>無法讀取股價資料</div>}
+      ) : (
+        <div style={{ height:120, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, color:C.muted, fontSize:12 }}>
+          <span>這個區間讀取失敗，可能是暫時連線問題</span>
+          <button onClick={() => load(range)} style={{ padding:"4px 12px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:12, cursor:"pointer" }}>🔄 重試</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -444,18 +454,78 @@ export default function App() {
       return next;
     });
   }, []);
+  /* ── 帳戶餘額 + 交易紀錄 同時寫入的原子化工具（避免 React 非同步 state 批次問題）── */
+  const updMulti = useCallback((patch) => {
+    setD(prev => {
+      const next = { ...prev };
+      Object.keys(patch).forEach(key => {
+        next[key] = typeof patch[key] === "function" ? patch[key](prev[key]) : patch[key];
+      });
+      saveData(next);
+      return next;
+    });
+  }, []);
   const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
   const expensePools = d.expensePools || [];
   const buckets = d.buckets || [];
   const addBucket = useCallback((accId, name, emoji, allocated) => {
-    upd("buckets", p => [...(p||[]), { id:"bk"+Date.now(), accId, name, emoji:emoji||"🎯", allocated:+allocated||0, vis:true }]);
+    upd("buckets", p => {
+      const siblings = (p||[]).filter(b => b.accId === accId);
+      const amt = +allocated||0;
+      return [...(p||[]), { id:"bk"+Date.now(), accId, name, emoji:emoji||"🎯", allocated:amt, vis:true, order:siblings.length, history:[{ date:TODAY, allocated:amt }] }];
+    });
   }, [upd]);
   const updateBucket = useCallback((id, patch) => {
-    upd("buckets", p => (p||[]).map(b => b.id===id ? { ...b, ...patch } : b));
+    upd("buckets", p => (p||[]).map(b => {
+      if (b.id !== id) return b;
+      const next = { ...b, ...patch };
+      if (patch.allocated !== undefined && patch.allocated !== b.allocated) {
+        const hist = (b.history || []).filter(h => h.date !== TODAY);
+        next.history = [...hist, { date: TODAY, allocated: patch.allocated }];
+      }
+      return next;
+    }));
   }, [upd]);
   const deleteBucket = useCallback((id) => {
     upd("buckets", p => (p||[]).filter(b => b.id!==id));
   }, [upd]);
+  const moveBucket = useCallback((accId, id, dir) => {
+    upd("buckets", p => {
+      const sibs = (p||[]).filter(b => b.accId === accId).sort((a,b) => (a.order||0)-(b.order||0));
+      const idx = sibs.findIndex(b => b.id === id), swapIdx = idx + dir;
+      if (swapIdx < 0 || swapIdx >= sibs.length) return p;
+      const o1 = sibs[idx].order||0, o2 = sibs[swapIdx].order||0;
+      return (p||[]).map(b => b.id===sibs[idx].id ? { ...b, order:o2 } : b.id===sibs[swapIdx].id ? { ...b, order:o1 } : b);
+    });
+  }, [upd]);
+  const transferBucket = useCallback((fromId, toId, amount) => {
+    const amt = +amount || 0;
+    if (amt <= 0 || fromId === toId) return;
+    const from = buckets.find(b => b.id === fromId), to = buckets.find(b => b.id === toId);
+    if (!from || !to) return;
+    upd("buckets", p => (p||[]).map(b => {
+      if (b.id === fromId) {
+        const newAmt = b.allocated-amt;
+        const hist = (b.history||[]).filter(h=>h.date!==TODAY);
+        return { ...b, allocated:newAmt, history:[...hist, { date:TODAY, allocated:newAmt }] };
+      }
+      if (b.id === toId) {
+        const newAmt = b.allocated+amt;
+        const hist = (b.history||[]).filter(h=>h.date!==TODAY);
+        return { ...b, allocated:newAmt, history:[...hist, { date:TODAY, allocated:newAmt }] };
+      }
+      return b;
+    }));
+    if (from.accId !== to.accId) {
+      const fromAcc = accs.find(a => a.id === from.accId), toAcc = accs.find(a => a.id === to.accId);
+      if (fromAcc && toAcc) {
+        updMulti({
+          accs: p => p.map(a => a.id===fromAcc.id ? { ...a, bal:a.bal-amt } : a.id===toAcc.id ? { ...a, bal:a.bal+amt } : a),
+          txns: p => [...p, { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:`子帳戶轉帳：${from.name} → ${to.name}`, acc:fromAcc.name, toAcc:toAcc.name, date:TODAY, tags:"#子帳戶轉帳" }],
+        });
+      }
+    }
+  }, [buckets, accs, upd, updMulti]);
   const watchlist = d.watchlist || [];
   const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 冷靜清單：4 小時緩衝期
   const addToWatchlist = useCallback((item) => {
@@ -484,7 +554,7 @@ export default function App() {
   const changeTheme = (t) => { localStorage.setItem("finzen_theme", t); setTheme(t); };
   const [modal, setModal] = useState(null);
   const [confirmDlg, setConfirmDlg] = useState(null);
-  const confirm = (msg, onOk, okLabel) => setConfirmDlg({ msg, onOk, okLabel });
+  const confirm = (msg, onOk, okLabel, skipUndo) => setConfirmDlg({ msg, onOk, okLabel, skipUndo });
   const closeConfirm = () => setConfirmDlg(null);
   const close = () => setModal(null);
 
@@ -523,6 +593,7 @@ export default function App() {
 
   /* ── invest state ── */
   const [invTab, setInvTab] = useState("holdings");
+  useEffect(() => { if (tab !== "invest") setInvTab("holdings"); }, [tab]);
   const [invPie, setInvPie] = useState("alloc");
   const [mkt, setMkt] = useState("ALL");
 
@@ -607,57 +678,71 @@ export default function App() {
     return out;
   }, [txns]);
 
-  /* ── 帳戶餘額 + 交易紀錄 同時寫入的原子化工具（避免 React 非同步 state 批次問題）── */
-  const updMulti = useCallback((patch) => {
-    setD(prev => {
-      const next = { ...prev };
-      Object.keys(patch).forEach(key => {
-        next[key] = typeof patch[key] === "function" ? patch[key](prev[key]) : patch[key];
-      });
-      saveData(next);
-      return next;
-    });
-  }, []);
-
   /* ── 編輯既有交易：先還原舊帳戶餘額影響，再套用新的（單次 updMulti 原子完成）── */
   const saveTxn = useCallback((edited) => {
     if (!edited) return;
     const old = txns.find(t => t.id === edited.id);
+    if (old?.poolId && +edited.amt !== old.amt) {
+      const diff = +edited.amt - old.amt;
+      const poolKey = old.poolType === "income" ? "pools" : "expensePools";
+      upd(poolKey, p => (p||[]).map(x => x.id === old.poolId ? { ...x, recognized: Math.max(0, x.recognized + diff) } : x));
+    }
     updMulti({
-      txns: prevTxns => prevTxns.map(t => t.id === edited.id ? { ...edited, amt:+edited.amt } : t),
+      txns: prevTxns => prevTxns.map(t => t.id === edited.id ? { ...edited, amt:+edited.amt, poolId:old?.poolId, poolType:old?.poolType, noBalanceEffect:old?.noBalanceEffect } : t),
       accs: prevAccs => prevAccs.map(a => {
         let bal = a.bal, payable = a.payable;
-        if (old) {
+        if (old && !old.noBalanceEffect) {
           if (old.acc === a.name) {
             if (old.type === "income") bal -= old.amt;
             else if (old.type === "expense") { if (a.type === "credit") payable = (payable||0) - old.amt; else bal += old.amt; }
+            else if (old.type === "adjust") bal -= (old.adjDiff || 0);
+            else if (old.type === "transfer") { if (a.type === "credit") payable = Math.max(0,(payable||0)-old.amt); else bal += old.amt; }
           }
+          if (old.type === "transfer" && old.toAcc === a.name) { if (a.type === "credit") payable = Math.max(0,(payable||0)+old.amt); else bal -= old.amt; }
         }
-        if (edited.acc === a.name) {
+        if (edited.acc === a.name && !edited.noBalanceEffect) {
           const amt = +edited.amt;
           if (edited.type === "income") bal += amt;
           else if (edited.type === "expense") { if (a.type === "credit") payable = (payable||0) + amt; else bal -= amt; }
+          else if (edited.type === "adjust") bal += (edited.adjDiff || 0);
+          else if (edited.type === "transfer") { if (a.type === "credit") payable = (payable||0) + amt; else bal -= amt; }
         }
+        if (edited.type === "transfer" && edited.toAcc === a.name && !edited.noBalanceEffect) { if (a.type === "credit") payable = Math.max(0,(payable||0)-(+edited.amt)); else bal += +edited.amt; }
         return (bal !== a.bal || payable !== a.payable) ? { ...a, bal, payable } : a;
       })
     });
     close();
-  }, [txns, updMulti]);
+  }, [txns, updMulti, upd]);
 
   /* ── 刪除交易：還原對帳戶的影響 ── */
   const delTxn = useCallback((id) => {
     const t = txns.find(x => x.id === id);
+    if (t?.poolId) {
+      const poolKey = t.poolType === "income" ? "pools" : "expensePools";
+      const revertBy = t.recognizedDiff != null ? t.recognizedDiff : t.amt;
+      upd(poolKey, p => (p||[]).map(x => x.id === t.poolId ? { ...x, recognized: Math.max(0, x.recognized - revertBy) } : x));
+    }
     updMulti({
       txns: prevTxns => prevTxns.filter(x => x.id !== id),
-      accs: prevAccs => !t || !t.acc ? prevAccs : prevAccs.map(a => {
-        if (a.name !== t.acc) return a;
-        if (t.type === "income") return { ...a, bal: a.bal - t.amt };
-        if (t.type === "expense") return a.type === "credit" ? { ...a, payable:(a.payable||0)-t.amt } : { ...a, bal:a.bal+t.amt };
-        return a;
-      })
+      accs: prevAccs => {
+        if (!t || t.noBalanceEffect) return prevAccs;
+        return prevAccs.map(a => {
+          let next = a;
+          if (t.acc === a.name) {
+            if (t.type === "income") next = { ...next, bal: next.bal - t.amt };
+            else if (t.type === "expense") next = a.type === "credit" ? { ...next, payable:(next.payable||0)-t.amt } : { ...next, bal:next.bal+t.amt };
+            else if (t.type === "adjust") next = { ...next, bal: next.bal - (t.adjDiff || 0) };
+            else if (t.type === "transfer") next = a.type === "credit" ? { ...next, payable:Math.max(0,(next.payable||0)-t.amt) } : { ...next, bal:next.bal + t.amt };
+          }
+          if (t.type === "transfer" && t.toAcc === a.name) {
+            next = a.type === "credit" ? { ...next, payable:Math.max(0,(next.payable||0)+t.amt) } : { ...next, bal: next.bal - t.amt };
+          }
+          return next;
+        });
+      }
     });
     close();
-  }, [txns, updMulti]);
+  }, [txns, updMulti, upd]);
 
   /* ── 帳戶餘額調整（初次設定 / 對帳差異，皆不計入收支）── */
   const adjBal = useCallback((acc, newBalStr, isFirst, desc) => {
@@ -677,7 +762,7 @@ export default function App() {
     const amt = Math.min(+recAmt, selPool.totalAmt - selPool.recognized);
     if (amt <= 0) return;
     upd("pools", p => p.map(x => x.id === selPool.id ? { ...x, recognized: x.recognized + amt } : x));
-    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:selPool.cat||"其他收入", amt, desc:`認列：${selPool.desc}`, acc:selPool.acc||"", date:TODAY, tags:"#認列" }]);
+    upd("txns", p => [...p, { id:Date.now(), type:"income", cat:selPool.cat||"其他收入", amt, desc:`認列：${selPool.desc}`, acc:selPool.acc||"", date:TODAY, tags:"#認列", noBalanceEffect:true, poolId:selPool.id, poolType:"income" }]);
     setRecAmt(""); setSelPool(null);
   }, [selPool, recAmt, upd]);
 
@@ -690,11 +775,15 @@ export default function App() {
     upd("subs", p => [...p, newSub]);
     if (nS.deferExpense && nS.freq === "year") {
       const poolId = "ep" + Date.now();
+      const monthlyAmt = Math.round(amt / 12);
       updMulti({
-        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id }],
+        txns: p => [...p,
+          { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id },
+          { id:Date.now()+1, type:"expense", cat:nS.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${nS.name}`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id, noBalanceEffect:true, poolId, poolType:"expense" },
+        ],
         accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
       });
-      upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt:Math.round(amt/12), recognized:0, startDate:TODAY, acc:nS.acc||"", subId:newSub.id }]);
+      upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:nS.acc||"", subId:newSub.id }]);
     } else {
       updMulti({
         txns: p => [...p, { id:Date.now(), type:"expense", cat:nS.cat||"訂閱", amt, desc:nS.name, acc:nS.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newSub.id }],
@@ -728,9 +817,10 @@ export default function App() {
   /* ── 信用卡繳費（供其餘檔案共用，Wallet 內建同名邏輯優先）── */
   const doPayCred = useCallback(() => {
     const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
+    const creditAcc = accs.find(x=>x.id===payF.creditId), fromAcc = accs.find(x=>x.id===payF.fromId);
     updMulti({
       accs: p => p.map(ac => ac.id === payF.creditId ? { ...ac, payable:Math.max(0,(ac.payable||0)-a) } : ac.id === payF.fromId ? { ...ac, bal:ac.bal-a } : ac),
-      txns: p => [...p, { id:Date.now(), type:"expense", cat:"帳戶調整", amt:a, desc:payF.note||"信用卡繳費", acc:accs.find(x=>x.id===payF.fromId)?.name||"", date:payF.date, tags:"#繳費" }]
+      txns: p => [...p, { id:Date.now(), type:"transfer", cat:"帳戶調整", amt:a, desc:payF.note||"信用卡繳費", acc:fromAcc?.name||"", toAcc:creditAcc?.name||"", date:payF.date, tags:"#繳費" }]
     });
     setPayF({ creditId:"", fromId:"", amt:"", date:TODAY, note:"" }); close();
   }, [payF, accs, updMulti]);
@@ -918,7 +1008,7 @@ export default function App() {
       let cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
       while (cur <= today && recCount < (pool.installments || 12)) {
         const amt = Math.min(pool.monthlyAmt, pool.totalAmt - recognized);
-        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: cur.toISOString().slice(0, 10), tags: "#分攤認列", autoSrc: pool.subId });
+        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: cur.toISOString().slice(0, 10), tags: "#分攤認列", autoSrc: pool.subId, noBalanceEffect:true, poolId: pool.id, poolType:"expense" });
         recognized += amt; recCount++;
         cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
       }
@@ -930,6 +1020,36 @@ export default function App() {
 
   useEffect(() => { if (stocks.length > 0) fetchAllPrices(stocks); }, [stocks.length]);
 
+  /* ── 一次性遷移：把舊的認列/分攤紀錄回溯補上 poolId 等欄位，讓刪除時能正確退回分攤池 ── */
+  useEffect(() => {
+    const needsMigration = txns.some(t => (t.tags === "#認列" || t.tags === "#分攤認列" || t.tags === "#認列調整") && t.poolId == null);
+    if (!needsMigration) return;
+    const patched = txns.map(t => {
+      if (t.poolId != null) return t;
+      if (t.tags === "#分攤認列" && t.autoSrc) {
+        const pool = expensePools.find(p => p.subId === t.autoSrc);
+        if (pool) return { ...t, poolId: pool.id, poolType:"expense", noBalanceEffect:true };
+      }
+      if (t.tags === "#認列" && t.desc?.startsWith("認列：")) {
+        const label = t.desc.slice(3);
+        const pool = pools.find(p => p.desc === label);
+        if (pool) return { ...t, poolId: pool.id, poolType:"income", noBalanceEffect:true };
+      }
+      if (t.tags === "#認列調整") {
+        if (t.desc?.startsWith("認列調整：")) {
+          const pool = pools.find(p => p.desc === t.desc.slice(5));
+          if (pool) return { ...t, poolId: pool.id, poolType:"income", noBalanceEffect:true, recognizedDiff: t.type === "income" ? t.amt : -t.amt };
+        }
+        if (t.desc?.startsWith("分攤調整：")) {
+          const pool = expensePools.find(p => p.desc === t.desc.slice(5));
+          if (pool) return { ...t, poolId: pool.id, poolType:"expense", noBalanceEffect:true, recognizedDiff: t.type === "expense" ? t.amt : -t.amt };
+        }
+      }
+      return t;
+    });
+    if (patched.some((t, i) => t !== txns[i])) upd("txns", () => patched);
+  }, [txns, pools, expensePools, upd]);
+
   /* ── 財務核心計算邏輯 ── */
   const visA = useMemo(() => accs.filter(a => a.type !== "credit" && a.vis), [accs]);
   const totDebt = useMemo(() => accs.filter(a => a.type === "credit" && a.vis).reduce((s, c) => s + (c.payable || 0), 0), [accs]);
@@ -939,6 +1059,41 @@ export default function App() {
   const billsMo = useMemo(() => (bills || []).filter(b => b.active).reduce((s, x) => s + x.amt, 0), [bills]);
   const totPools = useMemo(() => pools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [pools]);
   const totExpensePools = useMemo(() => expensePools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [expensePools]);
+
+  /* ── 每月存錢目標（提醒自己這個月/下個月要存多少錢到哪個帳戶）── */
+  const savingsTargets = d.savingsTargets || [];
+  const setSavingsTarget = useCallback((ym, accId, bucketId, amount, note) => {
+    upd("savingsTargets", p => {
+      const rest = (p||[]).filter(x => x.ym !== ym);
+      if (!amount || +amount <= 0) return rest;
+      return [...rest, { id:"sv"+ym, ym, accId:accId||null, bucketId:bucketId||null, amount:+amount, note:note||"" }];
+    });
+  }, [upd]);
+  const removeSavingsTarget = useCallback((ym) => upd("savingsTargets", p => (p||[]).filter(x=>x.ym!==ym)), [upd]);
+
+  const curYm = TODAY.slice(0,7);
+  const nextYm = (() => { const d2 = new Date(TODAY); d2.setMonth(d2.getMonth()+1); return d2.toISOString().slice(0,7); })();
+  const savingsProgress = useCallback((target) => {
+    if (!target) return 0;
+    const accName = target.accId ? accs.find(a=>a.id===target.accId)?.name : null;
+    const bucket = target.bucketId ? buckets.find(b=>b.id===target.bucketId) : null;
+    if (bucket) {
+      const hist = (bucket.history||[]).filter(h => h.date.slice(0,7) <= target.ym).sort((a,b)=>a.date.localeCompare(b.date));
+      const startHist = (bucket.history||[]).filter(h => h.date.slice(0,7) < target.ym).sort((a,b)=>b.date.localeCompare(a.date))[0];
+      const endVal = hist[hist.length-1]?.allocated ?? bucket.allocated;
+      const startVal = startHist?.allocated ?? 0;
+      return Math.max(0, endVal - startVal);
+    }
+    if (!accName) return 0;
+    return txns.filter(t => t.date.slice(0,7) === target.ym).reduce((s,t) => {
+      if (t.type === "transfer" && t.toAcc === accName) return s + t.amt;
+      if (t.type === "income" && t.acc === accName) return s + t.amt;
+      return s;
+    }, 0);
+  }, [accs, buckets, txns]);
+  const curSavingsTarget = savingsTargets.find(x => x.ym === curYm);
+  const nextSavingsTarget = savingsTargets.find(x => x.ym === nextYm);
+  const showNextMonthReminder = new Date(TODAY).getDate() >= 24 && !nextSavingsTarget;
   const cashBal = useMemo(() => accs.filter(a => a.type !== "credit" && a.type !== "investment" && a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
 
   const stSum = useMemo(() => stocks.map(st => {
@@ -980,27 +1135,39 @@ export default function App() {
     visA.forEach(a => { byType[a.type] = (byType[a.type] || 0) + toTWD(a.bal, a.cur, rates); });
     return Object.entries(byType).map(([type, value]) => ({ name: typeLabel[type] || type, value })).filter(x => x.value > 0);
   }, [visA, rates]);
-  const holdPie = useMemo(()=>stSum.filter(x=>x.totalSh>0).map(x=>({name:x.ticker, value:x.totalCost})),[stSum]);
+  const holdPie = useMemo(() => {
+    const map = {};
+    stSum.filter(x=>x.totalSh>0).forEach(x => {
+      const key = `${x.ticker}_${x.market}`;
+      if (!map[key]) map[key] = { name:x.ticker, value:0 };
+      map[key].value += x.totalCost;
+    });
+    return Object.values(map);
+  }, [stSum]);
 
   const invGrowth = useMemo(() => {
-    const moMap = {};
+    const dayMap = {};
     stocks.forEach(st => {
       if (st.manualShares && st.manualTotalCost) {
-        const ym = (st.trades?.[0]?.date || TODAY).slice(0,7);
-        moMap[ym] = (moMap[ym]||0) + st.manualTotalCost;
+        const dt = (st.trades?.[0]?.date || TODAY);
+        dayMap[dt] = (dayMap[dt]||0) + st.manualTotalCost;
       }
       (st.trades||[]).filter(t=>t.type==="buy").forEach(t => {
-        const ym = t.date.slice(0,7); const cost = t.totalCost || (t.shares*(t.price||0)) + (t.fee||0);
-        moMap[ym] = (moMap[ym]||0) + cost;
+        const cost = t.totalCost || (t.shares*(t.price||0)) + (t.fee||0);
+        dayMap[t.date] = (dayMap[t.date]||0) + cost;
       });
     });
-    if (!Object.keys(moMap).length) return [];
-    const months = Object.keys(moMap).sort();
+    const days = Object.keys(dayMap).sort();
+    if (!days.length) return [];
+    const start = new Date(days[0]), end = new Date(TODAY);
     let cumCost = 0; const mvRatio = stTotCost > 0 ? stTotMv / stTotCost : 1;
-    return months.map(ym => {
-      cumCost += moMap[ym]; const [y,m] = ym.split("-");
-      return { m:`${+y}/${+m}`, cost:Math.round(cumCost), mv:Math.round(stTotMv > 0 ? cumCost * mvRatio : 0) };
-    });
+    const result = [];
+    for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate()+1)) {
+      const dateStr = cur.toISOString().slice(0,10);
+      cumCost += (dayMap[dateStr] || 0);
+      result.push({ m:`${cur.getMonth()+1}/${cur.getDate()}`, cost:Math.round(cumCost), mv:Math.round(stTotMv > 0 ? cumCost * mvRatio : 0) });
+    }
+    return result;
   }, [stocks, stTotMv, stTotCost]);
 
   const [dailyGrowth, setDailyGrowth] = useState([]);
@@ -1036,7 +1203,7 @@ export default function App() {
     { key:"1mo", label:"1月", range:"1mo", interval:"1d" },
     { key:"3mo", label:"3月", range:"3mo", interval:"1d" },
     { key:"6mo", label:"6月", range:"6mo", interval:"1d" },
-    { key:"1y", label:"1年", range:"1y", interval:"1wk" },
+    { key:"1y", label:"1年", range:"1y", interval:"1d" },
   ];
   const fetchStockRange = useCallback(async (ticker, market, rangeKey) => {
     const opt = RANGE_OPTS.find(o => o.key === rangeKey) || RANGE_OPTS[2];
@@ -1045,6 +1212,7 @@ export default function App() {
     const proxies = [
       (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
       (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     ];
     for (const makeProxy of proxies) {
       try {
@@ -1151,6 +1319,7 @@ export default function App() {
   const addWatchStock = useCallback((item) => upd("watchStocks", p => [...(p||[]), { id:"ws"+Date.now(), ...item }]), [upd]);
   const removeWatchStock = useCallback((id) => upd("watchStocks", p => (p||[]).filter(x=>x.id!==id)), [upd]);
   const [loadingWatch, setLoadingWatch] = useState(false);
+  const [growthBucket, setGrowthBucket] = useState(null);
   const refreshWatchStocks = useCallback(async () => {
     if (!watchStocks.length) return;
     setLoadingWatch(true);
@@ -1320,24 +1489,30 @@ export default function App() {
   const isSingleMo = useMemo(() => { const s = new Date(chartRange.s), e = new Date(chartRange.e); return s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth(); }, [chartRange]);
   
   const chartData = useMemo(() => {
-    if (!txns.length) return []; const s = new Date(chartRange.s), e = new Date(chartRange.e);
-    if (isSingleMo) {
-      const year = s.getFullYear(), month = s.getMonth(), dim = new Date(year, month + 1, 0).getDate(), ym = `${year}-${String(month + 1).padStart(2, "0")}`;
-      const isCurMonth = ym === TODAY.slice(0, 7);
-      const lastDay = isCurMonth ? new Date(TODAY).getDate() : dim;
-      const afterNet = txns.filter(t => t.date > `${ym}-31`).reduce((s, t) => t.type === "income" ? s + t.amt : t.type === "expense" && t.cat !== "帳戶調整" ? s - t.amt : s, 0);
-      const endOfMonthAssets = totAssets - afterNet, dayTxns = {};
-      txns.filter(t => t.date.startsWith(ym)).forEach(t => { const day = parseInt(t.date.slice(8)); dayTxns[day] = dayTxns[day] || 0; if (t.type === "income" && t.cat !== "帳戶調整") dayTxns[day] += t.amt; if (t.type === "expense" && t.cat !== "帳戶調整") dayTxns[day] -= t.amt; });
-      const result = []; let running = endOfMonthAssets;
-      for (let d = dim; d >= 1; d--) { if (d <= lastDay) result.unshift({ d:`${d}日`, assets:Math.max(0, running) }); running -= (dayTxns[d] || 0); } return result;
+    if (!txns.length || !chartRange.s || !chartRange.e) return [];
+    const s = new Date(chartRange.s), e = new Date(chartRange.e);
+    if (e < s) return [];
+    const afterNet = txns.filter(t => t.date > chartRange.e).reduce((acc, t) => t.type === "income" && t.cat !== "帳戶調整" ? acc + t.amt : t.type === "expense" && t.cat !== "帳戶調整" ? acc - t.amt : acc, 0);
+    const endAssets = totAssets - afterNet;
+    const dayNet = {};
+    txns.forEach(t => {
+      if (t.date < chartRange.s || t.date > chartRange.e) return;
+      if (t.type === "income" && t.cat !== "帳戶調整") dayNet[t.date] = (dayNet[t.date] || 0) + t.amt;
+      if (t.type === "expense" && t.cat !== "帳戶調整") dayNet[t.date] = (dayNet[t.date] || 0) - t.amt;
+    });
+    const result = [];
+    let running = endAssets;
+    let cur = new Date(e);
+    while (cur >= s) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      result.unshift({
+        d: isSingleMo ? `${cur.getDate()}日` : `${cur.getMonth() + 1}/${cur.getDate()}`,
+        m: `${cur.getFullYear()}/${cur.getMonth() + 1}月`,
+        assets: Math.max(0, running),
+      });
+      running -= (dayNet[dateStr] || 0);
+      cur.setDate(cur.getDate() - 1);
     }
-    const moNet = {}; txns.forEach(t => { const ym = t.date.slice(0, 7); moNet[ym] = moNet[ym] || 0; if (t.type === "income" && t.cat !== "帳戶調整") moNet[ym] += t.amt; if (t.type === "expense" && t.cat !== "帳戶調整") moNet[ym] -= t.amt; });
-    const allMonths = []; const cur = new Date(s.getFullYear(), s.getMonth(), 1), end = new Date(e.getFullYear(), e.getMonth(), 1);
-    while (cur <= end) { allMonths.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`); cur.setMonth(cur.getMonth() + 1); }
-    if (allMonths.length === 0) return [];
-    const afterNet = Object.entries(moNet).filter(([ym]) => ym > allMonths[allMonths.length - 1]).reduce((s, [, v]) => s + v, 0);
-    let running = totAssets - afterNet; const result = [];
-    for (let i = allMonths.length - 1; i >= 0; i--) { const ym = allMonths[i], [y, m] = ym.split("-"); result.unshift({ m:`${+y}/${+m}月`, assets:Math.max(0, running) }); running -= (moNet[ym] || 0); }
     return result;
   }, [txns, chartRange, isSingleMo, totAssets]);
 
@@ -1386,8 +1561,9 @@ export default function App() {
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
-    expensePools, totExpensePools,
-    buckets, addBucket, updateBucket, deleteBucket,
+    expensePools, totExpensePools, customCE: d.customCE,
+    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder,
+    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, growthBucket, setGrowthBucket,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
@@ -1438,16 +1614,21 @@ export default function App() {
 
         {/* 確認刪除彈窗 */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {
+          if (confirmDlg.skipUndo) {
+            confirmDlg.onOk();
+            closeConfirm();
+            return;
+          }
           const snapshot = d;
           confirmDlg.onOk();
           closeConfirm();
-          setUndoInfo({ snapshot, label: confirmDlg.msg });
+          setUndoInfo({ snapshot, label: confirmDlg.msg, okLabel: confirmDlg.okLabel });
           if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
           undoTimerRef.current = setTimeout(() => setUndoInfo(null), 6000);
         }} onCancel={closeConfirm} />}
         {undoInfo && (
           <div style={{ position:"fixed", bottom:"calc(70px + env(safe-area-inset-bottom,0px))", left:"50%", transform:"translateX(-50%)", width:"calc(100% - 32px)", maxWidth:440, zIndex:250, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderRadius:14, background:C.surface, border:`1px solid ${C.borderL}`, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
-            <span style={{ fontSize:13, color:C.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>已刪除</span>
+            <span style={{ fontSize:13, color:C.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{(undoInfo.okLabel || "確認刪除").replace("確認", "已")}</span>
             <button onClick={undoDelete} style={{ flexShrink:0, padding:"7px 16px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:900, fontSize:13, cursor:"pointer" }}>↩️ 復原</button>
           </div>
         )}
