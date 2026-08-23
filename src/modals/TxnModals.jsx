@@ -84,14 +84,14 @@ export default function TxnModals({
 
     if (nT.deferred && nT.deferMoAmt && nT.type === "income") {
       upd("txns", p => p.map(x => x.id === id ? { ...x, type: "transfer", cat: "帳戶調整", desc: `待認列收入：${nT.desc || nT.cat}（共 ${fmt(+nT.amt)}）` } : x));
-      upd("pools", p => [...p, { id: "p" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt: +nT.amt, recognized: 0, date: nT.date, acc: nT.acc }]);
+      upd("pools", p => [...p, { id: "p" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt: +nT.amt, recognized: 0, date: nT.date, acc: nT.acc, originTxnId: id }]);
     }
 
     if (nT.installExp && +nT.installMonths > 1 && nT.type === "expense" && validProxies.length === 0) {
       const months = +nT.installMonths;
       const totalAmt = +nT.amt;
       upd("txns", p => p.map(x => x.id === id ? { ...x, type: "transfer", cat: "帳戶調整", desc: `分期付款：${nT.desc || nT.cat}（共 ${fmt(totalAmt)}，分 ${months} 期）`, tags: "#分攤認列" } : x));
-      upd("expensePools", p => [...(p || []), { id: "ep" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt, monthlyAmt: Math.round(totalAmt / months), installments: months, recognized: 0, startDate: nT.date, acc: nT.acc || "" }]);
+      upd("expensePools", p => [...(p || []), { id: "ep" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt, monthlyAmt: Math.round(totalAmt / months), installments: months, recognized: 0, startDate: nT.date, acc: nT.acc || "", originTxnId: id }]);
     }
     setNT(T0); close();
   };
@@ -192,7 +192,7 @@ export default function TxnModals({
           </div>
           <div style={{ display:"flex", gap:8 }}>
             <Btn v="warn" style={{ flex:1 }} onClick={() => setModal("editTxn")}>✏️ 編輯</Btn>
-            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm("確定刪除這筆交易？", () => delTxn(selTxn.id))}>🗑 刪除</Btn>
+            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(debts.some(x=>x.srcTxnId===selTxn.id && !x.settled) ? "確定刪除這筆交易？連動的代墊應收款也會一併刪除" : "確定刪除這筆交易？", () => delTxn(selTxn.id))}>🗑 刪除</Btn>
           </div>
         </Sheet>}
 
