@@ -3,7 +3,7 @@ import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Ca
 
 export default function ChartsPage({ 
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
-  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, buckets,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, hTxns, hInc, hExp, subsMo, billsMo,
   chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
@@ -23,13 +23,18 @@ export default function ChartsPage({
 
   /* ── 局部狀態與月份切換 ── */
   const [showDP, setShowDP] = useState(false);
+  const [expandedCat, setExpandedCat] = useState(null);
+  const [catRange, setCatRange] = useState(null);
+  const [showCatDP, setShowCatDP] = useState(false);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 }; });
   
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 });
   const nextMo = () => setMonth(({ y, m }) => m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 });
 
   /* ── 依本頁自己的月份重新計算收支（不依賴總覽頁的全域月份）── */
-  const moTxns = txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; });
+  const moTxns = catRange
+    ? txns.filter(t => t.date >= catRange.s && t.date <= catRange.e)
+    : txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; });
   const moInc = moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0);
   const moExp = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
   const expCat = (() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); })();
@@ -61,12 +66,20 @@ export default function ChartsPage({
         <div style={{ padding:"12px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <button onClick={prevMo} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:22 }}>‹</button>
-              <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{month.m}/{month.y}</span>
-              <button onClick={nextMo} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:22 }}>›</button>
+              {catRange ? (
+                <button onClick={() => setCatRange(null)} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:10, background:`${C.accent}22`, color:C.accentL, border:`1px solid ${C.accent}44`, cursor:"pointer", fontSize:13, fontWeight:700 }}>📅 {rl(catRange)} ✕</button>
+              ) : (
+                <>
+                  <button onClick={prevMo} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:22 }}>‹</button>
+                  <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{month.m}/{month.y}</span>
+                  <button onClick={nextMo} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:22 }}>›</button>
+                </>
+              )}
+              <button onClick={() => setShowCatDP(true)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14, marginLeft:2 }}>📅</button>
             </div>
             <button onClick={() => setModal("catSet")} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, fontSize:12, fontWeight:700 }}>⚙️ 類別</button>
           </div>
+          {showCatDP && <DatePicker value={catRange || { s:`${month.y}-${String(month.m).padStart(2,"0")}-01`, e:TODAY }} onChange={setCatRange} onClose={() => setShowCatDP(false)} />}
           
           <div style={{ display:"flex", gap:8, marginBottom:20 }}>
             {[{ v:"expense", l:"🛒 支出", c:C.expense }, { v:"income", l:"💰 收入", c:C.income }].map(o => <button key={o.v} onClick={() => setChartView(o.v)} style={{ flex:1, padding:"10px 4px", borderRadius:12, fontSize:14, fontWeight:700, background:chartView === o.v ? `${o.c}28` : C.card, color:chartView === o.v ? o.c : C.muted, border:`1px solid ${chartView === o.v ? o.c : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
@@ -87,15 +100,32 @@ export default function ChartsPage({
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ textAlign:"center", marginTop:-8, marginBottom:14 }}><div style={{ fontSize:11, color:C.textSub }}>Total</div><div style={{ fontWeight:900, fontSize:22, color:C.text }}>{fmt(total)}</div></div>
-                {data.map((dv, i) => (
-                  <div key={dv.name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:`${PIE[i % PIE.length]}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, flexShrink:0 }}>{ceMap[dv.name] || "📦"}</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}><span style={{ color:C.text }}>{dv.name}</span><span style={{ fontWeight:900, color:PIE[i % PIE.length] }}>{fmt(dv.value)}</span></div>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:2 }}><div style={{ flex:1, height:4, borderRadius:2, background:C.border }}><div style={{ height:"100%", borderRadius:2, width:`${(dv.value / total * 100).toFixed(0)}%`, background:PIE[i % PIE.length] }} /></div><span style={{ fontSize:11, color:C.muted, width:28, textAlign:"right" }}>{(dv.value / total * 100).toFixed(0)}%</span></div>
+                {data.map((dv, i) => {
+                  const isOpen = expandedCat === dv.name;
+                  const catTxns = moTxns.filter(t => t.cat === dv.name && (chartView==="expense" ? t.type==="expense" : (t.type==="income" && t.tags!=="#往來帳"))).sort((a,b)=>b.date.localeCompare(a.date));
+                  return (
+                    <div key={dv.name} style={{ marginBottom:10 }}>
+                      <div onClick={() => setExpandedCat(isOpen ? null : dv.name)} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+                        <div style={{ width:34, height:34, borderRadius:10, background:`${PIE[i % PIE.length]}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, flexShrink:0 }}>{ceMap[dv.name] || "📦"}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}><span style={{ color:C.text }}>{dv.name}</span><span style={{ fontWeight:900, color:PIE[i % PIE.length] }}>{fmt(dv.value)}</span></div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:2 }}><div style={{ flex:1, height:4, borderRadius:2, background:C.border }}><div style={{ height:"100%", borderRadius:2, width:`${(dv.value / total * 100).toFixed(0)}%`, background:PIE[i % PIE.length] }} /></div><span style={{ fontSize:11, color:C.muted, width:28, textAlign:"right" }}>{(dv.value / total * 100).toFixed(0)}%</span></div>
+                        </div>
+                        <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>{isOpen?"▲":"▼"}</span>
+                      </div>
+                      {isOpen && (
+                        <div style={{ marginTop:8, marginLeft:44, paddingLeft:10, borderLeft:`2px solid ${C.border}` }}>
+                          {catTxns.length === 0 ? <div style={{ fontSize:12, color:C.muted, padding:"4px 0" }}>沒有明細</div> : catTxns.map(t => (
+                            <div key={t.id} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", fontSize:12 }}>
+                              <span style={{ color:C.textSub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, marginRight:8 }}>{t.date.slice(5)} {t.desc||dv.name}</span>
+                              <span style={{ color:C.text, fontWeight:700, flexShrink:0 }}>{fmt(t.proxyAmt ? t.amt-t.proxyAmt : t.amt)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </Card>
             );
           })()}
@@ -158,13 +188,16 @@ export default function ChartsPage({
             </Card>
           )}
           {(goals||[]).map(g => {
-            const current = g.accIds && g.accIds.length > 0
-              ? accs.filter(a => g.accIds.includes(a.id)).reduce((s,a) => {
+            const current = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0)
+              ? accs.filter(a => (g.accIds||[]).includes(a.id)).reduce((s,a) => {
                   if (useMvForAssets && a.type==="investment") {
                     const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
                     return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
                   }
                   return s + toTWD(a.bal,a.cur,rates);
+                }, 0) + buckets.filter(b => (g.bucketIds||[]).includes(b.id)).reduce((s,b) => {
+                  const acc = accs.find(a=>a.id===b.accId);
+                  return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
                 }, 0)
               : netWorth;
             const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
@@ -197,7 +230,7 @@ export default function ChartsPage({
                   <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
                 </div>
                 <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-                  {g.accIds&&g.accIds.length>0 ? `指定帳戶：${accs.filter(a=>g.accIds.includes(a.id)).map(a=>a.name).join("、")}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
+                  {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
                 </div>
                 {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
                 {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}

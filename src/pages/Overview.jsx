@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export default function OverviewPage({ 
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
-  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, buckets,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
@@ -62,13 +62,16 @@ export default function OverviewPage({
           
           {/* Goal progress bars in overview */}
           {(goals||[]).filter(g=>g.target>0 && g.pinned).map(g => {
-            const cur = g.accIds&&g.accIds.length>0
-              ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>{
+            const cur = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0)
+              ? accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
                   if (useMvForAssets && a.type==="investment") {
                     const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
                     return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
                   }
                   return s + toTWD(a.bal,a.cur,rates);
+                },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).reduce((s,b)=>{
+                  const acc = accs.find(a=>a.id===b.accId);
+                  return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
                 },0)
               : netWorth;
             const pct = Math.min(100, cur>0?(cur/g.target*100):0);

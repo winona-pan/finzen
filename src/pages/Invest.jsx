@@ -141,12 +141,12 @@ export default function InvestPage({
                                 <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
                                 <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
-                                <Line type="monotone" dataKey="cost" stroke={theme==="light"?"#222":"#eee"} strokeWidth={2} dot={false} name="cost" />
+                                <Line type="monotone" dataKey="cost" stroke={theme==="dark"?"#eee":"#222"} strokeWidth={2} dot={false} name="cost" />
                                 {stTotMv > 0 && <Line type="monotone" dataKey="mv" stroke={C.income} strokeWidth={2.5} dot={false} name="mv" />}
                               </LineChart>
                             </ResponsiveContainer>
                             <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="light"?"#222":"#eee" }} />投入成本</div>
+                              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="dark"?"#eee":"#222" }} />投入成本</div>
                               {stTotMv > 0 && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:C.income }} />市值</div>}
                             </div>
                             {stTotMv === 0 && <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>市價載入後顯示市值曲線</div>}
@@ -280,6 +280,31 @@ export default function InvestPage({
                 </Card>
               )}
 
+              {(() => {
+                const allTrades = [];
+                stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name })));
+                allTrades.sort((a,b) => b.date.localeCompare(a.date));
+                if (!allTrades.length) return null;
+                return (
+                  <Card style={{ padding:16, marginBottom:16 }}>
+                    <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>全部交易紀錄（{allTrades.length} 筆）</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:320, overflowY:"auto" }}>
+                      {allTrades.map((t, i) => (
+                        <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
+                          <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmt(t.price)}</div>
+                            <div style={{ fontSize:10, color:C.muted }}>{t.date}</div>
+                          </div>
+                          <div style={{ fontWeight:900, fontSize:12, color:C.text, flexShrink:0 }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊點進個股詳細頁可以編輯或刪除單筆紀錄</div>
+                  </Card>
+                );
+              })()}
+
               {Object.keys(dailyPnlHeatmap).length > 0 && (
                 <Card style={{ padding:16 }}>
                   <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
@@ -323,10 +348,15 @@ export default function InvestPage({
                         <div style={{ fontSize:10, color:C.muted }}>平均賺 {fmt(Math.round(tradeStats.avgWin))} / 平均賠 {fmt(Math.round(Math.abs(tradeStats.avgLoss)))}</div>
                       </div>
                     </div>
-                    {tradeStats.avgR != null && (
+                    {tradeStats.avgR != null ? (
                       <div style={{ paddingTop:10, borderTop:`1px solid ${C.border}` }}>
                         <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>平均 R 值（{tradeStats.rCount} 筆有設停損）</div>
                         <div style={{ fontWeight:900, fontSize:16, color:tradeStats.avgR>=0?C.income:C.expense }}>{tradeStats.avgR>=0?"+":""}{tradeStats.avgR.toFixed(2)} R</div>
+                        <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>賺賠金額相對於停損風險的倍數，例如 +2R 代表賺了 2 倍你當初願意承受的虧損</div>
+                      </div>
+                    ) : (
+                      <div style={{ paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                        <div style={{ fontSize:11, color:C.muted }}>尚無 R 值資料——要先在個股詳細頁設定「停損%」，之後賣出時才會計算</div>
                       </div>
                     )}
                     {tradeStats.disciplinedCount > 0 && (

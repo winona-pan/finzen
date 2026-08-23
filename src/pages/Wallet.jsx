@@ -6,15 +6,17 @@ export default function WalletPage({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
   ALL_CURS, rates: _rates,
-  collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal,
+  collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket,
   selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   // 共用 UI atoms
-  InfoBtn, SH, Card, SwipeRow, Bdg, Btn
+  InfoBtn, SH, Card, SwipeRow, Bdg, Btn, EmojiPicker
 }) {
 
   /* ── 局部狀態 ── */
   const [wMode, setWMode] = useState("normal");
+  const [editingBucket, setEditingBucket] = useState(null);
+  const [bucketEPFor, setBucketEPFor] = useState(null);
   const [trFrom, setTrFrom] = useState("");
   const [trTo, setTrTo] = useState("");
   const [trAmt, setTrAmt] = useState("");
@@ -131,6 +133,36 @@ export default function WalletPage({
                     </SwipeRow>
                   ))}
                 </Card>
+                {grp.type === "debit" && all.map(a => {
+                  const myBuckets = buckets.filter(b => b.accId === a.id);
+                  if (!myBuckets.length) return null;
+                  return <div key={a.id + "_bk"} style={{ margin:"4px 0 8px", paddingLeft:8 }}>
+                    {myBuckets.map(b => (
+                      <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
+                        {editingBucket === b.id ? (
+                          <div style={{ padding:"8px 12px", background:`${C.accent}08`, borderRadius:10 }}>
+                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                              <button onClick={() => setBucketEPFor(b.id)} style={{ width:32, height:32, borderRadius:9, background:C.card, border:`1px solid ${C.border}`, fontSize:15, cursor:"pointer", flexShrink:0 }}>{b.emoji}</button>
+                              <input value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px" }} />
+                              <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:80, padding:"6px 8px" }} />
+                            </div>
+                            <button onClick={() => setEditingBucket(null)} style={{ width:"100%", marginTop:6, padding:6, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
+                          </div>
+                        ) : (
+                          <div onClick={() => setEditingBucket(b.id)} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", opacity:b.vis===false?0.4:1, cursor:"pointer" }}>
+                            <span style={{ fontSize:12, color:C.muted }}>└</span>
+                            <span style={{ fontSize:15 }}>{b.emoji}</span>
+                            <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
+                            {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
+                            <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
+                            <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false })); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
+                          </div>
+                        )}
+                      </SwipeRow>
+                    ))}
+                  </div>;
+                })}
+                {bucketEPFor && <EmojiPicker onSelect={e => { updateBucket(bucketEPFor, { emoji:e }); setBucketEPFor(null); }} onClose={() => setBucketEPFor(null)} />}
               </div>;
             })}
 
