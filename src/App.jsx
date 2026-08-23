@@ -25,32 +25,50 @@ const THEMES = {
     text:"#eef0fa", textSub:"#7c80a0", muted:"#444660", danger:"#ef4444",
     name:"深色", icon:"🌙",
   },
-  light: {
-    bg:"#f4f6fc", surface:"#ffffff", card:"#ffffff",
-    border:"#e2e8f0", borderL:"#cbd5e1",
-    income:"#e11d48", expense:"#16a34a",
-    accent:"#6366f1", accentL:"#4f46e5", accentD:"#4338ca",
-    warn:"#d97706", teal:"#0d9488",
-    text:"#1e293b", textSub:"#475569", muted:"#94a3b8", danger:"#dc2626",
-    name:"淺色", icon:"☀️",
+  nordic: {
+    bg:"#f7f5f0", surface:"#ffffff", card:"#fdfcfa",
+    border:"#e5e0d8", borderL:"#d4cdc0",
+    income:"#c9584a", expense:"#7a9b76",
+    accent:"#6b8caf", accentL:"#527396", accentD:"#3f5870",
+    warn:"#c9a227", teal:"#6a9c96",
+    text:"#3a3630", textSub:"#7a7468", muted:"#b5ada0", danger:"#c94f3f",
+    name:"北歐風", icon:"🌲",
   },
-  purple: {
-    bg:"#0e0b1a", surface:"#16112b", card:"#1f1840",
-    border:"#2e2550", borderL:"#3d3370",
-    income:"#f43f5e", expense:"#34d399",
-    accent:"#a855f7", accentL:"#c084fc", accentD:"#9333ea",
-    warn:"#f59e0b", teal:"#06b6d4",
-    text:"#f3e8ff", textSub:"#a78bfa", muted:"#6d5a9e", danger:"#ef4444",
-    name:"紫色", icon:"💜",
+  mediterranean: {
+    bg:"#fbf6ec", surface:"#ffffff", card:"#fffdf7",
+    border:"#ecdfc4", borderL:"#ddc99f",
+    income:"#d4634a", expense:"#7c9c6b",
+    accent:"#3d7ea6", accentL:"#2f6b91", accentD:"#234f6a",
+    warn:"#e0a13a", teal:"#4a9ca0",
+    text:"#3d3226", textSub:"#8a7a5f", muted:"#c9b58e", danger:"#c1442e",
+    name:"地中海風", icon:"🌊",
   },
-  ocean: {
-    bg:"#020b18", surface:"#061825", card:"#0a2236",
-    border:"#0f3450", borderL:"#1a4a6e",
-    income:"#f43f5e", expense:"#4ade80",
-    accent:"#0ea5e9", accentL:"#38bdf8", accentD:"#0284c7",
-    warn:"#f59e0b", teal:"#14b8a6",
-    text:"#e0f2fe", textSub:"#7dd3fc", muted:"#2d6a8a", danger:"#ef4444",
-    name:"海洋", icon:"🌊",
+  korean: {
+    bg:"#fdf7f9", surface:"#ffffff", card:"#fffbfc",
+    border:"#f3dfe6", borderL:"#eac6d3",
+    income:"#e0637f", expense:"#7fb8a4",
+    accent:"#d4879f", accentL:"#c26f89", accentD:"#a85870",
+    warn:"#e0b04a", teal:"#8fc4b8",
+    text:"#4a3b40", textSub:"#9b8085", muted:"#d9bfc7", danger:"#d1476a",
+    name:"韓式", icon:"🌸",
+  },
+  japanese: {
+    bg:"#f5f1e8", surface:"#fdfaf3", card:"#ffffff",
+    border:"#e0d8c3", borderL:"#cbbfa0",
+    income:"#b23b3b", expense:"#5f7a5c",
+    accent:"#3f5c6e", accentL:"#32495a", accentD:"#263a48",
+    warn:"#b8860b", teal:"#4f7d78",
+    text:"#332e26", textSub:"#6b6152", muted:"#a89d85", danger:"#a3372f",
+    name:"日式", icon:"🍃",
+  },
+  american: {
+    bg:"#f7f5f2", surface:"#ffffff", card:"#ffffff",
+    border:"#dcdad5", borderL:"#c5c2ba",
+    income:"#c8272c", expense:"#2e7d4f",
+    accent:"#1e3a5f", accentL:"#2c5282", accentD:"#152744",
+    warn:"#c98a1f", teal:"#2f7d78",
+    text:"#1f2937", textSub:"#5b6472", muted:"#a3aab5", danger:"#c8272c",
+    name:"美式", icon:"🦅",
   },
 };
 let C = THEMES.dark;
@@ -238,7 +256,10 @@ function DatePicker({ value, onChange, onClose }) {
     const end = new Date(TODAY), start = new Date(end);
     start.setMonth(start.getMonth() - months + 1); start.setDate(1);
     const fmt2 = dt => dt.toISOString().slice(0,10);
-    setS(fmt2(start)); setE(fmt2(end));
+    const ns = fmt2(start), ne = fmt2(end);
+    setS(ns); setE(ne);
+    onChange({ s:ns, e:ne });
+    onClose();
   };
   return <div style={{ position:"fixed", inset:0, zIndex:120, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.75)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
     <div style={{ width:"100%", maxWidth:420, maxHeight:"85dvh", overflowY:"auto", background:C.surface, borderRadius:"20px 20px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))" }}>
@@ -247,8 +268,8 @@ function DatePicker({ value, onChange, onClose }) {
         {[{l:"本月",m:1},{l:"近3月",m:3},{l:"近6月",m:6},{l:"近12月",m:12}].map(o => <button key={o.l} onClick={() => quick(o.m)} style={{ padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>{o.l}</button>)}
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="light"?"light":"dark" }} /></div>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="light"?"light":"dark" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
       </div>
       <div style={{ display:"flex", gap:8 }}>
         <button onClick={() => { onChange({ s, e }); onClose(); }} style={{ flex:1, padding:12, borderRadius:12, background:C.accent, color:"#fff", border:"none", fontWeight:900, cursor:"pointer" }}>確定</button>
@@ -425,7 +446,7 @@ export default function App() {
   const expensePools = d.expensePools || [];
   const buckets = d.buckets || [];
   const addBucket = useCallback((accId, name, emoji, allocated) => {
-    upd("buckets", p => [...(p||[]), { id:"bk"+Date.now(), accId, name, emoji:emoji||"🎯", allocated:+allocated||0 }]);
+    upd("buckets", p => [...(p||[]), { id:"bk"+Date.now(), accId, name, emoji:emoji||"🎯", allocated:+allocated||0, vis:true }]);
   }, [upd]);
   const updateBucket = useCallback((id, patch) => {
     upd("buckets", p => (p||[]).map(b => b.id===id ? { ...b, ...patch } : b));
@@ -517,7 +538,7 @@ export default function App() {
   const [settleCustomAmt, setSettleCustomAmt] = useState(null);
 
   /* ── forms ── */
-  const T0 = { type:"expense",cat:"食物",amt:"",desc:"",acc:"",date:TODAY,tags:"",proxy:false,proxyList:[{ person:"",amt:"" }],deferred:false,deferMonths:"4",deferMoAmt:"" };
+  const T0 = { type:"expense",cat:"食物",amt:"",desc:"",acc:"",date:TODAY,tags:"",proxy:false,proxyList:[{ person:"",amt:"" }],deferred:false,deferMonths:"4",deferMoAmt:"",installExp:false,installMonths:"3" };
   const [nT, setNT] = useState(T0);
   const D0 = { type:"receivable",person:"",amt:"",desc:"",date:TODAY,note:"",installTotal:0,installAmt:"",installPaid:0,installPaidAmt:0 };
   const [nD, setND] = useState(D0);
@@ -532,7 +553,7 @@ export default function App() {
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
-  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[] };
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[] };
   const [nG, setNG] = useState(G0);
   const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
@@ -662,17 +683,38 @@ export default function App() {
   const saveSub = useCallback((sub) => { upd("subs", p => p.map(x => x.id === sub.id ? sub : x)); close(); }, [upd]);
   const addSub = useCallback(() => {
     if (!nS.name || !nS.amt) return;
-    upd("subs", p => [...p, { ...nS, id:"sub"+Date.now(), amt:+nS.amt, active:true }]);
+    const amt = +nS.amt;
+    const newSub = { ...nS, id:"sub"+Date.now(), amt, active:true, lastBilled:TODAY };
+    upd("subs", p => [...p, newSub]);
+    if (nS.deferExpense && nS.freq === "year") {
+      const poolId = "ep" + Date.now();
+      updMulti({
+        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id }],
+        accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      });
+      upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt:Math.round(amt/12), recognized:0, startDate:TODAY, acc:nS.acc||"", subId:newSub.id }]);
+    } else {
+      updMulti({
+        txns: p => [...p, { id:Date.now(), type:"expense", cat:nS.cat||"訂閱", amt, desc:nS.name, acc:nS.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newSub.id }],
+        accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      });
+    }
     setNS(S0); close();
-  }, [nS, upd]);
+  }, [nS, upd, updMulti]);
 
   /* ── 基本開銷：編輯 / 新增 ── */
   const saveBill = useCallback(() => { if (!selBill) return; upd("bills", p => p.map(x => x.id === selBill.id ? selBill : x)); close(); }, [selBill, upd]);
   const addBill = useCallback(() => {
     if (!nB.name || !nB.amt) return;
-    upd("bills", p => [...(p||[]), { ...nB, id:"bill"+Date.now(), amt:+nB.amt, active:true }]);
+    const amt = +nB.amt;
+    const newBill = { ...nB, id:"bill"+Date.now(), amt, active:true, lastBilled:TODAY };
+    upd("bills", p => [...(p||[]), newBill]);
+    updMulti({
+      txns: p => [...p, { id:Date.now(), type:"expense", cat:nB.cat||"家居", amt, desc:nB.name, acc:nB.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newBill.id }],
+      accs: p => nB.acc ? p.map(a => a.name===nB.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+    });
     setNB(B0); close();
-  }, [nB, upd]);
+  }, [nB, upd, updMulti]);
 
   /* ── 新增帳戶 ── */
   const addAcc = useCallback(() => {
@@ -872,7 +914,7 @@ export default function App() {
       let recCount = Math.round(pool.recognized / pool.monthlyAmt);
       let recognized = pool.recognized;
       let cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
-      while (cur <= today && recCount < 12) {
+      while (cur <= today && recCount < (pool.installments || 12)) {
         const amt = Math.min(pool.monthlyAmt, pool.totalAmt - recognized);
         recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: cur.toISOString().slice(0, 10), tags: "#分攤認列", autoSrc: pool.subId });
         recognized += amt; recCount++;
@@ -917,13 +959,17 @@ export default function App() {
   const stTotCost = useMemo(() => stSum.reduce((s, x) => s + x.totalCost, 0), [stSum]);
   
   const totAssets = useMemo(() => {
-    const accBal = visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
+    const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s, b) => {
+      const acc = accs.find(a => a.id === b.accId);
+      return s + toTWD(b.allocated, acc?.cur || "TWD", rates);
+    }, 0);
+    const accBal = visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0) - excludedBucketTotal;
     if (useMvForAssets && stTotMv > 0) {
       const invAccBal = visA.filter(a => a.type==="investment").reduce((s,a) => s+toTWD(a.bal,a.cur,rates), 0);
       return accBal - invAccBal + stTotMv;
     }
     return accBal;
-  }, [visA, rates, useMvForAssets, stTotMv]);
+  }, [visA, rates, useMvForAssets, stTotMv, buckets, accs]);
 
   const netWorth = totAssets - totDebt - totPay + totRec;
   const allocPie = useMemo(() => {
@@ -1019,14 +1065,14 @@ export default function App() {
   }, []);
   const fetchDailyGrowth = useCallback(async () => {
     const held = stocks.filter(s => (s.trades?.some(t => t.type === "buy")) || s.manualShares);
-    if (!held.length) { setDailyGrowth([]); return; }
+    if (!held.length) { setDailyGrowth([]); return []; }
     setLoadingDaily(true);
     try {
       const histories = await Promise.all(held.map(s => fetchDailyHistory(s.ticker, s.market)));
       const allDates = new Set();
       histories.forEach(h => h.forEach(x => allDates.add(x.date)));
       const dateList = [...allDates].sort();
-      if (!dateList.length) { setDailyGrowth([]); return; }
+      if (!dateList.length) { setDailyGrowth([]); return []; }
       const result = dateList.map(date => {
         let mv = 0;
         held.forEach((s, i) => {
@@ -1045,8 +1091,10 @@ export default function App() {
         return { date: date.slice(5), mv: Math.round(mv) };
       }).filter(x => x.mv > 0);
       setDailyGrowth(result);
+      return result;
     } catch {
       setDailyGrowth([]);
+      return [];
     } finally {
       setLoadingDaily(false);
     }
@@ -1077,15 +1125,16 @@ export default function App() {
   const [benchmarkData, setBenchmarkData] = useState([]);
   const [loadingBenchmark, setLoadingBenchmark] = useState(false);
   const fetchBenchmarkCompare = useCallback(async () => {
-    if (!dailyGrowth.length) { await fetchDailyGrowth(); }
+    let growth = dailyGrowth;
+    if (!growth.length) { growth = await fetchDailyGrowth(); }
     setLoadingBenchmark(true);
     try {
       const hist = await fetchDailyHistory("0050", "TW");
-      if (!hist.length || !dailyGrowth.length) { setBenchmarkData([]); return; }
-      const startDate = dailyGrowth[0]?.date;
-      const base = dailyGrowth[0]?.mv || 1;
+      if (!hist.length || !growth.length) { setBenchmarkData([]); return; }
+      const startDate = growth[0]?.date;
+      const base = growth[0]?.mv || 1;
       const benchBase = hist.find(h => h.date.slice(5) >= startDate)?.close || hist[0].close;
-      const merged = dailyGrowth.map(d => {
+      const merged = growth.map(d => {
         let benchPrice = null;
         for (let j = hist.length - 1; j >= 0; j--) { if (hist[j].date.slice(5) <= d.date) { benchPrice = hist[j].close; break; } }
         return { date:d.date, portfolio: Math.round((d.mv / base - 1) * 1000) / 10, benchmark: benchPrice ? Math.round((benchPrice / benchBase - 1) * 1000) / 10 : null };
@@ -1110,18 +1159,23 @@ export default function App() {
         const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
         if (res.ok) data = await res.json();
       } catch {}
+      const needsLiveLookup = [];
       if (data) {
         upd("watchStocks", p => (p||[]).map(w => {
           const keys = [`${w.ticker}.TW`, w.ticker, w.ticker.toUpperCase(), `${w.ticker}.US`];
           const item = keys.map(k => data[k]).find(v => v?.price);
-          return item ? { ...w, curPrice:item.price, name:item.name||w.name, _extra:{ chgPct:item.chgPct } } : w;
+          if (item) return { ...w, curPrice:item.price, name:item.name||w.name, _extra:{ chgPct:item.chgPct } };
+          needsLiveLookup.push(w);
+          return w;
         }));
       } else {
-        for (const w of watchStocks) {
-          const res = await fetchPrice(w.ticker, w.market);
-          if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
-          await new Promise(r => setTimeout(r, 200));
-        }
+        needsLiveLookup.push(...watchStocks);
+      }
+      // 靜態清單裡沒有的（自選股通常不在你原本的持股清單內），改用即時查詢逐一補上
+      for (const w of needsLiveLookup) {
+        const res = await fetchPrice(w.ticker, w.market);
+        if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
+        await new Promise(r => setTimeout(r, 200));
       }
     } finally { setLoadingWatch(false); }
   }, [watchStocks, fetchPrice, upd]);
