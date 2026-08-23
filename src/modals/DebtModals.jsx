@@ -78,6 +78,26 @@ export default function DebtModals({
           <CalcInp label="總金額" value={String(editDebt.amt||"")} onChange={v => setEditDebt(p => ({ ...p, amt:+v }))} />
           <Inp label="說明" value={editDebt.desc||""} onChange={e => setEditDebt(p => ({ ...p, desc:e.target.value }))} />
           <Fld label="日期"><input type="date" value={editDebt.date||TODAY} onChange={e => setEditDebt(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+
+          {/* 分期付款（事後也能編輯）*/}
+          <button onClick={() => setEditDebt(p => ({ ...p, installTotal:p.installTotal>0?0:3, installAmt:p.installAmt||(p.amt?String(Math.round(+p.amt/3)):"") }))}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:editDebt.installTotal>0?`${C.warn}22`:C.card, color:editDebt.installTotal>0?C.warn:C.textSub, border:`1px solid ${editDebt.installTotal>0?C.warn:C.border}`, cursor:"pointer", marginBottom:12 }}>
+            <span>{editDebt.installTotal>0?"✅":"⬜"}</span> 分期付款
+          </button>
+
+          {editDebt.installTotal > 0 && <div style={{ padding:12, borderRadius:12, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              <Fld label="分幾期">
+                <select value={String(editDebt.installTotal)} onChange={e => setEditDebt(p => ({ ...p, installTotal:+e.target.value, installAmt:p.amt?String(Math.round(+p.amt/+e.target.value)):"" }))} style={iSt}>
+                  {Array.from({length:47},(_,i)=>i+2).map(n=><option key={n} value={n}>{n} 期</option>)}
+                </select>
+              </Fld>
+              <CalcInp label={editDebt.type==="receivable"?"每期收款":"每期付款"} value={editDebt.installAmt||""} onChange={v => setEditDebt(p => ({ ...p, installAmt:v }))} />
+            </div>
+            {(editDebt.installPaid||0) > 0 && <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>已經收/付了 {editDebt.installPaid} 期，共 {fmt(editDebt.installPaidAmt||0)}</div>}
+            <div style={{ fontSize:12, color:editDebt.type==="receivable"?C.teal:C.warn, marginTop:6 }}>💡 調整期數不會影響已經收/付過的紀錄</div>
+          </div>}
+
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); }}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>

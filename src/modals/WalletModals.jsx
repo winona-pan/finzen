@@ -7,6 +7,7 @@ export default function WalletModals({
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
   isSingleMo, chartRange, setChartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
+  buckets, addBucket, updateBucket, deleteBucket,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
   selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
   selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
@@ -24,7 +25,7 @@ export default function WalletModals({
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0,
   // 共用 UI atoms 與資料
-  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card
+  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card, SwipeRow
 }) {
 
   /* ── 局部狀態 ── */
@@ -151,7 +152,7 @@ export default function WalletModals({
               }}>{isFirst && newBal && +newBal !== selAcc.bal ? "設為初始金額" : "儲存"}</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
             </div>
-            <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); close(); })}>🗑 刪除此帳戶</Btn>
+            <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此帳戶</Btn>
             {showAccEP && <EmojiPicker onSelect={e => { setSelAcc(p => ({ ...p, icon:e })); setShowAccEP(false); }} onClose={() => setShowAccEP(false)} />}
           </Sheet>;
         })()}
@@ -164,7 +165,7 @@ export default function WalletModals({
             <Btn style={{ flex:1 }} onClick={() => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); }}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
-          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); close(); })}>🗑 刪除此信用卡</Btn>
+          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此信用卡</Btn>
         </Sheet>}
 
         {modal === "payCred" && <Sheet title="信用卡繳費 / Pay" onClose={close}>
@@ -196,6 +197,30 @@ export default function WalletModals({
               <Btn style={{ flex:1 }} onClick={() => { close(); setTimeout(() => setModal("adjBal"), 50); }}>✏️ 編輯帳戶</Btn>
               {isCredit && <Btn v="teal" style={{ flex:1 }} onClick={() => { setPayF({ creditId:selAcc.id, fromId:"", amt:String(selAcc.payable||0), date:TODAY, note:"" }); close(); setTimeout(() => setModal("payCred"), 50); }}>💳 繳費</Btn>}
             </div>
+
+            {selAcc.type === "debit" && (() => {
+              const myBuckets = buckets.filter(b => b.accId === selAcc.id);
+              const allocated = myBuckets.reduce((s,b)=>s+b.allocated, 0);
+              const unassigned = selAcc.bal - allocated;
+              return <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>子帳戶（願望、旅費、存錢等分類）</div>
+                {myBuckets.map(b => (
+                  <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}` }}>
+                      <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
+                      <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}</div>
+                      <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:100, textAlign:"right", padding:"6px 8px" }} />
+                    </div>
+                  </SwipeRow>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 4px", fontSize:12, color:unassigned<0?C.expense:C.muted, fontWeight:700 }}>
+                  <span>未分配</span><span>{fmt(unassigned)}</span>
+                </div>
+                {unassigned < 0 && <div style={{ fontSize:11, color:C.expense, marginBottom:8 }}>⚠️ 子帳戶總額超過實際餘額了</div>}
+                <BucketAdder accId={selAcc.id} addBucket={addBucket} C={C} iSt={iSt} EmojiPicker={EmojiPicker} />
+              </div>;
+            })()}
+
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>交易紀錄</div>
             {accTxns.length === 0 && <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>此帳戶尚無交易記錄</div>}
             <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
@@ -285,6 +310,14 @@ export default function WalletModals({
                 <Inp label="日期（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p=>({...p,day:e.target.value}))} />
               </div>
             : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />}
+
+          {nS.freq === "year" && (
+            <button onClick={() => setNS(p => ({ ...p, deferExpense:!p.deferExpense }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:nS.deferExpense ? `${C.teal}22` : C.card, color:nS.deferExpense ? C.teal : C.textSub, border:`1px solid ${nS.deferExpense ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
+              <span>{nS.deferExpense ? "✅" : "⬜"}</span>
+              <span style={{ textAlign:"left" }}>年繳分攤認列（扣款當下不算整筆支出，改成 {nS.amt ? Math.round(+nS.amt/12) : "每月"} 分 12 個月慢慢認列）</span>
+            </button>
+          )}
+
           <CatPicker value={nS.cat} onChange={v => setNS(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addSub}>新增</Btn>
@@ -325,10 +358,18 @@ export default function WalletModals({
                 <Inp label="日期（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p=>({...p,day:+e.target.value}))} />
               </div>
             : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />}
+
+          {selSub.freq === "year" && (
+            <button onClick={() => setSelSub(p => ({ ...p, deferExpense:!p.deferExpense }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:selSub.deferExpense ? `${C.teal}22` : C.card, color:selSub.deferExpense ? C.teal : C.textSub, border:`1px solid ${selSub.deferExpense ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
+              <span>{selSub.deferExpense ? "✅" : "⬜"}</span>
+              <span style={{ textAlign:"left" }}>年繳分攤認列（下次扣款起分 12 個月慢慢認列）</span>
+            </button>
+          )}
+
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => saveSub(selSub)}>儲存</Btn>
-            <Btn v="danger" style={{ flex:1 }} onClick={() => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); }}>刪除</Btn>
+            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？`, () => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); })}>刪除</Btn>
           </div>
         </Sheet>}
 
@@ -411,8 +452,30 @@ export default function WalletModals({
             <Btn style={{ flex:1 }} onClick={saveBill}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
-          <Btn v="danger" style={{ width:"100%" }} onClick={() => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); }}>🗑 刪除</Btn>
+          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); })}>🗑 刪除</Btn>
         </Sheet>}
     </>
+  );
+}
+
+/* ── 子帳戶新增小表單 ── */
+function BucketAdder({ accId, addBucket, C, iSt, EmojiPicker }) {
+  const [name, setName] = useState("");
+  const [amt, setAmt] = useState("");
+  const [emoji, setEmoji] = useState("🎯");
+  const [showEP, setShowEP] = useState(false);
+  const add = () => {
+    if (!name.trim()) return;
+    addBucket(accId, name.trim(), emoji, amt);
+    setName(""); setAmt(""); setEmoji("🎯");
+  };
+  return (
+    <div style={{ display:"flex", gap:6, marginTop:8 }}>
+      <button onClick={() => setShowEP(true)} style={{ width:38, height:38, borderRadius:10, background:C.card, border:`1px solid ${C.border}`, fontSize:18, cursor:"pointer", flexShrink:0 }}>{emoji}</button>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="子帳戶名稱，如：旅費" style={{ ...iSt, flex:1 }} />
+      <input type="number" value={amt} onChange={e => setAmt(e.target.value)} placeholder="金額" style={{ ...iSt, width:80 }} />
+      <button onClick={add} style={{ padding:"0 12px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, cursor:"pointer" }}>加入</button>
+      {showEP && <EmojiPicker onSelect={e => { setEmoji(e); setShowEP(false); }} onClose={() => setShowEP(false)} />}
+    </div>
   );
 }

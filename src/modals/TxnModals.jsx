@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export default function TxnModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
-  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -168,7 +168,7 @@ export default function TxnModals({
           </div>
           <div style={{ display:"flex", gap:8 }}>
             <Btn v="warn" style={{ flex:1 }} onClick={() => setModal("editTxn")}>✏️ 編輯</Btn>
-            <Btn v="danger" style={{ flex:1 }} onClick={() => delTxn(selTxn.id)}>🗑 刪除</Btn>
+            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm("確定刪除這筆交易？", () => delTxn(selTxn.id))}>🗑 刪除</Btn>
           </div>
         </Sheet>}
 
@@ -184,6 +184,20 @@ export default function TxnModals({
               <input type="number" placeholder={`最多 ${fmt(p.totalAmt - p.recognized)}`} value={selPool?.id === p.id ? recAmt : ""} onFocus={() => setSelPool(p)} onChange={e => setRecAmt(e.target.value)} style={{ ...iSt, flex:1 }} />
               <Btn v="teal" sz="sm" onClick={() => { setSelPool(p); setTimeout(doRecognize, 50); }}>認列</Btn>
             </div>
+          </div>)}
+        </Sheet>}
+
+        {modal === "expensePools" && <Sheet title="年繳分攤進度" onClose={close}>
+          <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+            這些是開了「年繳分攤認列」的訂閱。扣款當下不會整筆算進支出，而是每個月自動認列 1/12，累積 12 個月後認列完畢。
+          </div>
+          {expensePools.filter(p => p.totalAmt - p.recognized > 0).length === 0 && <div style={{ padding:"32px 0", textAlign:"center", color:C.muted }}>目前沒有進行中的分攤</div>}
+          {expensePools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} 開始・每月 {fmt(p.monthlyAmt)}</div></div>
+              <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>
+            </div>
+            <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.warn }} /></div>
           </div>)}
         </Sheet>}
     </>

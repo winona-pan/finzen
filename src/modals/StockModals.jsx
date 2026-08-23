@@ -22,10 +22,10 @@ export default function StockModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview, updateStockMeta,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview, updateStockMeta, StockPriceChart, fetchStockRange,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS,
   // 接收全域共用 UI Atoms 元件
-  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg
+  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, SwipeRow
 }) {
 
   // 表單重置預設值
@@ -263,6 +263,11 @@ export default function StockModals({
               </div>
             </Card>}
 
+            <Card style={{ padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:900, color:C.muted, marginBottom:8, letterSpacing:"0.08em" }}>股價走勢</div>
+              <StockPriceChart ticker={st.ticker} market={st.market} fetchStockRange={fetchStockRange} />
+            </Card>
+
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>持股資料</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <Inp label="股數（自動）" type="number" value={String(st.totalSh)}
@@ -305,6 +310,27 @@ export default function StockModals({
               );
             })()}
             
+            {(st.trades||[]).length > 0 && <div style={{ margin:"14px 0" }}>
+              <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>交易紀錄（{st.trades.length} 筆）</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                {[...st.trades].sort((a,b) => b.date.localeCompare(a.date)).map((t, i) => (
+                  <SwipeRow key={t.id||i} onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
+                      <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} 股 ＠ {fmt(t.price)}</div>
+                        <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
+                        {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl))}</div>}
+                      </div>
+                    </div>
+                  </SwipeRow>
+                ))}
+              </div>
+            </div>}
+
             <div style={{ display:"flex", gap:8, marginTop:12 }}>
               <Btn v="warn" style={{ flex:1 }} onClick={() => {
                 const proceeds=hasPrice?String(Math.round(st.curPrice*st.totalSh)):"";
