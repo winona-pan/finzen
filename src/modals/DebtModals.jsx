@@ -100,7 +100,7 @@ export default function DebtModals({
           </div>}
 
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆往來帳的修改？金額會影響淨資產計算", () => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); })}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆往來帳的修改？金額會影響淨資產計算", () => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); }, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
         </Sheet>}
@@ -164,7 +164,7 @@ export default function DebtModals({
                   setSettleDebt(null); setSettleAcc(""); setSettleCustomAmt(null); close();
                 };
                 if (settleAcc) {
-                  confirm(`確定${isReceivable?"收款":"付款"} ${fmt(thisPay)}？${settleAcc} 帳戶餘額會${isReceivable?"增加":"減少"}這筆金額`, doSettle);
+                  confirm(`確定${isReceivable?"收款":"付款"} ${fmt(thisPay)}？${settleAcc} 帳戶餘額會${isReceivable?"增加":"減少"}這筆金額`, doSettle, isReceivable?"確認收款":"確認付款");
                 } else {
                   doSettle();
                 }

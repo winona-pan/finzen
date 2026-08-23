@@ -166,7 +166,7 @@ export default function WalletModals({
           <Inp label="信用額度" type="number" value={selAcc.limit || ""} onChange={e => setSelAcc(p => ({ ...p, limit:+e.target.value }))} />
           <Inp label="目前應付金額" type="number" value={selAcc.payable != null ? String(selAcc.payable) : "0"} onChange={e => setSelAcc(p => ({ ...p, payable:+e.target.value }))} />
           <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張信用卡的修改？", () => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); })}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張信用卡的修改？", () => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); }, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此信用卡</Btn>
@@ -220,7 +220,7 @@ export default function WalletModals({
                       ) : (
                         <div onClick={() => setEditingBucketId(b.id)} style={{ flex:1, fontWeight:700, fontSize:13, color:C.text, cursor:"pointer" }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
                       )}
-                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0 }}>{b.vis===false?"🙈":"👁️"}</button>
+                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0 }}>{b.vis===false?"🙈":"👁️"}</button>
                       <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px" }} />
                     </div>
                   </SwipeRow>
@@ -390,7 +390,7 @@ export default function WalletModals({
 
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個訂閱的修改？", () => saveSub(selSub))}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個訂閱的修改？", () => saveSub(selSub), "確認編輯")}>儲存</Btn>
             <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？`, () => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); })}>刪除</Btn>
           </div>
         </Sheet>}
@@ -471,7 +471,7 @@ export default function WalletModals({
             : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆開銷的修改？", saveBill)}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆開銷的修改？", saveBill, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); })}>🗑 刪除</Btn>
