@@ -196,14 +196,16 @@ function InfoBtn({ msg }) {
   );
 }
 
-function ConfirmDialog({ msg, onOk, onCancel }) {
+function ConfirmDialog({ msg, onOk, onCancel, okLabel }) {
+  const label = okLabel || "確認刪除";
+  const isDanger = !okLabel || label.includes("刪除");
   return (
     <div style={{ position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.7)",backdropFilter:"blur(8px)" }}>
       <div style={{ background:C.surface,border:`1px solid ${C.borderL}`,borderRadius:20,padding:"28px 24px",maxWidth:320,width:"90%",textAlign:"center" }}>
         <div style={{ fontSize:15,fontWeight:700,color:C.text,marginBottom:24,lineHeight:1.5 }}>{msg}</div>
         <div style={{ display:"flex",gap:10 }}>
           <button onClick={onCancel} style={{ flex:1,padding:"11px",borderRadius:12,background:C.card,border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14,cursor:"pointer" }}>取消</button>
-          <button onClick={onOk} style={{ flex:1,padding:"11px",borderRadius:12,background:C.danger,border:"none",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>確認刪除</button>
+          <button onClick={onOk} style={{ flex:1,padding:"11px",borderRadius:12,background:isDanger?C.danger:C.accent,border:"none",color:"#fff",fontWeight:900,fontSize:14,cursor:"pointer" }}>{label}</button>
         </div>
       </div>
     </div>
@@ -482,7 +484,7 @@ export default function App() {
   const changeTheme = (t) => { localStorage.setItem("finzen_theme", t); setTheme(t); };
   const [modal, setModal] = useState(null);
   const [confirmDlg, setConfirmDlg] = useState(null);
-  const confirm = (msg, onOk) => setConfirmDlg({ msg, onOk });
+  const confirm = (msg, onOk, okLabel) => setConfirmDlg({ msg, onOk, okLabel });
   const closeConfirm = () => setConfirmDlg(null);
   const close = () => setModal(null);
 
@@ -553,7 +555,7 @@ export default function App() {
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
-  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[] };
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null };
   const [nG, setNG] = useState(G0);
   const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
@@ -1435,7 +1437,7 @@ export default function App() {
         <OtherModals {...p} />
 
         {/* 確認刪除彈窗 */}
-        {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => {
+        {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {
           const snapshot = d;
           confirmDlg.onOk();
           closeConfirm();
