@@ -62,9 +62,10 @@ export default function OverviewPage({
           
           {/* Goal progress bars in overview */}
           {(goals||[]).filter(g=>g.target>0 && g.pinned).map(g => {
+            const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
             const cur = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0)
               ? accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
-                  if (useMvForAssets && a.type==="investment") {
+                  if (goalUseMv && a.type==="investment") {
                     const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
                     return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
                   }

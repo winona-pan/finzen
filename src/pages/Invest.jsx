@@ -30,6 +30,7 @@ export default function InvestPage({
 
   const [growthMode, setGrowthMode] = useState("monthly");
   const [expandedWatch, setExpandedWatch] = useState(null);
+  const [allTradeMonth, setAllTradeMonth] = useState(null);
 
   return (
     <>
@@ -285,11 +286,22 @@ export default function InvestPage({
                 stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name })));
                 allTrades.sort((a,b) => b.date.localeCompare(a.date));
                 if (!allTrades.length) return null;
+                const allTMonths = [...new Set(allTrades.map(t => t.date.slice(0,7)))].sort().reverse();
+                const curAllYm = allTradeMonth || allTMonths[0];
+                const curAllTrades = allTrades.filter(t => t.date.slice(0,7) === curAllYm);
+                const curAllIdx = allTMonths.indexOf(curAllYm);
                 return (
                   <Card style={{ padding:16, marginBottom:16 }}>
-                    <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>全部交易紀錄（{allTrades.length} 筆）</div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>全部交易紀錄（共 {allTrades.length} 筆）</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx+1])} disabled={curAllIdx>=allTMonths.length-1} style={{ background:"none", border:"none", cursor:curAllIdx>=allTMonths.length-1?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx>=allTMonths.length-1?0.3:1 }}>‹</button>
+                        <span style={{ fontSize:12, fontWeight:700, color:C.text, minWidth:50, textAlign:"center" }}>{curAllYm.slice(0,4)}/{curAllYm.slice(5,7)}</span>
+                        <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx-1])} disabled={curAllIdx<=0} style={{ background:"none", border:"none", cursor:curAllIdx<=0?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx<=0?0.3:1 }}>›</button>
+                      </div>
+                    </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:320, overflowY:"auto" }}>
-                      {allTrades.map((t, i) => (
+                      {curAllTrades.map((t, i) => (
                         <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                           <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                           <div style={{ flex:1, minWidth:0 }}>
@@ -629,14 +641,18 @@ function WatchStockAdder({ addWatchStock, C, iSt }) {
     setTicker(""); setName("");
   };
   return (
-    <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-      <input value={ticker} onChange={e => setTicker(e.target.value)} placeholder="代號 如 2330" style={{ ...iSt, flex:1 }} />
-      <input value={name} onChange={e => setName(e.target.value)} placeholder="名稱（選填）" style={{ ...iSt, flex:1 }} />
-      <select value={market} onChange={e => setMarket(e.target.value)} style={{ ...iSt, flex:"0 0 64px" }}>
-        <option value="TW">TW</option>
-        <option value="US">US</option>
-      </select>
-      <button onClick={add} style={{ padding:"0 14px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, cursor:"pointer" }}>加入</button>
+    <div style={{ marginBottom:14, padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+      <div style={{ display:"flex", gap:6, marginBottom:8 }}>
+        <input value={ticker} onChange={e => setTicker(e.target.value)} placeholder="代號 如 2330" style={{ ...iSt, flex:1, minWidth:0 }} />
+        <select value={market} onChange={e => setMarket(e.target.value)} style={{ ...iSt, flex:"0 0 68px" }}>
+          <option value="TW">TW</option>
+          <option value="US">US</option>
+        </select>
+      </div>
+      <div style={{ display:"flex", gap:6 }}>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="名稱（選填）" style={{ ...iSt, flex:1, minWidth:0 }} onKeyDown={e => { if (e.key==="Enter") add(); }} />
+        <button onClick={add} style={{ flexShrink:0, padding:"0 20px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:14, cursor:"pointer" }}>加入</button>
+      </div>
     </div>
   );
 }

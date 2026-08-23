@@ -99,7 +99,7 @@ export default function SettingsPage({
                   localStorage.removeItem("finzen_v3");
                   alert("資料已完全清除");
                   window.location.reload();
-                })} v="danger" sz="sm">🗑 清空</Btn>
+                }, "確認清空")} v="danger" sz="sm">🗑 清空</Btn>
               </div>
               <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
             </Card>

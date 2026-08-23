@@ -188,9 +188,10 @@ export default function ChartsPage({
             </Card>
           )}
           {(goals||[]).map(g => {
+            const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
             const current = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0)
               ? accs.filter(a => (g.accIds||[]).includes(a.id)).reduce((s,a) => {
-                  if (useMvForAssets && a.type==="investment") {
+                  if (goalUseMv && a.type==="investment") {
                     const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
                     return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
                   }
@@ -230,7 +231,7 @@ export default function ChartsPage({
                   <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
                 </div>
                 <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-                  {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
+                  {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
                 </div>
                 {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
                 {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}

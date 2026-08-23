@@ -155,7 +155,7 @@ export default function WalletPage({
                             <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
                             {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
                             <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
-                            <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false })); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
+                            <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
                           </div>
                         )}
                       </SwipeRow>
