@@ -722,6 +722,19 @@ export default function App() {
       const revertBy = t.recognizedDiff != null ? t.recognizedDiff : t.amt;
       upd(poolKey, p => (p||[]).map(x => x.id === t.poolId ? { ...x, recognized: Math.max(0, x.recognized - revertBy) } : x));
     }
+    // 如果刪的是分攤池的「起點交易」，整個池子跟它產生的所有認列子紀錄要一起清掉
+    const originPoolIncome = pools.find(p => p.originTxnId === id);
+    const originPoolExpense = expensePools.find(p => p.originTxnId === id);
+    if (originPoolIncome) {
+      upd("pools", p => (p||[]).filter(x => x.id !== originPoolIncome.id));
+      upd("txns", p => p.filter(x => x.poolId !== originPoolIncome.id || x.id === id));
+    }
+    if (originPoolExpense) {
+      upd("expensePools", p => (p||[]).filter(x => x.id !== originPoolExpense.id));
+      upd("txns", p => p.filter(x => x.poolId !== originPoolExpense.id || x.id === id));
+    }
+    // 如果刪的是代墊產生的原始交易，把還沒結清的對應應收帳款一併清掉（已結清的保留，那是真實發生過的還款紀錄）
+    upd("debts", p => (p||[]).filter(x => !(x.srcTxnId === id && !x.settled)));
     updMulti({
       txns: prevTxns => prevTxns.filter(x => x.id !== id),
       accs: prevAccs => {
@@ -742,7 +755,7 @@ export default function App() {
       }
     });
     close();
-  }, [txns, updMulti, upd]);
+  }, [txns, updMulti, upd, pools, expensePools]);
 
   /* ── 帳戶餘額調整（初次設定 / 對帳差異，皆不計入收支）── */
   const adjBal = useCallback((acc, newBalStr, isFirst, desc) => {
@@ -774,16 +787,17 @@ export default function App() {
     const newSub = { ...nS, id:"sub"+Date.now(), amt, active:true, lastBilled:TODAY };
     upd("subs", p => [...p, newSub]);
     if (nS.deferExpense && nS.freq === "year") {
-      const poolId = "ep" + Date.now();
+      const originId = Date.now();
+      const poolId = "ep" + originId;
       const monthlyAmt = Math.round(amt / 12);
       updMulti({
         txns: p => [...p,
-          { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id },
-          { id:Date.now()+1, type:"expense", cat:nS.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${nS.name}`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id, noBalanceEffect:true, poolId, poolType:"expense" },
+          { id:originId, type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id },
+          { id:originId+1, type:"expense", cat:nS.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${nS.name}`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id, noBalanceEffect:true, poolId, poolType:"expense" },
         ],
         accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
       });
-      upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:nS.acc||"", subId:newSub.id }]);
+      upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:nS.acc||"", subId:newSub.id, originTxnId:originId }]);
     } else {
       updMulti({
         txns: p => [...p, { id:Date.now(), type:"expense", cat:nS.cat||"訂閱", amt, desc:nS.name, acc:nS.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newSub.id }],
@@ -965,9 +979,10 @@ export default function App() {
       const lastDate = s.lastBilled || null; const dues = getDueDates(s, lastDate);
       dues.forEach(date => {
         if (s.deferExpense && s.freq === "year") {
-          const poolId = "ep" + Date.now() + Math.random();
-          newTxns.push({ id: Date.now() + Math.random(), type: "transfer", cat: "帳戶調整", amt: s.amt, desc: `年繳分攤：${s.name}（共 ${s.amt}）`, acc: s.acc || "", date, tags: "#分攤認列", autoSrc: s.id });
-          newPools.push({ id: poolId, desc: s.name, cat: s.cat || "訂閱", totalAmt: s.amt, monthlyAmt: Math.round(s.amt / 12), recognized: 0, startDate: date, acc: s.acc || "", subId: s.id });
+          const originId = Date.now() + Math.random();
+          const poolId = "ep" + originId;
+          newTxns.push({ id: originId, type: "transfer", cat: "帳戶調整", amt: s.amt, desc: `年繳分攤：${s.name}（共 ${s.amt}）`, acc: s.acc || "", date, tags: "#分攤認列", autoSrc: s.id });
+          newPools.push({ id: poolId, desc: s.name, cat: s.cat || "訂閱", totalAmt: s.amt, monthlyAmt: Math.round(s.amt / 12), recognized: 0, startDate: date, acc: s.acc || "", subId: s.id, originTxnId: originId });
         } else {
           newTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: s.cat || "訂閱", amt: s.amt, desc: s.name, acc: s.acc || "", date, tags: "#自動記帳", autoSrc: s.id });
         }
