@@ -14,9 +14,10 @@ export default function InvestPage({
   invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA, EMOTIONS, emotionReview,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
-  watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks,
+  watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta,
   dividendEst, loadingDiv, fetchDividendEstimate,
+  dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, StockPriceChart, fetchStockRange,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
@@ -28,6 +29,7 @@ export default function InvestPage({
 }) {
 
   const [growthMode, setGrowthMode] = useState("monthly");
+  const [expandedWatch, setExpandedWatch] = useState(null);
 
   return (
     <>
@@ -391,6 +393,34 @@ export default function InvestPage({
                 ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{loadingDiv?"讀取中…":"點「重新整理」讀取股息資料"}</div>}
               </Card>
 
+              {/* 股利公告（TWSE官方，非估算）*/}
+              <Card style={{ padding:16, marginTop:14 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>股利公告</div>
+                    <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>證交所官方資料，僅上市（TW）公司，公司公告後才查得到</div>
+                  </div>
+                  <button onClick={fetchDividendAnnounce} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer", flexShrink:0 }}>{loadingDivAnn?"讀取中…":"重新整理"}</button>
+                </div>
+                {!divAnnFetched ? (
+                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{loadingDivAnn?"讀取中…":"點「重新整理」查詢"}</div>
+                ) : dividendAnnounce.length === 0 ? (
+                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>沒有上市持股，或查無資料</div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {dividendAnnounce.map(x => (
+                      <div key={x.ticker} style={{ padding:"10px 12px", borderRadius:10, background:x.announced?`${C.income}10`:C.card, border:`1px solid ${x.announced?C.income+"33":C.border}` }}>
+                        <div style={{ display:"flex", justifyContent:"space-between" }}>
+                          <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{x.ticker} {x.name}</span>
+                          {x.announced ? <span style={{ fontWeight:900, fontSize:13, color:C.income }}>{fmt(Math.round(x.estIncome))}</span> : <span style={{ fontSize:11, color:C.muted }}>尚未公告</span>}
+                        </div>
+                        {x.announced && <div style={{ fontSize:11, color:C.textSub, marginTop:3 }}>{x.year}年度・每股 {x.cashDivPerShare} 元・{x.distDate || "分派日未定"}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
               <div style={{ fontSize:11, color:C.muted, margin:"18px 0 10px", lineHeight:1.6 }}>
                 每次買賣時標記當下的心態，累積夠多筆之後，下面會告訴你「衝動下的單」跟「計畫內的單」績效差多少。
               </div>
@@ -437,23 +467,30 @@ export default function InvestPage({
             <div>
               <WatchStockAdder addWatchStock={addWatchStock} C={C} iSt={iSt} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
-                <button onClick={refreshWatchStocks} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>🔄 更新報價</button>
+                <button onClick={refreshWatchStocks} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?"讀取中…":"🔄 更新報價"}</button>
               </div>
               {watchStocks.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>還沒有自選股，上面加一支想追蹤的股票吧</div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {watchStocks.map(w => (
-                    <SwipeRow key={w.id} onDelete={() => confirm(`移除自選股「${w.ticker}」？`, () => removeWatchStock(w.id))}>
-                      <Card style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <div>
-                          <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>
-                          <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
+                    <SwipeRow key={w.id} onDelete={() => confirm(`移除自選股「${w.ticker}」？`, () => removeWatchStock(w.id))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
+                      <Card style={{ padding:14 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <div>
+                            <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>
+                            <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmt(w.curPrice) : "—"}</div>
+                            {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
+                          </div>
                         </div>
-                        <div style={{ textAlign:"right" }}>
-                          <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmt(w.curPrice) : "—"}</div>
-                          {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
-                        </div>
+                        {expandedWatch === w.id && (
+                          <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                            <StockPriceChart ticker={w.ticker} market={w.market} fetchStockRange={fetchStockRange} />
+                          </div>
+                        )}
                       </Card>
                     </SwipeRow>
                   ))}

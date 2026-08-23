@@ -6,7 +6,7 @@ export default function OverviewPage({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
-  selTxn, setSelTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools,
+  selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
@@ -50,6 +50,10 @@ export default function OverviewPage({
               <span style={{ fontSize:12, fontWeight:700, color:C.teal }}>📅 待認列收入池：{fmt(totPools)}</span>
               <span style={{ fontSize:12, color:C.teal }}>認列 →</span>
             </div>}
+            {totExpensePools > 0 && <div onClick={() => setModal("expensePools")} style={{ display:"flex", justifyContent:"space-between", padding:"7px 12px", borderRadius:10, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, cursor:"pointer", marginTop:4 }}>
+              <span style={{ fontSize:12, fontWeight:700, color:C.warn }}>📦 年繳分攤中：{fmt(totExpensePools)} 未認列</span>
+              <span style={{ fontSize:12, color:C.warn }}>查看 →</span>
+            </div>}
             {passiveMo > 0 && <div style={{ padding:"7px 12px", borderRadius:10, background:`${C.accentL}12`, border:`1px solid ${C.accentL}33`, marginTop:4 }}>
               <span style={{ fontSize:12, color:C.accentL }}>🏦 非勞務收入 {fmt(passiveMo)}（建議存起來）</span>
             </div>}
@@ -57,7 +61,7 @@ export default function OverviewPage({
           {alertR > 0.4 && <div style={{ margin:"0 16px 10px", display:"flex", alignItems:"center", gap:8, padding:"10px 14px", borderRadius:14, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, fontSize:12, fontWeight:700, color:C.warn }}>⚠️ 生活支出 {(alertR * 100).toFixed(0)}% 超過收入 40%！</div>}
           
           {/* Goal progress bars in overview */}
-          {(goals||[]).filter(g=>g.target>0).map(g => {
+          {(goals||[]).filter(g=>g.target>0 && g.pinned).map(g => {
             const cur = g.accIds&&g.accIds.length>0
               ? accs.filter(a=>g.accIds.includes(a.id)).reduce((s,a)=>{
                   if (useMvForAssets && a.type==="investment") {
@@ -98,7 +102,7 @@ export default function OverviewPage({
                 </div>
                 <Card style={{ overflow:"hidden" }}>
                   {dayT.map((t, i) => (
-                    <SwipeRow key={t.id} onDelete={() => confirm("確定刪除此筆交易？", () => upd("txns", p => p.filter(x => x.id !== t.id)))} onEdit={() => { setSelTxn({ ...t }); setModal("editTxn"); }} onClick={() => { setSelTxn({ ...t }); setModal("txnDet"); }}>
+                    <SwipeRow key={t.id} onDelete={() => confirm("確定刪除此筆交易？", () => delTxn(t.id))} onEdit={() => { setSelTxn({ ...t }); setModal("editTxn"); }} onClick={() => { setSelTxn({ ...t }); setModal("txnDet"); }}>
                       <div style={rowSt(i, true)}>
                         <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{ceMap[t.cat] || "📦"}</div>
                         <div style={{ flex:1, minWidth:0 }}>

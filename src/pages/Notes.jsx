@@ -74,7 +74,7 @@ export default function NotesPage({
                       <div style={{ display:"flex", gap:8 }}>
                         <Btn v="secondary" sz="sm" onClick={() => { setEditDebt({...d}); setModal("editDebt"); }}>✏️</Btn>
                         <Btn v="teal" style={{ flex:1 }} onClick={() => { setSettleDebt(d); setSettleAcc(""); setModal("settleDebt"); }}>✓ {d.installTotal > 0 ? (dt==="receivable"?"收一期":"付一期") : (dt==="receivable"?"確認收款":"結清")}</Btn>
-                        <Btn v="danger" sz="sm" onClick={() => upd("debts", p => p.filter(x => x.id !== d.id))}>🗑</Btn>
+                        <Btn v="danger" sz="sm" onClick={() => confirm(`確定刪除「${d.person} ${d.desc||""}」這筆往來帳？`, () => upd("debts", p => p.filter(x => x.id !== d.id)))}>🗑</Btn>
                       </div>
                     </Card>
                   ))}
@@ -90,7 +90,7 @@ export default function NotesPage({
                 <Card key={d.id} style={{ padding:"12px 16px", marginBottom:6, opacity:.4 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <div><span style={{ fontSize:14, fontWeight:700, color:C.text }}>{d.person}</span><span style={{ fontSize:12, color:C.muted, marginLeft:8 }}>{d.desc}</span></div>
-                    <div style={{ display:"flex", gap:8, alignItems:"center" }}><span style={{ fontWeight:900, fontSize:13, color:C.muted }}>{fmt(d.amt)}</span><button onClick={() => upd("debts", p => p.filter(x => x.id !== d.id))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button></div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}><span style={{ fontWeight:900, fontSize:13, color:C.muted }}>{fmt(d.amt)}</span><button onClick={() => confirm(`確定刪除「${d.person} ${d.desc||""}」這筆往來帳？`, () => upd("debts", p => p.filter(x => x.id !== d.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button></div>
                   </div>
                 </Card>
               ))}

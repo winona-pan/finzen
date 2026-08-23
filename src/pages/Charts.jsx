@@ -5,9 +5,9 @@ export default function ChartsPage({
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
-  ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
+  ceMap, CE, AT, PIE, hTxns, hInc, hExp, subsMo, billsMo,
   chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
-  incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
+  chartView, setChartView, healthRange, setHealthRange,
   useMvForAssets, setUseMvForAssets, poolThisMo, fetchAllPrices, ALL_CURS, theme,
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
   invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA,
@@ -27,7 +27,26 @@ export default function ChartsPage({
   
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 });
   const nextMo = () => setMonth(({ y, m }) => m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 });
-  
+
+  /* ── 依本頁自己的月份重新計算收支（不依賴總覽頁的全域月份）── */
+  const moTxns = txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; });
+  const moInc = moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0);
+  const moExp = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
+  const expCat = (() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); })();
+  const incCat = (() => { const m = {}; moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); })();
+
+  /* ── 資產水位圖 Y 軸：依實際資料範圍動態縮放，不是每次都從 0 開始 ── */
+  const assetYDomain = (() => {
+    const vals = chartData.map(d => d.assets).filter(v => v != null && !isNaN(v));
+    if (!vals.length) return [0, "auto"];
+    const minV = Math.min(...vals), maxV = Math.max(...vals);
+    const span = maxV - minV;
+    const pad = span > 0 ? span * 0.2 : Math.max(maxV * 0.05, 5000);
+    const lo = Math.max(0, minV - pad), hi = maxV + pad;
+    const step = hi - lo > 200000 ? 50000 : hi - lo > 50000 ? 10000 : 5000;
+    return [Math.floor(lo / step) * step, Math.ceil(hi / step) * step];
+  })();
+
   const rl = r => { 
     if (!r.s || !r.e) return "—"; 
     if (r.s === r.e) return r.s; 
@@ -96,7 +115,7 @@ export default function ChartsPage({
                     <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
-                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
+                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} domain={assetYDomain} />
                     <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
                     <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
                   </AreaChart>
@@ -164,6 +183,7 @@ export default function ChartsPage({
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
                     <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
                     <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
                   </div>

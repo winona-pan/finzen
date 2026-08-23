@@ -94,8 +94,8 @@ export default function WalletPage({
               </div>
             </button>
             {!collapsed["assets"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
-              const items = accs.filter(a => a.type === grp.type);
-              const all = accs.filter(a => a.type === grp.type);
+              const items = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
+              const all = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
               const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
               if (!all.length) return null;
               const moveAcc = (id, dir) => {
@@ -108,7 +108,7 @@ export default function WalletPage({
                 <SH title={grp.label} right={fmt(total)} />
                 <Card style={{ overflow:"hidden" }}>
                   {all.map((a, i) => (
-                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => upd("accs", p => p.filter(x => x.id !== a.id))); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
+                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => { upd("accs", p => p.filter(x => x.id !== a.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== a.id)); }); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, opacity:a.vis?1:0.45 }}>
                         {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }}>
                           <button onClick={e => { e.stopPropagation(); moveAcc(a.id, -1); }} disabled={i === 0} style={{ width:24, height:22, borderRadius:6, background:i === 0 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === 0 ? "default" : "pointer", color:i === 0 ? C.muted : C.accentL, fontSize:13 }}>▲</button>
@@ -233,7 +233,7 @@ export default function WalletPage({
             </button>
             {!collapsed["subs"] && <div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => <SwipeRow key={s.id} onDelete={() => upd("subs", p => p.filter(x => x.id !== s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
+                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => <SwipeRow key={s.id} onDelete={() => confirm(`確定刪除訂閱「${s.name}」？`, () => upd("subs", p => p.filter(x => x.id !== s.id)))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                     <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
                     <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
@@ -261,7 +261,7 @@ export default function WalletPage({
             </button>
             {!collapsed["bills"] && <div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => upd("bills", p => p.filter(x => x.id !== b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
+                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => confirm(`確定刪除「${b.name}」？`, () => upd("bills", p => p.filter(x => x.id !== b.id)))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                     <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
                     <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>
