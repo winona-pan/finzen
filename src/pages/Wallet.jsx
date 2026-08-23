@@ -6,7 +6,7 @@ export default function WalletPage({
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
   ALL_CURS, rates: _rates,
-  collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket,
+  collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket, moveBucket, growthBucket, setGrowthBucket,
   selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   // 共用 UI atoms
@@ -95,6 +95,9 @@ export default function WalletPage({
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
+            {buckets.length > 1 && !collapsed["assets"] && (
+              <button onClick={() => setModal("bucketTransfer")} style={{ width:"100%", marginBottom:8, padding:"7px 10px", borderRadius:10, background:C.card, border:`1px dashed ${C.border}`, color:C.accentL, fontSize:12, fontWeight:700, cursor:"pointer" }}>🔄 子帳戶互轉</button>
+            )}
             {!collapsed["assets"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
               const items = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
               const all = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
@@ -134,10 +137,10 @@ export default function WalletPage({
                   ))}
                 </Card>
                 {grp.type === "debit" && all.map(a => {
-                  const myBuckets = buckets.filter(b => b.accId === a.id);
+                  const myBuckets = buckets.filter(b => b.accId === a.id).sort((x,y) => (x.order||0)-(y.order||0));
                   if (!myBuckets.length) return null;
                   return <div key={a.id + "_bk"} style={{ margin:"4px 0 8px", paddingLeft:8 }}>
-                    {myBuckets.map(b => (
+                    {myBuckets.map((b, bi) => (
                       <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
                         {editingBucket === b.id ? (
                           <div style={{ padding:"8px 12px", background:`${C.accent}08`, borderRadius:10 }}>
@@ -150,11 +153,16 @@ export default function WalletPage({
                           </div>
                         ) : (
                           <div onClick={() => setEditingBucket(b.id)} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 12px", opacity:b.vis===false?0.4:1, cursor:"pointer" }}>
+                            {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }} onClick={e=>e.stopPropagation()}>
+                              <button onClick={() => moveBucket(a.id, b.id, -1)} disabled={bi===0} style={{ width:20, height:18, borderRadius:5, background:bi===0?C.muted+"22":C.accent+"33", border:"none", cursor:bi===0?"default":"pointer", color:bi===0?C.muted:C.accentL, fontSize:11 }}>▲</button>
+                              <button onClick={() => moveBucket(a.id, b.id, 1)} disabled={bi===myBuckets.length-1} style={{ width:20, height:18, borderRadius:5, background:bi===myBuckets.length-1?C.muted+"22":C.accent+"33", border:"none", cursor:bi===myBuckets.length-1?"default":"pointer", color:bi===myBuckets.length-1?C.muted:C.accentL, fontSize:11 }}>▼</button>
+                            </div>}
                             <span style={{ fontSize:12, color:C.muted }}>└</span>
                             <span style={{ fontSize:15 }}>{b.emoji}</span>
                             <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
                             {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
                             <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
+                            {(b.history||[]).length > 1 && <button onClick={e => { e.stopPropagation(); setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>📈</button>}
                             <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
                           </div>
                         )}
@@ -307,17 +315,6 @@ export default function WalletPage({
               <Btn onClick={() => setModal("addBill")} v="secondary" style={{ width:"100%" }}>＋ 新增基本開銷</Btn>
               <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
             </div>}
-
-            {/* Data management */}
-            <div>
-              <SH title="資料管理" />
-              <Card style={{ padding:16 }}>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-                  <Btn onClick={exportData} v="secondary" sz="sm">📤 匯出備份</Btn>
-                </div>
-                <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
-              </Card>
-            </div>
           </div>
         </div>
       )}

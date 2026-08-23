@@ -77,7 +77,6 @@ export default function ChartsPage({
               )}
               <button onClick={() => setShowCatDP(true)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14, marginLeft:2 }}>📅</button>
             </div>
-            <button onClick={() => setModal("catSet")} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, fontSize:12, fontWeight:700 }}>⚙️ 類別</button>
           </div>
           {showCatDP && <DatePicker value={catRange || { s:`${month.y}-${String(month.m).padStart(2,"0")}-01`, e:TODAY }} onChange={setCatRange} onClose={() => setShowCatDP(false)} />}
           
@@ -144,7 +143,7 @@ export default function ChartsPage({
                   <AreaChart data={chartData} margin={{ top:5, right:5, bottom:0, left:0 }}>
                     <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
+                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(chartData.length / 8) - 1)} />
                     <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} domain={assetYDomain} />
                     <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
                     <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
@@ -154,7 +153,7 @@ export default function ChartsPage({
                 <ResponsiveContainer width="100%" height={150}>
                   <LineChart data={changeData} margin={{ top:5, right:5, bottom:0, left:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey={isSingleMo ? "d" : "m"} tick={{ fill:C.muted, fontSize:isSingleMo ? 8 : 10 }} axisLine={false} tickLine={false} interval={isSingleMo ? 4 : 0} />
+                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(changeData.length / 8) - 1)} />
                     <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
                     <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [(v>=0?"+":"")+fmt(v), "淨變動"]} />
                     <Line type="linear" dataKey="change" stroke={C.warn} strokeWidth={2.5} dot={{ r:3, fill:C.warn }} />
@@ -191,12 +190,14 @@ export default function ChartsPage({
             const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
             const current = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0)
               ? accs.filter(a => (g.accIds||[]).includes(a.id)).reduce((s,a) => {
-                  if (goalUseMv && a.type==="investment") {
-                    const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
-                    return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
+                  if (a.type==="investment") {
+                    const stForAcc = stSum.filter(st=>st.acc===a.name);
+                    const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+                    return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
                   }
                   return s + toTWD(a.bal,a.cur,rates);
-                }, 0) + buckets.filter(b => (g.bucketIds||[]).includes(b.id)).reduce((s,b) => {
+                }, 0) + buckets.filter(b => (g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b) => {
                   const acc = accs.find(a=>a.id===b.accId);
                   return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
                 }, 0)

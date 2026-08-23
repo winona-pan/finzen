@@ -7,6 +7,7 @@ export default function OverviewPage({
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
+  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
@@ -58,6 +59,37 @@ export default function OverviewPage({
               <span style={{ fontSize:12, color:C.accentL }}>🏦 非勞務收入 {fmt(passiveMo)}（建議存起來）</span>
             </div>}
           </div>
+
+          {(() => {
+            const target = curSavingsTarget;
+            const progress = target ? savingsProgress(target) : 0;
+            const pct = target ? Math.min(100, (progress/target.amount*100)) : 0;
+            const targetName = target ? (target.bucketId ? buckets.find(b=>b.id===target.bucketId)?.name : accs.find(a=>a.id===target.accId)?.name) : "";
+            return (
+              <div style={{ margin:"0 16px 12px", padding:14, borderRadius:14, background:C.card, border:`1px solid ${C.border}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:target?8:0 }}>
+                  <span style={{ fontSize:13, fontWeight:900, color:C.text }}>💰 這個月的存錢目標</span>
+                  <button onClick={() => setModal("savingsTarget")} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:12, fontWeight:700 }}>{target?"✏️ 調整":"＋ 設定"}</button>
+                </div>
+                {target ? (
+                  <div>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.textSub, marginBottom:4 }}>
+                      <span>存到「{targetName}」</span>
+                      <span style={{ fontWeight:700, color:pct>=100?C.income:C.text }}>{fmt(progress)} / {fmt(target.amount)}</span>
+                    </div>
+                    <div style={{ height:7, borderRadius:4, background:C.border }}><div style={{ height:"100%", borderRadius:4, width:`${pct}%`, background:pct>=100?C.income:C.accent, transition:"width .3s" }} /></div>
+                    {target.note && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>{target.note}</div>}
+                  </div>
+                ) : <div style={{ fontSize:12, color:C.muted }}>依這個月的收支狀況，設定這個月要存多少錢、存到哪裡</div>}
+              </div>
+            );
+          })()}
+
+          {showNextMonthReminder && (
+            <div onClick={() => setModal("savingsTarget")} style={{ margin:"0 16px 12px", padding:"10px 14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44`, cursor:"pointer" }}>
+              <span style={{ fontSize:12, fontWeight:700, color:C.teal }}>📅 月底了，要不要先想想下個月要存多少錢？點這裡設定</span>
+            </div>
+          )}
           {alertR > 0.4 && <div style={{ margin:"0 16px 10px", display:"flex", alignItems:"center", gap:8, padding:"10px 14px", borderRadius:14, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, fontSize:12, fontWeight:700, color:C.warn }}>⚠️ 生活支出 {(alertR * 100).toFixed(0)}% 超過收入 40%！</div>}
           
           {/* Goal progress bars in overview */}
@@ -65,12 +97,14 @@ export default function OverviewPage({
             const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
             const cur = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0)
               ? accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
-                  if (goalUseMv && a.type==="investment") {
-                    const mv = stSum.filter(st=>st.acc===a.name).reduce((ss,st)=>ss+(st.mv>0?st.mv:st.totalCost),0);
-                    return s + (mv > 0 ? mv : toTWD(a.bal,a.cur,rates));
+                  if (a.type==="investment") {
+                    const stForAcc = stSum.filter(st=>st.acc===a.name);
+                    const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+                    return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
                   }
                   return s + toTWD(a.bal,a.cur,rates);
-                },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).reduce((s,b)=>{
+                },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b)=>{
                   const acc = accs.find(a=>a.id===b.accId);
                   return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
                 },0)

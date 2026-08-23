@@ -130,7 +130,7 @@ export default function InvestPage({
                   ? (
                     <div>
                       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-                        <button onClick={() => setGrowthMode("monthly")} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="monthly"?`${C.accent}28`:C.card, color:growthMode==="monthly"?C.accentL:C.muted, border:`1px solid ${growthMode==="monthly"?C.accent:C.border}`, cursor:"pointer" }}>月度成本/市值</button>
+                        <button onClick={() => setGrowthMode("monthly")} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="monthly"?`${C.accent}28`:C.card, color:growthMode==="monthly"?C.accentL:C.muted, border:`1px solid ${growthMode==="monthly"?C.accent:C.border}`, cursor:"pointer" }}>成本/市值估算</button>
                         <button onClick={() => { setGrowthMode("daily"); if (!dailyGrowth.length && !loadingDaily) fetchDailyGrowth(); }} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="daily"?`${C.accent}28`:C.card, color:growthMode==="daily"?C.accentL:C.muted, border:`1px solid ${growthMode==="daily"?C.accent:C.border}`, cursor:"pointer" }}>每日收盤走勢</button>
                       </div>
                       {growthMode === "monthly" ? (
@@ -139,7 +139,7 @@ export default function InvestPage({
                             <ResponsiveContainer width="100%" height={180}>
                               <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                                <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} />
+                                <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(invGrowth.length / 6) - 1)} />
                                 <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
                                 <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
                                 <Line type="monotone" dataKey="cost" stroke={theme==="dark"?"#eee":"#222"} strokeWidth={2} dot={false} name="cost" />
