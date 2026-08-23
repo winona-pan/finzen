@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function WalletModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -37,6 +37,10 @@ export default function WalletModals({
   const [showAccEP, setShowAccEP] = useState(false);
   const [showDP, setShowDP] = useState(false);
   const [confirmDlg, setConfirmDlg] = useState(null);
+  const [editingBucketId, setEditingBucketId] = useState(null);
+  const [bucketEPFor, setBucketEPFor] = useState(null);
+  const [accDetailMonth, setAccDetailMonth] = useState(null);
+  useEffect(() => { setAccDetailMonth(null); }, [selAcc?.id]);
   const closeConfirm = () => setConfirmDlg(null);
 
   /* ── 帳戶轉帳處理 ── */
@@ -162,7 +166,7 @@ export default function WalletModals({
           <Inp label="信用額度" type="number" value={selAcc.limit || ""} onChange={e => setSelAcc(p => ({ ...p, limit:+e.target.value }))} />
           <Inp label="目前應付金額" type="number" value={selAcc.payable != null ? String(selAcc.payable) : "0"} onChange={e => setSelAcc(p => ({ ...p, payable:+e.target.value }))} />
           <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); }}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張信用卡的修改？", () => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); })}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此信用卡</Btn>
@@ -181,10 +185,13 @@ export default function WalletModals({
         </Sheet>}
 
         {modal === "accDetail" && selAcc && (() => {
-          const accTxns = txns
+          const allAccTxns = txns
             .filter(t => t.acc === selAcc.name || t.toAcc === selAcc.name)
-            .sort((a,b) => b.date.localeCompare(a.date))
-            .slice(0, 50);
+            .sort((a,b) => b.date.localeCompare(a.date));
+          const monthsAvail = [...new Set(allAccTxns.map(t => t.date.slice(0,7)))].sort().reverse();
+          const curYm = accDetailMonth || monthsAvail[0] || TODAY.slice(0,7);
+          const accTxns = allAccTxns.filter(t => t.date.slice(0,7) === curYm);
+          const curIdx = monthsAvail.indexOf(curYm);
           const isCredit = selAcc.type === "credit";
           return <Sheet title={`${selAcc.icon||AT[selAcc.type]||""} ${selAcc.name}`} onClose={close}>
             <Card style={{ padding:16, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }}>
@@ -194,7 +201,7 @@ export default function WalletModals({
               {isCredit && <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>信用額度 {fmt(selAcc.limit||0)} · 使用 {selAcc.limit>0?((selAcc.payable||0)/selAcc.limit*100).toFixed(0):0}%</div>}
             </Card>
             <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-              <Btn style={{ flex:1 }} onClick={() => { close(); setTimeout(() => setModal("adjBal"), 50); }}>✏️ 編輯帳戶</Btn>
+              <Btn style={{ flex:1 }} onClick={() => { const target = isCredit ? "editCredit" : "adjBal"; close(); setTimeout(() => setModal(target), 50); }}>✏️ 編輯帳戶</Btn>
               {isCredit && <Btn v="teal" style={{ flex:1 }} onClick={() => { setPayF({ creditId:selAcc.id, fromId:"", amt:String(selAcc.payable||0), date:TODAY, note:"" }); close(); setTimeout(() => setModal("payCred"), 50); }}>💳 繳費</Btn>}
             </div>
 
@@ -206,13 +213,19 @@ export default function WalletModals({
                 <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>子帳戶（願望、旅費、存錢等分類）</div>
                 {myBuckets.map(b => (
                   <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}` }}>
-                      <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
-                      <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}</div>
-                      <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:100, textAlign:"right", padding:"6px 8px" }} />
+                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1 }}>
+                      <button onClick={() => setBucketEPFor(b.id)} style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, border:"none", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, cursor:"pointer" }}>{b.emoji}</button>
+                      {editingBucketId === b.id ? (
+                        <input autoFocus value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} onBlur={() => setEditingBucketId(null)} onKeyDown={e => { if (e.key==="Enter") setEditingBucketId(null); }} style={{ ...iSt, flex:1, padding:"4px 8px" }} />
+                      ) : (
+                        <div onClick={() => setEditingBucketId(b.id)} style={{ flex:1, fontWeight:700, fontSize:13, color:C.text, cursor:"pointer" }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
+                      )}
+                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0 }}>{b.vis===false?"🙈":"👁️"}</button>
+                      <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px" }} />
                     </div>
                   </SwipeRow>
                 ))}
+                {bucketEPFor && <EmojiPicker onSelect={e => { updateBucket(bucketEPFor, { emoji:e }); setBucketEPFor(null); }} onClose={() => setBucketEPFor(null)} />}
                 <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 4px", fontSize:12, color:unassigned<0?C.expense:C.muted, fontWeight:700 }}>
                   <span>未分配</span><span>{fmt(unassigned)}</span>
                 </div>
@@ -221,8 +234,17 @@ export default function WalletModals({
               </div>;
             })()}
 
-            <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>交易紀錄</div>
-            {accTxns.length === 0 && <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>此帳戶尚無交易記錄</div>}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted }}>交易紀錄</div>
+              {monthsAvail.length > 0 && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <button onClick={() => setAccDetailMonth(monthsAvail[curIdx+1])} disabled={curIdx>=monthsAvail.length-1} style={{ background:"none", border:"none", cursor:curIdx>=monthsAvail.length-1?"default":"pointer", color:curIdx>=monthsAvail.length-1?C.muted:C.textSub, fontSize:18, opacity:curIdx>=monthsAvail.length-1?0.3:1 }}>‹</button>
+                  <span style={{ fontSize:13, fontWeight:700, color:C.text, minWidth:56, textAlign:"center" }}>{curYm.slice(0,4)}/{curYm.slice(5,7)}</span>
+                  <button onClick={() => setAccDetailMonth(monthsAvail[curIdx-1])} disabled={curIdx<=0} style={{ background:"none", border:"none", cursor:curIdx<=0?"default":"pointer", color:curIdx<=0?C.muted:C.textSub, fontSize:18, opacity:curIdx<=0?0.3:1 }}>›</button>
+                </div>
+              )}
+            </div>
+            {accTxns.length === 0 && <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>這個月沒有交易記錄</div>}
             <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
               {accTxns.map((t, i) => {
                 const isFrom = t.acc === selAcc.name;
@@ -368,7 +390,7 @@ export default function WalletModals({
 
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => saveSub(selSub)}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個訂閱的修改？", () => saveSub(selSub))}>儲存</Btn>
             <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？`, () => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); })}>刪除</Btn>
           </div>
         </Sheet>}
@@ -449,7 +471,7 @@ export default function WalletModals({
             : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={saveBill}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆開銷的修改？", saveBill)}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); })}>🗑 刪除</Btn>

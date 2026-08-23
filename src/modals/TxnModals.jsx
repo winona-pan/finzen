@@ -27,6 +27,8 @@ export default function TxnModals({
   Sheet, Inp, Sl, Fld, CalcInp, AutoInput, Btn, TP
 }) {
 
+  const [editPool, setEditPool] = useState(null);
+
   /* ── 新增交易（含代墊拆分、分月認列）── */
   const addTxn = () => {
     if (!nT.amt) return;
@@ -83,6 +85,13 @@ export default function TxnModals({
       upd("txns", p => p.map(x => x.id === id ? { ...x, type: "transfer", cat: "帳戶調整", desc: `待認列收入：${nT.desc || nT.cat}（共 ${fmt(+nT.amt)}）` } : x));
       upd("pools", p => [...p, { id: "p" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt: +nT.amt, recognized: 0, date: nT.date, acc: nT.acc }]);
     }
+
+    if (nT.installExp && +nT.installMonths > 1 && nT.type === "expense" && validProxies.length === 0) {
+      const months = +nT.installMonths;
+      const totalAmt = +nT.amt;
+      upd("txns", p => p.map(x => x.id === id ? { ...x, type: "transfer", cat: "帳戶調整", desc: `分期付款：${nT.desc || nT.cat}（共 ${fmt(totalAmt)}，分 ${months} 期）`, tags: "#分攤認列" } : x));
+      upd("expensePools", p => [...(p || []), { id: "ep" + id, desc: nT.desc || nT.cat, cat: nT.cat, totalAmt, monthlyAmt: Math.round(totalAmt / months), installments: months, recognized: 0, startDate: nT.date, acc: nT.acc || "" }]);
+    }
     setNT(T0); close();
   };
 
@@ -115,6 +124,20 @@ export default function TxnModals({
               </div>)}
               <button onClick={() => setNT(p => ({ ...p, proxyList:[...p.proxyList, { person:"", amt:"" }] }))} style={{ width:"100%", padding:"6px", borderRadius:8, background:"transparent", border:`1px dashed ${C.warn}`, color:C.warn, fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ 新增代墊對象</button>
               <div style={{ fontSize:12, color:C.warn, marginTop:6 }}>✨ 自動在「往來帳」為每位對象建立應收記錄</div>
+            </div>}
+
+            <button onClick={() => setNT(p => ({ ...p, installExp:!p.installExp, installMonths:p.installMonths||"3" }))} style={{ width:"100%", marginTop:8, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.installExp ? `${C.teal}22` : C.card, color:nT.installExp ? C.teal : C.textSub, border:`1px solid ${nT.installExp ? C.teal : C.border}`, cursor:"pointer" }}>
+              <span>{nT.installExp ? "✅" : "⬜"}</span> 分期付款（例：分期買家電）
+            </button>
+            {nT.installExp && <div style={{ marginTop:8, padding:12, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}44` }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                <Inp label="分幾期" type="number" min="2" placeholder="3" value={nT.installMonths||"3"} onChange={e => setNT(p => ({ ...p, installMonths:e.target.value }))} />
+                <div>
+                  <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>每期約</div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.teal, padding:"9px 0" }}>{nT.amt && nT.installMonths ? fmt(Math.round(+nT.amt / +nT.installMonths)) : "—"}</div>
+                </div>
+              </div>
+              <div style={{ fontSize:12, color:C.teal, marginTop:4 }}>💡 帳戶當下不會整筆扣款，改成每月自動認列一部分支出</div>
             </div>}
           </div>}
 
@@ -149,7 +172,7 @@ export default function TxnModals({
           <Sl label="帳戶" value={selTxn.acc || ""} onChange={e => setSelTxn(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
           <Fld label="日期"><input type="date" value={selTxn.date} onChange={e => setSelTxn(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => saveTxn(selTxn)}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆修改？帳戶餘額會依新舊金額差異自動調整", () => saveTxn(selTxn))}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
         </Sheet>}
@@ -177,8 +200,29 @@ export default function TxnModals({
           {pools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
               <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.date}</div></div>
-              <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.teal }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>
+              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.teal }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
+              <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
             </div>
+            {editPool?.id === p.id && (
+              <div style={{ padding:10, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, marginBottom:10 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  <Inp label="總額" type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
+                  <Inp label="已認列" type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn sz="sm" v="teal" style={{ flex:1 }} onClick={() => {
+                    const newTotal = +editPool.totalAmt, newRec = Math.min(+editPool.recognized, newTotal);
+                    const diff = newRec - p.recognized;
+                    confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
+                      upd("pools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec } : x));
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`認列調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
+                      setEditPool(null);
+                    });
+                  }}>儲存</Btn>
+                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
+                </div>
+              </div>
+            )}
             <div style={{ height:6, borderRadius:3, background:C.border, marginBottom:12 }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.teal }} /></div>
             <div style={{ display:"flex", gap:8 }}>
               <input type="number" placeholder={`最多 ${fmt(p.totalAmt - p.recognized)}`} value={selPool?.id === p.id ? recAmt : ""} onFocus={() => setSelPool(p)} onChange={e => setRecAmt(e.target.value)} style={{ ...iSt, flex:1 }} />
@@ -189,14 +233,36 @@ export default function TxnModals({
 
         {modal === "expensePools" && <Sheet title="年繳分攤進度" onClose={close}>
           <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-            這些是開了「年繳分攤認列」的訂閱。扣款當下不會整筆算進支出，而是每個月自動認列 1/12，累積 12 個月後認列完畢。
+            這些是開了「分攤認列」的訂閱或支出。扣款當下不會整筆算進支出，而是每個月自動認列一部分，直到全額認列完畢。
           </div>
           {expensePools.filter(p => p.totalAmt - p.recognized > 0).length === 0 && <div style={{ padding:"32px 0", textAlign:"center", color:C.muted }}>目前沒有進行中的分攤</div>}
           {expensePools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-              <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} 開始・每月 {fmt(p.monthlyAmt)}</div></div>
-              <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>
+              <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} 開始・每期 {fmt(p.monthlyAmt)}</div></div>
+              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
+              <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
             </div>
+            {editPool?.id === p.id && (
+              <div style={{ padding:10, borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:10 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  <Inp label="總額" type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
+                  <Inp label="已認列" type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn sz="sm" v="warn" style={{ flex:1 }} onClick={() => {
+                    const newTotal = +editPool.totalAmt, newRec = Math.min(+editPool.recognized, newTotal);
+                    const diff = newRec - p.recognized;
+                    const newMonthly = Math.round(newTotal / (p.installments || 12));
+                    confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
+                      upd("expensePools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec, monthlyAmt:newMonthly } : x));
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`分攤調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
+                      setEditPool(null);
+                    });
+                  }}>儲存</Btn>
+                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
+                </div>
+              </div>
+            )}
             <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.warn }} /></div>
           </div>)}
         </Sheet>}

@@ -32,6 +32,8 @@ export default function StockModals({
   const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"" };
 
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [editingTrade, setEditingTrade] = useState(null);
+  const [tradeDraft, setTradeDraft] = useState({ shares:"", price:"" });
 
   /* ── 追高偵測：今日漲幅過大，或買進價明顯高於現有均成本 ── */
   const existingBuyStock = stocks.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
@@ -311,21 +313,47 @@ export default function StockModals({
             })()}
             
             {(st.trades||[]).length > 0 && <div style={{ margin:"14px 0" }}>
-              <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>交易紀錄（{st.trades.length} 筆）</div>
+              <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:4 }}>交易紀錄（{st.trades.length} 筆）</div>
+              <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>點一筆可以編輯股數/單價；編輯或刪除都不會自動調整帳戶餘額，需要的話請自行到錢包調整</div>
               <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                 {[...st.trades].sort((a,b) => b.date.localeCompare(a.date)).map((t, i) => (
-                  <SwipeRow key={t.id||i} onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
-                      <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} 股 ＠ {fmt(t.price)}</div>
-                        <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
+                  <SwipeRow key={t.id||i} onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？（不會自動退回帳戶餘額）`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))} onClick={() => { if (editingTrade===t.id) { setEditingTrade(null); } else { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); } }}>
+                    {editingTrade === t.id ? (
+                      <div style={{ padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined, background:`${C.accent}08` }}>
+                        <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>股數</div>
+                            <input type="number" value={tradeDraft.shares} onChange={e => setTradeDraft(d => ({ ...d, shares:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} onClick={e=>e.stopPropagation()} />
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>單價</div>
+                            <input type="number" value={tradeDraft.price} onChange={e => setTradeDraft(d => ({ ...d, price:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} onClick={e=>e.stopPropagation()} />
+                          </div>
+                        </div>
+                        <button onClick={e => {
+                          e.stopPropagation();
+                          const newShares = +tradeDraft.shares||0, newPrice = +tradeDraft.price||0;
+                          if (newShares === t.shares && newPrice === t.price) { setEditingTrade(null); return; }
+                          confirm(`確定修改這筆${t.type==="buy"?"買進":"賣出"}紀錄？會影響這檔股票的總股數/成本/總資產顯示`, () => {
+                            upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newPrice*newShares+(x.fee||0) : x.totalCost } : x) } : s));
+                            setEditingTrade(null);
+                          });
+                        }} style={{ width:"100%", padding:8, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
                       </div>
-                      <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
-                        {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl))}</div>}
+                    ) : (
+                      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
+                        <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} 股 ＠ {fmt(t.price)}</div>
+                          <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
+                        </div>
+                        <div style={{ textAlign:"right", flexShrink:0 }}>
+                          <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
+                          {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl))}</div>}
+                        </div>
+                        <span style={{ color:C.muted, fontSize:12 }}>✏️</span>
                       </div>
-                    </div>
+                    )}
                   </SwipeRow>
                 ))}
               </div>
@@ -339,7 +367,7 @@ export default function StockModals({
                 setModal("sellStock");
               }}>賣出 {st.ticker}</Btn>
             </div>
-            <Btn v="danger" style={{ width:"100%", marginTop:8 }} onClick={() => confirm(`確定刪除 ${st.ticker}？`,()=>{upd("stocks",p=>p.filter(s=>s.id!==st.id));close();})}>🗑 刪除此持股</Btn>
+            <Btn v="danger" style={{ width:"100%", marginTop:8 }} onClick={() => confirm(`確定刪除 ${st.ticker}？（不會自動退回帳戶餘額，需要的話請自行到錢包調整）`,()=>{upd("stocks",p=>p.filter(s=>s.id!==st.id));close();})}>🗑 刪除此持股</Btn>
           </Sheet>;
         })()}
     </>

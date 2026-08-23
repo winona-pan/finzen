@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export default function OtherModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
-  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, buckets,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -37,7 +37,7 @@ export default function OtherModals({
   const [showCatEP, setShowCatEP] = useState(false);
 
   /* ── 表單預設值 ── */
-  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [] };
+  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [] };
   const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
 
   /* ── 新增理財目標 ── */
@@ -86,6 +86,16 @@ export default function OtherModals({
               ))}
             </div>
           </Fld>
+          {buckets.length > 0 && <Fld label="或指定子帳戶（願望、旅費等）">
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {buckets.map(b => (
+                <button key={b.id} onClick={() => setNG(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
+                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(nG.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:(nG.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(nG.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:"pointer" }}>
+                  {b.emoji} {b.name}
+                </button>
+              ))}
+            </div>
+          </Fld>}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addGoal}>新增</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -105,8 +115,28 @@ export default function OtherModals({
               ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}天
             </div>}
           </Fld>
+          <Fld label="計算哪些帳戶（不選則用總資產）">
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {accs.filter(a => a.type !== "credit").map(a => (
+                <button key={a.id} onClick={() => setEditGoal(p => ({ ...p, accIds:(p.accIds||[]).includes(a.id)?p.accIds.filter(x=>x!==a.id):[...(p.accIds||[]), a.id] }))}
+                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(editGoal.accIds||[]).includes(a.id)?`${C.accent}28`:C.card, color:(editGoal.accIds||[]).includes(a.id)?C.accentL:C.muted, border:`1px solid ${(editGoal.accIds||[]).includes(a.id)?C.accent:C.border}`, cursor:"pointer" }}>
+                  {a.icon||AT[a.type]||""} {a.name}
+                </button>
+              ))}
+            </div>
+          </Fld>
+          {buckets.length > 0 && <Fld label="或指定子帳戶（願望、旅費等）">
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {buckets.map(b => (
+                <button key={b.id} onClick={() => setEditGoal(p => ({ ...p, bucketIds:(p.bucketIds||[]).includes(b.id)?p.bucketIds.filter(x=>x!==b.id):[...(p.bucketIds||[]), b.id] }))}
+                  style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:(editGoal.bucketIds||[]).includes(b.id)?`${C.teal}28`:C.card, color:(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.muted, border:`1px solid ${(editGoal.bucketIds||[]).includes(b.id)?C.teal:C.border}`, cursor:"pointer" }}>
+                  {b.emoji} {b.name}
+                </button>
+              ))}
+            </div>
+          </Fld>}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個目標的修改？", () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); })}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           {showGoalEP && <EmojiPicker onSelect={e => { setEditGoal(p => ({ ...p, emoji:e })); setShowGoalEP(false); }} onClose={() => setShowGoalEP(false)} />}
@@ -156,7 +186,7 @@ export default function OtherModals({
             <Fld label="到期日"><input type="date" value={selPolicy.maturityDate||""} onChange={e=>setSelPolicy(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => { upd("policies", p=>p.map(x=>x.id===selPolicy.id?selPolicy:x)); close(); }}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張保單的修改？", () => { upd("policies", p=>p.map(x=>x.id===selPolicy.id?selPolicy:x)); close(); })}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           {showGoalEP && <EmojiPicker onSelect={e=>{setSelPolicy(p=>({...p,emoji:e}));setShowGoalEP(false);}} onClose={()=>setShowGoalEP(false)} />}

@@ -76,6 +76,7 @@ export default function DebtModals({
           </div>
           <Inp label="對象" value={editDebt.person||""} onChange={e => setEditDebt(p => ({ ...p, person:e.target.value }))} />
           <CalcInp label="總金額" value={String(editDebt.amt||"")} onChange={v => setEditDebt(p => ({ ...p, amt:+v }))} />
+          {editDebt.srcTxnId && <div style={{ fontSize:11, color:C.muted, marginTop:-8, marginBottom:12 }}>ℹ️ 這筆是代墊自動建立的應收款，改這裡的金額不會連動回原始那筆交易紀錄</div>}
           <Inp label="說明" value={editDebt.desc||""} onChange={e => setEditDebt(p => ({ ...p, desc:e.target.value }))} />
           <Fld label="日期"><input type="date" value={editDebt.date||TODAY} onChange={e => setEditDebt(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
 
@@ -99,7 +100,7 @@ export default function DebtModals({
           </div>}
 
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); }}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆往來帳的修改？金額會影響淨資產計算", () => { upd("debts", p => p.map(x => x.id===editDebt.id ? editDebt : x)); close(); })}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
         </Sheet>}
@@ -138,28 +139,35 @@ export default function DebtModals({
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
                 if (!thisPay || thisPay <= 0) return;
-                if (isInstall) {
-                  upd("debts", p => p.map(x => x.id===d.id ? {...x, installPaid:newPaidCount, installPaidAmt:paidSoFar+thisPay, settled:isLast} : x));
+                const doSettle = () => {
+                  if (isInstall) {
+                    upd("debts", p => p.map(x => x.id===d.id ? {...x, installPaid:newPaidCount, installPaidAmt:paidSoFar+thisPay, settled:isLast} : x));
+                  } else {
+                    upd("debts", p => p.map(x => x.id===d.id ? {...x, settled:true} : x));
+                  }
+                  if (settleAcc && thisPay) {
+                    if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
+                    else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
+                  }
+                  const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
+                  upd("txns", p => [...p, {
+                    id:Date.now(),
+                    type: isReceivable ? "transfer" : "expense",
+                    cat: "往來帳",
+                    amt: thisPay,
+                    desc,
+                    acc: settleAcc || "",
+                    toAcc: isReceivable ? settleAcc : "",
+                    date: TODAY,
+                    tags: "#往來帳",
+                  }]);
+                  setSettleDebt(null); setSettleAcc(""); setSettleCustomAmt(null); close();
+                };
+                if (settleAcc) {
+                  confirm(`確定${isReceivable?"收款":"付款"} ${fmt(thisPay)}？${settleAcc} 帳戶餘額會${isReceivable?"增加":"減少"}這筆金額`, doSettle);
                 } else {
-                  upd("debts", p => p.map(x => x.id===d.id ? {...x, settled:true} : x));
+                  doSettle();
                 }
-                if (settleAcc && thisPay) {
-                  if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
-                  else upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal-thisPay} : a));
-                }
-                const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
-                upd("txns", p => [...p, {
-                  id:Date.now(),
-                  type: isReceivable ? "transfer" : "expense",
-                  cat: "往來帳",
-                  amt: thisPay,
-                  desc,
-                  acc: settleAcc || "",
-                  toAcc: isReceivable ? settleAcc : "",
-                  date: TODAY,
-                  tags: "#往來帳",
-                }]);
-                setSettleDebt(null); setSettleAcc(""); setSettleCustomAmt(null); close();
               }}>✓ {isInstall ? (isReceivable?`收第${newPaidCount}期`:`付第${newPaidCount}期`) : (isReceivable?"確認收款":"確認付款")}</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
             </div>
