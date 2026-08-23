@@ -363,6 +363,49 @@ function SwipeRow({ children, onDelete, onEdit, onClick }) {
   );
 }
 
+/* ── StockPriceChart：股價區間走勢圖，附 1日/5日/1月/3月/6月/1年 切換 ── */
+function StockPriceChart({ ticker, market, fetchStockRange }) {
+  const [range, setRange] = useState("1mo");
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async (r) => {
+    setLoading(true);
+    const res = await fetchStockRange(ticker, market, r);
+    setData(res);
+    setLoading(false);
+  }, [ticker, market, fetchStockRange]);
+  useEffect(() => { load(range); }, [range, ticker]);
+  const first = data[0]?.close, last = data[data.length - 1]?.close;
+  const chgPct = (first && last) ? ((last - first) / first * 100) : null;
+  const color = chgPct == null ? C.muted : chgPct >= 0 ? C.income : C.expense;
+  return (
+    <div>
+      <div style={{ display:"flex", gap:4, marginBottom:10, overflowX:"auto" }}>
+        {RANGE_OPTS_STATIC.map(o => <button key={o.key} onClick={() => setRange(o.key)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:range===o.key?C.accent:C.card, color:range===o.key?"#fff":C.muted, border:"none", cursor:"pointer" }}>{o.label}</button>)}
+      </div>
+      {loading ? (
+        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
+      ) : data.length > 1 ? (
+        <div>
+          <div style={{ fontWeight:900, fontSize:16, color, marginBottom:6 }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
+          <ResponsiveContainer width="100%" height={110}>
+            <LineChart data={data} margin={{ top:5, right:5, bottom:0, left:0 }}>
+              <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:8 }} axisLine={false} tickLine={false} interval={Math.ceil(data.length/5)} />
+              <YAxis hide domain={["auto","auto"]} />
+              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[v,"價格"]} />
+              <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>無法讀取股價資料</div>}
+    </div>
+  );
+}
+const RANGE_OPTS_STATIC = [
+  { key:"1d", label:"1日" }, { key:"5d", label:"5日" }, { key:"1mo", label:"1月" },
+  { key:"3mo", label:"3月" }, { key:"6mo", label:"6月" }, { key:"1y", label:"1年" },
+];
+
 const pnlColor = (val, C) => val > 0 ? C.income : val < 0 ? C.expense : C.textSub;
 
 /* ══════════════════════════════════════════════════════
@@ -379,6 +422,17 @@ export default function App() {
     });
   }, []);
   const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
+  const expensePools = d.expensePools || [];
+  const buckets = d.buckets || [];
+  const addBucket = useCallback((accId, name, emoji, allocated) => {
+    upd("buckets", p => [...(p||[]), { id:"bk"+Date.now(), accId, name, emoji:emoji||"🎯", allocated:+allocated||0 }]);
+  }, [upd]);
+  const updateBucket = useCallback((id, patch) => {
+    upd("buckets", p => (p||[]).map(b => b.id===id ? { ...b, ...patch } : b));
+  }, [upd]);
+  const deleteBucket = useCallback((id) => {
+    upd("buckets", p => (p||[]).filter(b => b.id!==id));
+  }, [upd]);
   const watchlist = d.watchlist || [];
   const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 冷靜清單：4 小時緩衝期
   const addToWatchlist = useCallback((item) => {
@@ -410,6 +464,17 @@ export default function App() {
   const confirm = (msg, onOk) => setConfirmDlg({ msg, onOk });
   const closeConfirm = () => setConfirmDlg(null);
   const close = () => setModal(null);
+
+  /* ── 全域復原機制：任何經過 confirm() 確認的動作，執行前先存一份完整快照 ── */
+  const [undoInfo, setUndoInfo] = useState(null);
+  const undoTimerRef = useRef(null);
+  const undoDelete = useCallback(() => {
+    if (!undoInfo) return;
+    setD(undoInfo.snapshot);
+    saveData(undoInfo.snapshot);
+    setUndoInfo(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  }, [undoInfo]);
 
   /* ── selected items ── */
   const [selTxn, setSelTxn] = useState(null);
@@ -456,7 +521,7 @@ export default function App() {
   const [nT, setNT] = useState(T0);
   const D0 = { type:"receivable",person:"",amt:"",desc:"",date:TODAY,note:"",installTotal:0,installAmt:"",installPaid:0,installPaidAmt:0 };
   const [nD, setND] = useState(D0);
-  const S0 = { name:"",amt:"",acc:"",day:"1",weekday:"1",freq:"month",cat:"訂閱",period:"month",periodN:"1" };
+  const S0 = { name:"",amt:"",acc:"",day:"1",weekday:"1",freq:"month",cat:"訂閱",period:"month",periodN:"1",deferExpense:false };
   const [nS, setNS] = useState(S0);
   const B0 = { name:"",amt:"",acc:"",day:"1",weekday:"1",freq:"month",cat:"家居",active:false,period:"month",periodN:"1" };
   const [nB, setNB] = useState(B0);
@@ -761,9 +826,18 @@ export default function App() {
       return dates;
     };
     let newTxns = [];
+    let newPools = [];
     (d.subs || []).filter(s => s.active).forEach(s => {
       const lastDate = s.lastBilled || null; const dues = getDueDates(s, lastDate);
-      dues.forEach(date => { newTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: s.cat || "訂閱", amt: s.amt, desc: s.name, acc: s.acc || "", date, tags: "#自動記帳", autoSrc: s.id }); });
+      dues.forEach(date => {
+        if (s.deferExpense && s.freq === "year") {
+          const poolId = "ep" + Date.now() + Math.random();
+          newTxns.push({ id: Date.now() + Math.random(), type: "transfer", cat: "帳戶調整", amt: s.amt, desc: `年繳分攤：${s.name}（共 ${s.amt}）`, acc: s.acc || "", date, tags: "#分攤認列", autoSrc: s.id });
+          newPools.push({ id: poolId, desc: s.name, cat: s.cat || "訂閱", totalAmt: s.amt, monthlyAmt: Math.round(s.amt / 12), recognized: 0, startDate: date, acc: s.acc || "", subId: s.id });
+        } else {
+          newTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: s.cat || "訂閱", amt: s.amt, desc: s.name, acc: s.acc || "", date, tags: "#自動記帳", autoSrc: s.id });
+        }
+      });
       if (dues.length > 0) upd("subs", p => p.map(x => x.id === s.id ? { ...x, lastBilled: dues[dues.length - 1] } : x));
     });
     (d.bills || []).filter(b => b.active).forEach(b => {
@@ -783,6 +857,31 @@ export default function App() {
       });
       upd("txns", p => [...p, ...newTxns]);
     }
+    if (newPools.length > 0) {
+      upd("expensePools", p => [...(p || []), ...newPools]);
+    }
+
+    /* ── 每月自動認列費用分攤池（年繳訂閱分12個月認列）── */
+    const allPools = [...(d.expensePools || []), ...newPools];
+    const today = new Date(TODAY);
+    const recogTxns = [];
+    const poolUpdates = [];
+    allPools.forEach(pool => {
+      if (pool.recognized >= pool.totalAmt) return;
+      const start = new Date(pool.startDate);
+      let recCount = Math.round(pool.recognized / pool.monthlyAmt);
+      let recognized = pool.recognized;
+      let cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
+      while (cur <= today && recCount < 12) {
+        const amt = Math.min(pool.monthlyAmt, pool.totalAmt - recognized);
+        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: cur.toISOString().slice(0, 10), tags: "#分攤認列", autoSrc: pool.subId });
+        recognized += amt; recCount++;
+        cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
+      }
+      if (recognized !== pool.recognized) poolUpdates.push({ id: pool.id, recognized });
+    });
+    if (recogTxns.length > 0) upd("txns", p => [...p, ...recogTxns]);
+    if (poolUpdates.length > 0) upd("expensePools", p => (p || []).map(x => { const u = poolUpdates.find(y => y.id === x.id); return u ? { ...x, recognized:u.recognized } : x; }));
   }, []);
 
   useEffect(() => { if (stocks.length > 0) fetchAllPrices(stocks); }, [stocks.length]);
@@ -795,6 +894,7 @@ export default function App() {
   const subsMo = useMemo(() => subs.filter(s => s.active).reduce((s, x) => s + x.amt, 0), [subs]);
   const billsMo = useMemo(() => (bills || []).filter(b => b.active).reduce((s, x) => s + x.amt, 0), [bills]);
   const totPools = useMemo(() => pools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [pools]);
+  const totExpensePools = useMemo(() => expensePools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [expensePools]);
   const cashBal = useMemo(() => accs.filter(a => a.type !== "credit" && a.type !== "investment" && a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
 
   const stSum = useMemo(() => stocks.map(st => {
@@ -881,7 +981,42 @@ export default function App() {
     return [];
   }, []);
 
-  /* ── 依每日收盤價，組合出整體投資組合的每日市值走勢（波動明顯，非平滑估算）── */
+  /* ── 通用股價區間查詢：1日/5日/1月/3月/6月/1年 ── */
+  const RANGE_OPTS = [
+    { key:"1d", label:"1日", range:"1d", interval:"5m" },
+    { key:"5d", label:"5日", range:"5d", interval:"15m" },
+    { key:"1mo", label:"1月", range:"1mo", interval:"1d" },
+    { key:"3mo", label:"3月", range:"3mo", interval:"1d" },
+    { key:"6mo", label:"6月", range:"6mo", interval:"1d" },
+    { key:"1y", label:"1年", range:"1y", interval:"1wk" },
+  ];
+  const fetchStockRange = useCallback(async (ticker, market, rangeKey) => {
+    const opt = RANGE_OPTS.find(o => o.key === rangeKey) || RANGE_OPTS[2];
+    const sym = market === "TW" ? `${ticker}.TW` : ticker;
+    const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=${opt.interval}&range=${opt.range}`;
+    const proxies = [
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    ];
+    for (const makeProxy of proxies) {
+      try {
+        const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        const raw = await r.text();
+        let d; try { const j = JSON.parse(raw); d = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
+        const result = d?.chart?.result?.[0];
+        const ts = result?.timestamp, closes = result?.indicators?.quote?.[0]?.close;
+        if (!ts || !closes) continue;
+        const isIntraday = opt.interval.endsWith("m");
+        return ts.map((t, i) => ({
+          t,
+          label: isIntraday ? new Date(t * 1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(t * 1000).toISOString().slice(5, 10),
+          close: closes[i],
+        })).filter(x => x.close != null);
+      } catch { continue; }
+    }
+    return [];
+  }, []);
   const fetchDailyGrowth = useCallback(async () => {
     const held = stocks.filter(s => (s.trades?.some(t => t.type === "buy")) || s.manualShares);
     if (!held.length) { setDailyGrowth([]); return; }
@@ -964,7 +1099,32 @@ export default function App() {
   const watchStocks = d.watchStocks || [];
   const addWatchStock = useCallback((item) => upd("watchStocks", p => [...(p||[]), { id:"ws"+Date.now(), ...item }]), [upd]);
   const removeWatchStock = useCallback((id) => upd("watchStocks", p => (p||[]).filter(x=>x.id!==id)), [upd]);
-  const refreshWatchStocks = useCallback(() => { if (watchStocks.length) fetchAllPrices(watchStocks); }, [watchStocks, fetchAllPrices]);
+  const [loadingWatch, setLoadingWatch] = useState(false);
+  const refreshWatchStocks = useCallback(async () => {
+    if (!watchStocks.length) return;
+    setLoadingWatch(true);
+    try {
+      const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+      let data = null;
+      try {
+        const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+        if (res.ok) data = await res.json();
+      } catch {}
+      if (data) {
+        upd("watchStocks", p => (p||[]).map(w => {
+          const keys = [`${w.ticker}.TW`, w.ticker, w.ticker.toUpperCase(), `${w.ticker}.US`];
+          const item = keys.map(k => data[k]).find(v => v?.price);
+          return item ? { ...w, curPrice:item.price, name:item.name||w.name, _extra:{ chgPct:item.chgPct } } : w;
+        }));
+      } else {
+        for (const w of watchStocks) {
+          const res = await fetchPrice(w.ticker, w.market);
+          if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+    } finally { setLoadingWatch(false); }
+  }, [watchStocks, fetchPrice, upd]);
 
   /* ── 每日損益熱力圖（近 90 天，依交易記帳的淨收支）── */
   const dailyPnlHeatmap = useMemo(() => {
@@ -1023,7 +1183,54 @@ export default function App() {
     finally { setLoadingDiv(false); }
   }, [stSum]);
 
-  /* ── 情緒標記回顧：依情緒彙整買進/賣出次數與績效 ── */
+  /* ── 股利公告（TWSE OpenAPI 官方資料，非估算）── */
+  const [dividendAnnounce, setDividendAnnounce] = useState([]);
+  const [loadingDivAnn, setLoadingDivAnn] = useState(false);
+  const [divAnnFetched, setDivAnnFetched] = useState(false);
+  const fetchDividendAnnounce = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0 && s.market === "TW");
+    if (!held.length) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+    setLoadingDivAnn(true);
+    const apiUrl = "https://openapi.twse.com.tw/v1/opendata/t187ap45_L";
+    const attempts = [
+      () => apiUrl,
+      () => `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,
+      () => `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+    ];
+    try {
+      let list = null;
+      for (const makeUrl of attempts) {
+        try {
+          const r = await fetch(makeUrl(), { signal:AbortSignal.timeout(10000) });
+          if (!r.ok) continue;
+          const raw = await r.text();
+          try {
+            const j = JSON.parse(raw);
+            list = Array.isArray(j) ? j : (j.contents ? JSON.parse(j.contents) : null);
+          } catch { continue; }
+          if (Array.isArray(list)) break;
+        } catch { continue; }
+      }
+      if (!list) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+      const tickers = new Set(held.map(s => s.ticker));
+      const matched = list.filter(row => tickers.has(row["公司代號"]));
+      const results = held.map(s => {
+        const row = matched.find(r => r["公司代號"] === s.ticker);
+        if (!row) return { ticker:s.ticker, name:s.name, announced:false };
+        const cashDiv = +row["盈餘分配之現金股利(元/股)"] || +row["現金股利(元/股)"] || 0;
+        return {
+          ticker:s.ticker, name:s.name, announced:true,
+          year: row["股利所屬年度"] || "",
+          distDate: row["董事會（擬議）股利分派日"] || row["股東會日期"] || "",
+          cashDivPerShare: cashDiv,
+          estIncome: cashDiv * s.totalSh,
+        };
+      });
+      setDividendAnnounce(results);
+      setDivAnnFetched(true);
+    } catch { setDividendAnnounce([]); setDivAnnFetched(true); }
+    finally { setLoadingDivAnn(false); }
+  }, [stSum]);
   const emotionReview = useMemo(() => {
     const map = {};
     EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
@@ -1060,11 +1267,13 @@ export default function App() {
     if (!txns.length) return []; const s = new Date(chartRange.s), e = new Date(chartRange.e);
     if (isSingleMo) {
       const year = s.getFullYear(), month = s.getMonth(), dim = new Date(year, month + 1, 0).getDate(), ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const isCurMonth = ym === TODAY.slice(0, 7);
+      const lastDay = isCurMonth ? new Date(TODAY).getDate() : dim;
       const afterNet = txns.filter(t => t.date > `${ym}-31`).reduce((s, t) => t.type === "income" ? s + t.amt : t.type === "expense" && t.cat !== "帳戶調整" ? s - t.amt : s, 0);
       const endOfMonthAssets = totAssets - afterNet, dayTxns = {};
       txns.filter(t => t.date.startsWith(ym)).forEach(t => { const day = parseInt(t.date.slice(8)); dayTxns[day] = dayTxns[day] || 0; if (t.type === "income" && t.cat !== "帳戶調整") dayTxns[day] += t.amt; if (t.type === "expense" && t.cat !== "帳戶調整") dayTxns[day] -= t.amt; });
       const result = []; let running = endOfMonthAssets;
-      for (let d = dim; d >= 1; d--) { result.unshift({ d:`${d}日`, assets:Math.max(0, running) }); running -= (dayTxns[d] || 0); } return result;
+      for (let d = dim; d >= 1; d--) { if (d <= lastDay) result.unshift({ d:`${d}日`, assets:Math.max(0, running) }); running -= (dayTxns[d] || 0); } return result;
     }
     const moNet = {}; txns.forEach(t => { const ym = t.date.slice(0, 7); moNet[ym] = moNet[ym] || 0; if (t.type === "income" && t.cat !== "帳戶調整") moNet[ym] += t.amt; if (t.type === "expense" && t.cat !== "帳戶調整") moNet[ym] -= t.amt; });
     const allMonths = []; const cur = new Date(s.getFullYear(), s.getMonth(), 1), end = new Date(e.getFullYear(), e.getMonth(), 1);
@@ -1102,9 +1311,10 @@ export default function App() {
     dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
     watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
     tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
-    watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks,
+    watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
     dailyPnlHeatmap, sectorPie, updateStockMeta,
     dividendEst, loadingDiv, fetchDividendEstimate,
+    dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
     useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
@@ -1120,9 +1330,11 @@ export default function App() {
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
+    expensePools, totExpensePools,
+    buckets, addBucket, updateBucket, deleteBucket,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
-    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji,
+    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
     InfoBtn, ConfirmDialog, Card, SH, Bdg, Btn, TP, SwipeRow
   };
 
@@ -1169,7 +1381,20 @@ export default function App() {
         <OtherModals {...p} />
 
         {/* 確認刪除彈窗 */}
-        {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => { confirmDlg.onOk(); closeConfirm(); }} onCancel={closeConfirm} />}
+        {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => {
+          const snapshot = d;
+          confirmDlg.onOk();
+          closeConfirm();
+          setUndoInfo({ snapshot, label: confirmDlg.msg });
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          undoTimerRef.current = setTimeout(() => setUndoInfo(null), 6000);
+        }} onCancel={closeConfirm} />}
+        {undoInfo && (
+          <div style={{ position:"fixed", bottom:"calc(70px + env(safe-area-inset-bottom,0px))", left:"50%", transform:"translateX(-50%)", width:"calc(100% - 32px)", maxWidth:440, zIndex:250, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderRadius:14, background:C.surface, border:`1px solid ${C.borderL}`, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+            <span style={{ fontSize:13, color:C.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>已刪除</span>
+            <button onClick={undoDelete} style={{ flexShrink:0, padding:"7px 16px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:900, fontSize:13, cursor:"pointer" }}>↩️ 復原</button>
+          </div>
+        )}
       </div>
     </>
   );
