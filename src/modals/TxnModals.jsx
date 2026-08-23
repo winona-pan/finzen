@@ -217,7 +217,7 @@ export default function TxnModals({
                       upd("pools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec } : x));
                       if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`認列調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
                       setEditPool(null);
-                    , "確認調整");
+                    }, "確認調整");
                   }}>儲存</Btn>
                   <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
                 </div>
@@ -257,7 +257,7 @@ export default function TxnModals({
                       upd("expensePools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec, monthlyAmt:newMonthly } : x));
                       if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`分攤調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整" }]);
                       setEditPool(null);
-                    , "確認調整");
+                    }, "確認調整");
                   }}>儲存</Btn>
                   <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
                 </div>
