@@ -1,7 +1,7 @@
 export default function SubsBillsPage({
   C, tab, fmt, upd, setModal, confirm,
   subs, bills, subsMo, billsMo, monthlyEquiv,
-  setSelSub, setSelBill, toggleSub, toggleBill,
+  setSelSub, setSelBill, toggleSub, toggleBill, deleteSub, deleteBill,
   collapsed, toggleSection,
   Card, Btn, SwipeRow, InfoBtn
 }) {
@@ -24,7 +24,7 @@ export default function SubsBillsPage({
               {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => (
                 <div key={s.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <SwipeRow onDelete={() => confirm(`確定刪除訂閱「${s.name}」？`, () => upd("subs", p => p.filter(x => x.id !== s.id)))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
+                    <SwipeRow onDelete={() => confirm(`確定刪除訂閱「${s.name}」？連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）`, () => deleteSub(s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
                         <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
@@ -62,7 +62,7 @@ export default function SubsBillsPage({
               {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => (
                 <div key={b.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <SwipeRow onDelete={() => confirm(`確定刪除「${b.name}」？`, () => upd("bills", p => p.filter(x => x.id !== b.id)))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
+                    <SwipeRow onDelete={() => confirm(`確定刪除「${b.name}」？`, () => deleteBill(b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
                         <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>

@@ -4,7 +4,7 @@ export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
   setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal,
-  curSavingsTarget, savingsProgress,
+  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget,
   Card, Btn
 }) {
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
@@ -95,6 +95,11 @@ export default function GoalsPage({
                 </div>
                 {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
                 {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
+                {(() => {
+                  const applied = g.goalType !== "milestone" ? getGoalSavingsTarget(curYm, g.id) : null;
+                  if (applied == null) return null;
+                  return <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, fontSize:11, color:C.teal, textAlign:"center" }}>🧠 這個月分流引擎已套用：存 {fmt(applied)}</div>;
+                })()}
               </Card>
             );
           })}
