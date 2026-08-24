@@ -1516,6 +1516,7 @@ export default function App() {
   const [loadingWatch, setLoadingWatch] = useState(false);
   const [growthBucket, setGrowthBucket] = useState(null);
   const [offsetGoal, setOffsetGoal] = useState(null);
+  const [depositGoal, setDepositGoal] = useState(null);
   const refreshWatchStocks = useCallback(async () => {
     if (!watchStocks.length) return;
     setLoadingWatch(true);
@@ -2037,7 +2038,7 @@ export default function App() {
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
     goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation,
-    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal,
+    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
