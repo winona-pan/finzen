@@ -499,8 +499,11 @@ export default function App() {
       const sibs = (p||[]).filter(b => b.accId === accId).sort((a,b) => (a.order||0)-(b.order||0));
       const idx = sibs.findIndex(b => b.id === id), swapIdx = idx + dir;
       if (swapIdx < 0 || swapIdx >= sibs.length) return p;
-      const o1 = sibs[idx].order||0, o2 = sibs[swapIdx].order||0;
-      return (p||[]).map(b => b.id===sibs[idx].id ? { ...b, order:o2 } : b.id===sibs[swapIdx].id ? { ...b, order:o1 } : b);
+      const reordered = [...sibs];
+      [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+      const orderMap = {};
+      reordered.forEach((b, i) => { orderMap[b.id] = i; });
+      return (p||[]).map(b => orderMap[b.id] !== undefined ? { ...b, order:orderMap[b.id] } : b);
     });
   }, [upd]);
   const transferBucket = useCallback((fromId, toId, amount) => {
