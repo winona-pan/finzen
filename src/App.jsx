@@ -8,6 +8,8 @@ import ChartsPage    from "./pages/Charts";
 import NotesPage     from "./pages/Notes";
 import InvestPage    from "./pages/Invest";
 import SettingsPage  from "./pages/Settings";
+import GoalsPage     from "./pages/Goals";
+import SubsBillsPage from "./pages/SubsBills";
 import TxnModals     from "./modals/TxnModals";
 import WalletModals  from "./modals/WalletModals";
 import StockModals   from "./modals/StockModals";
@@ -175,11 +177,11 @@ function Sheet({ title, onClose, children }) {
 function Fld({ label, children }) { return <div style={{ marginBottom:12 }}><label style={{ display:"block",fontSize:11,fontWeight:700,color:C.textSub,marginBottom:6 }}>{label}</label>{children}</div>; }
 function Inp({ label, ...p }) { return <Fld label={label}><input {...p} style={iSt} /></Fld>; }
 function Sl({ label, children, ...p }) { return <Fld label={label}><select {...p} style={iSt}>{children}</select></Fld>; }
-function Btn({ children, onClick, v = "primary", sz = "md", style = {} }) {
+function Btn({ children, onClick, v = "primary", sz = "md", style = {}, disabled = false }) {
   const bg = v === "primary" ? C.accent : v === "danger" ? "#ef444428" : v === "warn" ? `${C.warn}28` : v === "teal" ? `${C.teal}28` : C.card;
   const col = v === "primary" ? "#fff" : v === "danger" ? C.danger : v === "warn" ? C.warn : v === "teal" ? C.teal : C.text;
   const br = v === "primary" ? "transparent" : v === "danger" ? `${C.danger}66` : v === "warn" ? `${C.warn}66` : v === "teal" ? `${C.teal}66` : C.border;
-  return <button onClick={onClick} style={{ padding:sz === "sm" ? "6px 14px" : "10px 16px",fontSize:sz === "sm" ? 12 : 14,background:bg,border:`1px solid ${br}`,color:col,borderRadius:12,fontWeight:700,cursor:"pointer",...style }}>{children}</button>;
+  return <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{ padding:sz === "sm" ? "6px 14px" : "10px 16px",fontSize:sz === "sm" ? 12 : 14,background:bg,border:`1px solid ${br}`,color:col,borderRadius:12,fontWeight:700,cursor:disabled?"default":"pointer",opacity:disabled?0.45:1,...style }}>{children}</button>;
 }
 function TP({ active, color, onClick, children }) {
   return <button onClick={onClick} style={{ flex:1,padding:"10px 4px",borderRadius:12,fontSize:14,fontWeight:700,background:active ? `${color}28` : C.card,color:active ? color : C.muted,border:`1px solid ${active ? color : C.border}`,cursor:"pointer" }}>{children}</button>;
@@ -426,9 +428,9 @@ function StockPriceChart({ ticker, market, fetchStockRange }) {
       ) : data.length > 1 ? (
         <div>
           <div style={{ fontWeight:900, fontSize:16, color, marginBottom:6 }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
-          <ResponsiveContainer width="100%" height={110}>
-            <LineChart data={data} margin={{ top:5, right:5, bottom:0, left:0 }}>
-              <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:8 }} axisLine={false} tickLine={false} interval={Math.ceil(data.length/5)} />
+          <ResponsiveContainer width="100%" height={124}>
+            <LineChart data={data} margin={{ top:5, right:5, bottom:14, left:0 }}>
+              <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(data.length/5)} dy={4} />
               <YAxis hide domain={["auto","auto"]} />
               <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[Number(v).toFixed(2),"價格"]} />
               <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
@@ -549,6 +551,41 @@ export default function App() {
       }
     }
   }, [buckets, accs, upd, updMulti]);
+
+  /* ── 統一轉帳：帳戶↔帳戶、子帳戶↔子帳戶、帳戶↔子帳戶，任意組合都走這一個函式 ── */
+  /* key 格式："acc:<id>" 或 "bucket:<id>" */
+  const doTransfer = useCallback((fromKey, toKey, amount) => {
+    const amt = +amount || 0;
+    if (amt <= 0 || fromKey === toKey) return;
+    const [fromType, fromId] = fromKey.split(":");
+    const [toType, toId] = toKey.split(":");
+
+    if (fromType === "acc" && toType === "acc") {
+      doAccountTransfer(fromId, toId, amt);
+      return;
+    }
+    if (fromType === "bucket" && toType === "bucket") {
+      transferBucket(fromId, toId, amt);
+      return;
+    }
+    // 帳戶 → 子帳戶：如果子帳戶就在這個帳戶底下，只是重新標記分類；不同帳戶才需要真的搬錢
+    if (fromType === "acc" && toType === "bucket") {
+      const toBucket = buckets.find(b => b.id === toId);
+      if (!toBucket) return;
+      if (toBucket.accId !== fromId) doAccountTransfer(fromId, toBucket.accId, amt, `轉入子帳戶：${toBucket.name}`);
+      updateBucket(toId, { allocated: toBucket.allocated + amt });
+      return;
+    }
+    // 子帳戶 → 帳戶：如果目標帳戶就是子帳戶所屬的帳戶，只是把錢從子帳戶「取消標記」；不同帳戶才需要真的搬錢
+    if (fromType === "bucket" && toType === "acc") {
+      const fromBucket = buckets.find(b => b.id === fromId);
+      if (!fromBucket) return;
+      updateBucket(fromId, { allocated: Math.max(0, fromBucket.allocated - amt) });
+      if (fromBucket.accId !== toId) doAccountTransfer(fromBucket.accId, toId, amt, `子帳戶轉出：${fromBucket.name}`);
+      return;
+    }
+  }, [doAccountTransfer, transferBucket, updateBucket, buckets]);
+
   const watchlist = d.watchlist || [];
   const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 冷靜清單：4 小時緩衝期
   const addToWatchlist = useCallback((item) => {
@@ -649,7 +686,7 @@ export default function App() {
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
-  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false, priority:0 };
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false, priority:5, goalType:"sinking" };
   const [nG, setNG] = useState(G0);
   const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
@@ -743,7 +780,15 @@ export default function App() {
     if (t?.poolId) {
       const poolKey = t.poolType === "income" ? "pools" : "expensePools";
       const revertBy = t.recognizedDiff != null ? t.recognizedDiff : t.amt;
-      upd(poolKey, p => (p||[]).map(x => x.id === t.poolId ? { ...x, recognized: Math.max(0, x.recognized - revertBy) } : x));
+      upd(poolKey, p => (p||[]).map(x => {
+        if (x.id !== t.poolId) return x;
+        const next = { ...x, recognized: Math.max(0, x.recognized - revertBy) };
+        if (t.poolType === "expense" && t.date) {
+          const ym = t.date.slice(0, 7);
+          next.skippedMonths = [...new Set([...(x.skippedMonths || []), ym])];
+        }
+        return next;
+      }));
     }
     // 如果刪的是分攤池的「起點交易」，整個池子跟它產生的所有認列子紀錄要一起清掉
     const originPoolIncome = pools.find(p => p.originTxnId === id);
@@ -1069,19 +1114,24 @@ export default function App() {
     /* ── 每月自動認列費用分攤池（年繳訂閱分12個月認列）── */
     const allPools = [...(d.expensePools || []), ...newPools];
     const today = new Date(TODAY);
+    const existingTxns = d.txns || [];
     const recogTxns = [];
     const poolUpdates = [];
     allPools.forEach(pool => {
       if (pool.recognized >= pool.totalAmt) return;
       const start = new Date(pool.startDate);
-      let recCount = Math.round(pool.recognized / pool.monthlyAmt);
-      let recognized = pool.recognized;
-      let cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
-      while (cur <= today && recCount < (pool.installments || 12)) {
+      const skipped = pool.skippedMonths || [];
+      let recognized = 0;
+      for (let m = 0; m < (pool.installments || 12); m++) {
+        const cur = new Date(start.getFullYear(), start.getMonth() + m, start.getDate());
+        if (cur > today) break;
+        const ym = cur.toISOString().slice(0, 7);
         const amt = Math.min(pool.monthlyAmt, pool.totalAmt - recognized);
-        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: cur.toISOString().slice(0, 10), tags: "#分攤認列", autoSrc: pool.subId, noBalanceEffect:true, poolId: pool.id, poolType:"expense" });
-        recognized += amt; recCount++;
-        cur = new Date(start.getFullYear(), start.getMonth() + recCount, start.getDate());
+        if (skipped.includes(ym)) continue; // 使用者手動刪過這個月的認列，不要自動補回來
+        const already = existingTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym) || recogTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym);
+        if (already) { recognized += amt; continue; }
+        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: ym + "-" + String(start.getDate()).padStart(2,"0"), tags: "#分攤認列", autoSrc: pool.subId, noBalanceEffect:true, poolId: pool.id, poolType:"expense" });
+        recognized += amt;
       }
       if (recognized !== pool.recognized) poolUpdates.push({ id: pool.id, recognized });
     });
@@ -1120,6 +1170,20 @@ export default function App() {
     });
     if (patched.some((t, i) => t !== txns[i])) upd("txns", () => patched);
   }, [txns, pools, expensePools, upd]);
+
+  /* ── 一次性遷移：舊版目標優先級(0一般/1優先/2最優先，數字越大越優先)轉換成新制(1-10，數字越小越優先)，並補上預設 goalType ── */
+  useEffect(() => {
+    const needsMigration = goals.some(g => g.priorityMigrated !== true);
+    if (!needsMigration) return;
+    const remap = { 0:10, 1:5, 2:1 };
+    const patched = goals.map(g => g.priorityMigrated === true ? g : {
+      ...g,
+      priority: remap[g.priority] != null ? remap[g.priority] : (g.priority || 5),
+      goalType: g.goalType || "sinking",
+      priorityMigrated: true,
+    });
+    upd("goals", () => patched);
+  }, [goals, upd]);
 
   /* ── 財務核心計算邏輯 ── */
   const visA = useMemo(() => accs.filter(a => a.type !== "credit" && a.vis), [accs]);
@@ -1393,6 +1457,7 @@ export default function App() {
   const removeWatchStock = useCallback((id) => upd("watchStocks", p => (p||[]).filter(x=>x.id!==id)), [upd]);
   const [loadingWatch, setLoadingWatch] = useState(false);
   const [growthBucket, setGrowthBucket] = useState(null);
+  const [offsetGoal, setOffsetGoal] = useState(null);
   const refreshWatchStocks = useCallback(async () => {
     if (!watchStocks.length) return;
     setLoadingWatch(true);
@@ -1580,6 +1645,14 @@ export default function App() {
     },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0);
   }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA]);
 
+  /* ── 目標是否已封存：達標，或（有截止日的類型）已過期 ── */
+  const isGoalArchived = useCallback((g) => {
+    const cur = goalCurrentAmount(g);
+    if (g.target > 0 && cur >= g.target) return true;
+    if (g.goalType === "sinking" && g.deadline && new Date(g.deadline) < new Date(TODAY)) return true;
+    return false;
+  }, [goalCurrentAmount]);
+
   /* ── 固定投資設定（智慧分流用）── */
   const allocSettings = d.allocSettings || { investAmt:6000, investAccId:"", livingBucketId:"", reserveBucketId:"" };
   const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...(p||{investAmt:6000,investAccId:"",livingBucketId:"",reserveBucketId:""}), ...patch })), [upd]);
@@ -1588,9 +1661,8 @@ export default function App() {
   const computeAllocation = useCallback((totalIncome, overrides = {}) => {
     const income = +totalIncome || 0;
     const investAmt = overrides.investAmt != null ? overrides.investAmt : (allocSettings.investAmt || 0);
-    let remaining = income - investAmt;
 
-    // 生活費：近3個月平均實際支出（自適應學習），若指定生活區子帳戶則改用該子帳戶的月度變動當基準
+    // Step 2【生活費】：近3個月平均實際支出（自適應學習），可手動覆寫
     const months = [];
     for (let i = 1; i <= 3; i++) {
       const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
@@ -1598,35 +1670,47 @@ export default function App() {
     }
     const histVariable = months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : 11000;
     const livingAmt = overrides.livingAmt != null ? overrides.livingAmt : adaptiveLiving;
 
-    // 各存錢目標：依優先級（高到低）分配，未達標才分配，額度不夠就依序遞減分配
-    const activeGoals = goals.filter(g => g.target > 0 && g.deadline).map(g => {
+    // Step 3【專案存錢目標】：goalType==="sinking"，排除里程碑與已封存，依優先級（數字越小越優先）與剩餘月數排序
+    const mapGoal = (g) => {
       const cur = goalCurrentAmount(g);
-      const deadline = new Date(g.deadline);
-      const monthsLeft = Math.max(1, Math.round((deadline - new Date(TODAY)) / (30*24*60*60*1000)));
-      const needed = Math.max(0, (g.target - cur) / monthsLeft);
-      const isDone = cur >= g.target;
-      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority||0, target:g.target, cur, monthsLeft, needed:Math.round(needed), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
-    }).sort((a,b) => (b.priority - a.priority) || (a.monthsLeft - b.monthsLeft));
+      const monthsLeft = g.deadline ? Math.max(1, Math.round((new Date(g.deadline) - new Date(TODAY)) / (30*24*60*60*1000))) : null;
+      const needed = monthsLeft ? Math.max(0, (g.target - cur) / monthsLeft) : Math.max(0, g.target - cur);
+      const isDone = g.target > 0 && cur >= g.target;
+      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority==null?5:g.priority, target:g.target, cur, monthsLeft, needed:Math.round(needed), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
+    };
+    const activeSinking = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
+      .map(mapGoal).sort((a,b) => (a.priority - b.priority) || (a.monthsLeft - b.monthsLeft));
 
-    let poolForGoals = Math.max(0, remaining - livingAmt);
-    const goalAllocs = activeGoals.map(g => {
+    let remaining = Math.max(0, income - investAmt - livingAmt);
+    const goalAllocs = activeSinking.map(g => {
       if (g.isDone) return { ...g, alloc:0 };
       const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : g.needed;
-      const alloc = Math.max(0, Math.min(want, poolForGoals));
-      poolForGoals -= alloc;
+      const alloc = Math.max(0, Math.min(want, remaining));
+      remaining -= alloc;
       return { ...g, alloc };
     });
 
-    const reserveAmt = Math.max(0, poolForGoals);
+    // Step 4【自由願望池】：goalType==="wishlist"，用剩餘資金依優先級注入直到滿額
+    const activeWishlist = goals.filter(g => g.goalType === "wishlist" && g.target > 0 && !isGoalArchived(g))
+      .map(mapGoal).sort((a,b) => a.priority - b.priority);
+    const wishlistAllocs = activeWishlist.map(g => {
+      const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : Math.max(0, g.target - g.cur);
+      const alloc = Math.max(0, Math.min(want, remaining));
+      remaining -= alloc;
+      return { ...g, alloc };
+    });
 
-    return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, reserveAmt };
-  }, [allocSettings, goals, goalCurrentAmount, txns]);
+    // Step 5【存錢/緊急預備金】：所有目標滿足後剩下的全部
+    const reserveAmt = Math.max(0, remaining);
+
+    return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, wishlistAllocs, reserveAmt };
+  }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns]);
 
   /* ── 本月理財建議：算固定支出、近3個月平均變動支出、估出可以存多少 ── */
   const financialSuggestion = useMemo(() => {
@@ -1646,6 +1730,63 @@ export default function App() {
     const suggested = Math.max(0, Math.round(moInc - fixedMo - avgVariable));
     return { income: moInc, fixed: Math.round(fixedMo), avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
   }, [moInc, subsMo, billsMo, moExp, txns]);
+
+  /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現），本月若已套用過分流才顯示「安全」狀態 ── */
+  const guiltFreeGauge = useMemo(() => {
+    const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
+    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
+      .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
+    const remaining = Math.round(livingBudget - spentSoFar);
+    const hasAllocated = savingsTargets.some(x => x.ym === curYm);
+    return { livingBudget: Math.round(livingBudget), spentSoFar: Math.round(spentSoFar), remaining, hasAllocated };
+  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm]);
+
+  /* ── 年度現金流預測與動態排程 ── */
+  const incomeSchedule = d.incomeSchedule || {};
+  const setIncomeSchedule = useCallback((ym, projected) => {
+    upd("incomeSchedule", p => ({ ...(p||{}), [ym]: { ...(p?.[ym]||{}), projected:+projected||0 } }));
+  }, [upd]);
+
+  const yearlySchedule = useMemo(() => {
+    const months = [];
+    const defaultProjected = Math.round(financialSuggestion.income + financialSuggestion.fixed + financialSuggestion.avgVariable) || 0;
+    for (let i = 0; i < 12; i++) {
+      const dt = new Date(TODAY); dt.setDate(1); dt.setMonth(dt.getMonth() + i);
+      const ym = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
+      const label = `${dt.getFullYear()}/${dt.getMonth()+1}`;
+      const isPast = ym < curYm;
+      const isCurrent = ym === curYm;
+      const actualIncome = (isPast || isCurrent) ? txns.filter(t => t.date.startsWith(ym) && t.type==="income" && t.tags!=="#往來帳").reduce((s,t)=>s+t.amt,0) : null;
+      const stored = incomeSchedule[ym];
+      const projected = stored?.projected != null ? stored.projected : defaultProjected;
+      // 已發生的月份用實際值代表這個月的資金水位，未發生的用預估值
+      const effectiveIncome = actualIncome != null ? actualIncome : projected;
+      months.push({ ym, label, isPast, isCurrent, actualIncome, projected, effectiveIncome });
+    }
+    return months;
+  }, [incomeSchedule, financialSuggestion, curYm, txns]);
+
+  // 依各月「可用資金水位」的權重，把每個專案存錢目標的剩餘需求平滑分配到各月（收入高的月多存、低的月少存）
+  const yearlyGoalSchedule = useMemo(() => {
+    const fixedMo = subsMo + billsMo;
+    const livingAmt = guiltFreeGauge.livingBudget;
+    const investAmt = allocSettings.investAmt || 0;
+    return goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g)).map(g => {
+      const cur = goalCurrentAmount(g);
+      const totalNeeded = Math.max(0, g.target - cur);
+      const relevantMonths = yearlySchedule.filter(m => m.ym <= g.deadline.slice(0,7));
+      const monthsLeft = Math.max(1, relevantMonths.length);
+      const surplus = relevantMonths.map(m => Math.max(0, m.effectiveIncome - fixedMo - livingAmt - investAmt));
+      const totalSurplus = surplus.reduce((s,v)=>s+v, 0);
+      const perMonth = relevantMonths.map((m, i) => {
+        const w = totalSurplus > 0 ? (surplus[i] / totalSurplus) : (1 / monthsLeft);
+        return { ym: m.ym, label: m.label, alloc: Math.round(totalNeeded * w) };
+      });
+      return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur, totalNeeded, monthsLeft, perMonth };
+    });
+  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, subsMo, billsMo, guiltFreeGauge, allocSettings]);
+
+
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const alertAmt = useMemo(() => moTxns.filter(t => t.type === "expense" && ["食物","交通","家居"].includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
@@ -1736,9 +1877,10 @@ export default function App() {
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
-    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, financialSuggestion,
-    goalCurrentAmount, allocSettings, setAllocSettings, computeAllocation,
-    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, growthBucket, setGrowthBucket,
+    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
+    incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule,
+    goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation,
+    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
@@ -1756,6 +1898,8 @@ export default function App() {
           {tab === "charts"   && <ChartsPage {...p} />}
           {tab === "notes"    && <NotesPage {...p} />}
           {tab === "invest"   && <InvestPage {...p} />}
+          {tab === "goals"    && <GoalsPage {...p} />}
+          {tab === "subsbills" && <SubsBillsPage {...p} />}
           {tab === "settings" && <SettingsPage {...p} />}
         </div>
 
@@ -1766,11 +1910,11 @@ export default function App() {
 
         {/* 底部導覽列 */}
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
-          <div style={{ display:"flex" }}>
-            {[{ k:"overview", i:"📊", l:"總覽" }, { k:"wallet", i:"👛", l:"錢包" }, { k:"charts", i:"📉", l:"圖表" }, { k:"notes", i:"👥", l:"往來帳" }, { k:"invest", i:"📈", l:"投資" }, { k:"settings", i:"⚙️", l:"設定" }].map(t => {
+          <div style={{ display:"flex", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
+            {[{ k:"overview", i:"📊", l:"總覽" }, { k:"wallet", i:"👛", l:"錢包" }, { k:"charts", i:"📉", l:"圖表" }, { k:"goals", i:"🎯", l:"目標" }, { k:"subsbills", i:"🔁", l:"訂閱" }, { k:"notes", i:"👥", l:"往來帳" }, { k:"invest", i:"📈", l:"投資" }, { k:"settings", i:"⚙️", l:"設定" }].map(t => {
               const active = tab === t.k;
               return (
-                <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
+                <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"0 0 auto", minWidth:64, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
                   <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
                   <span style={{ fontSize:11, fontWeight:700 }}>{t.l}</span>
                   {active && <div style={{ width:4, height:4, borderRadius:"50%", background:C.accent }} />}
