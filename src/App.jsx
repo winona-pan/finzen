@@ -965,7 +965,7 @@ export default function App() {
     if (buyF.fromAcc) {
       updMulti({
         accs: p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a),
-        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, date:TODAY, tags:"#股票" }],
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, toAcc:buyF.acc, date:TODAY, tags:"#股票" }],
       });
     }
     setBuyF(BF0); close();
@@ -993,7 +993,7 @@ export default function App() {
     if (sellF.returnAcc && proceeds) {
       updMulti({
         accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
-        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:st?.acc||"", toAcc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
       });
     }
     if (sellF.pnl && +sellF.pnl !== 0) {
@@ -1713,7 +1713,7 @@ export default function App() {
 
   /* ── 固定投資設定（智慧分流用）── */
   const ALLOC_DEFAULT = { investAmt:6000, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"",
-    defaultIncome:23000, defaultLivingCap:11000, defaultInvestAmt:6000, defaultInvestAccId:"",
+    defaultIncome:23000, defaultLivingCap:11000, defaultInvestAmt:6000, defaultInvestAccId:"", planStartYm:"",
     defaultIncomeItems:[{ id:"inc_default", label:"零用錢", amt:23000, accId:"" }] };
   const allocSettings = d.allocSettings ? { ...ALLOC_DEFAULT, ...d.allocSettings } : ALLOC_DEFAULT;
   const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...ALLOC_DEFAULT, ...(p||{}), ...patch })), [upd]);
@@ -1826,8 +1826,11 @@ export default function App() {
       ? allocSettings.defaultIncomeItems
       : [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome||23000, accId:"" }];
     const defaultProjected = defaultIncomeItemsList.reduce((s, it) => s + (+it.amt || 0), 0);
+    // 如果有設定「計畫起始月份」且晚於這個月，年度規劃就從那個月開始算，之前的月份（例如還沒開始規劃的當月）不列入
+    const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
+    const startDt = new Date(planStartYm + "-01");
     for (let i = 0; i < 12; i++) {
-      const dt = new Date(TODAY); dt.setDate(1); dt.setMonth(dt.getMonth() + i);
+      const dt = new Date(startDt); dt.setDate(1); dt.setMonth(dt.getMonth() + i);
       const ym = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
       const label = `${dt.getFullYear()}/${dt.getMonth()+1}`;
       const isPast = ym < curYm;
@@ -1863,7 +1866,7 @@ export default function App() {
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
-        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7) }))
+        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7), accIds:g.accIds||[], bucketIds:g.bucketIds||[] }))
       .sort((a,b) => a.priority - b.priority);
 
     // 剩餘需求會隨著每個月被分掉的金額累減，模擬「這個月存了，下個月要存的就變少」
@@ -1895,11 +1898,11 @@ export default function App() {
       const totalNeeded = Math.max(0, g.target - g.cur);
       const perMonth = perGoalPerMonth[g.id].filter(m => m.ym <= g.deadlineYm);
       const monthsLeft = perMonth.length;
-      return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth };
+      return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth, accIds:g.accIds, bucketIds:g.bucketIds };
     });
   }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget]);
 
-  /* ── 年度現金流預測：5大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/預備金 ⑤月底純現金總水位累加）── */
+  /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
   const yearlyForecastTable = useMemo(() => {
     // 生活費已經包含訂閱／基本開銷了，不再另外加 subsMo/billsMo
     const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
@@ -1907,7 +1910,6 @@ export default function App() {
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
     const rigid = livingAmt + investAmt;
-    let cumulative = 0;
     return yearlySchedule.map(m => {
       const sinkingBreakdown = yearlyGoalSchedule
         .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, alloc: g.perMonth.find(pm=>pm.ym===m.ym)?.alloc || 0 }))
@@ -1915,9 +1917,8 @@ export default function App() {
       const sinkingAlloc = sinkingBreakdown.reduce((s,x) => s + x.alloc, 0);
       // 願望池與存錢/預備金都屬於「溢流」性質，一起算進這一格；真正細拆要看實際進度，這裡先合併呈現
       const overflowAmt = Math.max(0, m.effectiveIncome - rigid - sinkingAlloc);
-      cumulative += overflowAmt;
       return { ym:m.ym, label:m.label, isPast:m.isPast, isCurrent:m.isCurrent, isSeasonalEstimate:m.isSeasonalEstimate,
-        income:m.effectiveIncome, rigid, sinkingAlloc, sinkingBreakdown, overflowAmt, cumulative };
+        income:m.effectiveIncome, rigid, sinkingAlloc, sinkingBreakdown, overflowAmt };
     });
   }, [yearlySchedule, yearlyGoalSchedule, guiltFreeGauge, allocSettings]);
 
