@@ -5,7 +5,8 @@ export default function TxnModals({
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, offsetGoal, setOffsetGoal, guiltFreeGauge, updateBucket, passiveMo,
-  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
+  getSweptAmount, addSweptAmount,
+  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -349,7 +350,8 @@ export default function TxnModals({
 
         {modal === "yearlyForecast" && (
           <YearlyForecastSheet
-            yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} setIncomeSchedule={setIncomeSchedule}
+            yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} yearlyForecastTable={yearlyForecastTable}
+            setIncomeSchedule={setIncomeSchedule} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs}
             close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
           />
         )}
@@ -367,11 +369,11 @@ export default function TxnModals({
         })()}
 
         {modal === "sweepMoney" && (
-          <SweepMoneySheet title="🧹 月底零錢一鍵掃入" amount={guiltFreeGauge.remaining} amountLabel="這個月生活區還剩下" goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
+          <SweepMoneySheet title="🧹 月底零錢一鍵掃入" amount={guiltFreeGauge.remaining} amountLabel="這個月生活區還剩下" ym={curYm} kind="leftover" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
         )}
 
         {modal === "sweepPassive" && (
-          <SweepMoneySheet title="🏦 被動收入分配" amount={passiveMo} amountLabel="這個月的非勞務收入" goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
+          <SweepMoneySheet title="🏦 被動收入分配" amount={passiveMo} amountLabel="這個月還沒分配的非勞務收入" ym={curYm} kind="passive" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
         )}
     </>
   );
@@ -443,16 +445,20 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
   /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到這個月的排程 */
   const [incomeItems, setIncomeItemsLocal] = useState(() => getIncomeItems(curYm).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
-  /* 投資分流：可以同時分好幾筆到不同證券戶／不同來源帳戶 */
+  /* 投資分流：可以同時分好幾筆到不同證券戶，純粹是規劃／記錄用，不會自動幫你轉帳（因為實際買進是你自己分次操作的） */
   const [investAllocs, setInvestAllocsLocal] = useState(() => {
     if (allocSettings.investAllocs && allocSettings.investAllocs.length > 0) return allocSettings.investAllocs;
     if (allocSettings.investAccId || allocSettings.investAmt) return [{ id:"inv"+Date.now(), amt: allocSettings.investAmt || 0, toAccId: allocSettings.investAccId || "", fromAccId: "" }];
+    if (allocSettings.defaultInvestAmt) return [{ id:"inv"+Date.now(), amt: allocSettings.defaultInvestAmt, toAccId: allocSettings.defaultInvestAccId || "", fromAccId: "" }];
     return [];
   });
   const [livingOverride, setLivingOverride] = useState(null);
   const [goalOverrides, setGoalOverrides] = useState({});
   const [showSettings, setShowSettings] = useState(true);
   const [savedDefault, setSavedDefault] = useState(false);
+  /* 要套用到哪些月份：預設只有這個月，也可以一次勾多個月一起設定存錢目標 */
+  const monthOptions = Array.from({ length: 6 }, (_, i) => { const dt = new Date(curYm+"-01"); dt.setMonth(dt.getMonth()+i); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; });
+  const [applyMonths, setApplyMonths] = useState([curYm]);
 
   const income = incomeItems.reduce((s, it) => s + (+it.amt || 0), 0);
   const investAmt = investAllocs.reduce((s, r) => s + (+r.amt || 0), 0);
@@ -475,39 +481,38 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
 
   return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
     <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:14, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
-      這筆錢會依序被分配：① 先填下面每一筆收入實際會進哪個帳戶 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部進「存錢／預備金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>
+      這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部進「存錢／預備金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
     </div>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
       <span>💵 這個月的收入來源</span>
       <span style={{ color:C.income, fontWeight:900 }}>合計 {fmt(income)}</span>
     </div>
-    <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:8 }}>
+    <div style={{ borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden", marginBottom:8 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 90px 1fr 24px", gap:4, padding:"6px 8px", background:C.card, fontSize:10, fontWeight:700, color:C.muted }}>
+        <span>來源</span><span>金額</span><span>存入帳戶</span><span></span>
+      </div>
       {incomeItems.map(it => (
-        <div key={it.id} style={{ padding:10, borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-            <input value={it.label} onChange={e => patchIncomeItem(it.id, { label:e.target.value })} placeholder="例如：零用錢、薪水、家教" style={{ ...iSt, flex:1, padding:"6px 8px", fontSize:12 }} />
-            <button onClick={() => removeIncomeItem(it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14, padding:"0 4px" }}>✕</button>
-          </div>
-          <div style={{ display:"flex", gap:6 }}>
-            <input type="number" value={it.amt} onChange={e => patchIncomeItem(it.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, width:100, padding:"6px 8px", fontSize:13, fontWeight:700 }} />
-            <select value={it.accId||""} onChange={e => patchIncomeItem(it.id, { accId:e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px", fontSize:12 }}>
-              <option value="">— 要進哪個帳戶（選填）—</option>
-              {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
+        <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 90px 1fr 24px", gap:4, padding:"6px 8px", borderTop:`1px solid ${C.border}`, alignItems:"center" }}>
+          <input value={it.label} onChange={e => patchIncomeItem(it.id, { label:e.target.value })} placeholder="零用錢/薪水…" style={{ ...iSt, padding:"6px 8px", fontSize:12 }} />
+          <input type="number" value={it.amt} onChange={e => patchIncomeItem(it.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, padding:"6px 8px", fontSize:12, fontWeight:700 }} />
+          <select value={it.accId||""} onChange={e => patchIncomeItem(it.id, { accId:e.target.value })} style={{ ...iSt, padding:"6px 4px", fontSize:11 }}>
+            <option value="">— 選填 —</option>
+            {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <button onClick={() => removeIncomeItem(it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>✕</button>
         </div>
       ))}
-      <button onClick={addIncomeItem} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆收入</button>
-      {!savedDefault ? (
-        <button onClick={() => { setDefaultIncomeItems(incomeItems); setSavedDefault(true); }} style={{ width:"100%", padding:6, background:"none", border:"none", color:C.muted, fontSize:11, cursor:"pointer" }}>把這份收入細項設成以後每個月的預設值</button>
-      ) : (
-        <div style={{ textAlign:"center", fontSize:11, color:C.teal }}>✅ 已設成以後每月的預設收入</div>
-      )}
     </div>
+    <button onClick={addIncomeItem} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer", marginBottom:6 }}>＋ 新增一筆收入</button>
+    {!savedDefault ? (
+      <button onClick={() => { setDefaultIncomeItems(incomeItems); setSavedDefault(true); }} style={{ width:"100%", padding:6, background:"none", border:"none", color:C.muted, fontSize:11, cursor:"pointer", marginBottom:8 }}>把這份收入細項設成以後每個月的預設值</button>
+    ) : (
+      <div style={{ textAlign:"center", fontSize:11, color:C.teal, marginBottom:8 }}>✅ 已設成以後每月的預設收入</div>
+    )}
 
     <button onClick={() => setShowSettings(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginBottom:showSettings?8:14, marginTop:10 }}>
-      <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>📊 投資分流設定（可以同時分到不同帳戶）</span>
+      <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>📊 投資分流規劃（可以分好幾筆到不同帳戶，只記錄不自動轉帳）</span>
       <span style={{ fontSize:12, color:C.muted }}>{showSettings?"▲":"▼"}</span>
     </button>
     {showSettings && (
@@ -524,13 +529,14 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
             </select>
             {r.toAccId && (
               <select value={r.fromAccId||""} onChange={e => patchInvestAlloc(r.id, { fromAccId:e.target.value })} style={{ ...iSt, width:"100%", padding:"6px 8px", fontSize:12 }}>
-                <option value="">— 從哪個帳戶轉出（不選則只顯示建議）—</option>
+                <option value="">— 從哪個帳戶轉出（純備註，不會自動轉帳）—</option>
                 {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             )}
           </div>
         ))}
         <button onClick={addInvestAlloc} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆投資分流</button>
+        <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>這裡的設定會自動存起來，不用另外按套用；實際買進請你自己去操作證券戶。</div>
         {buckets.length > 0 && (
           <div style={{ marginTop:10 }}>
             <Sl label="存錢／預備金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
@@ -544,16 +550,16 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
 
     <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資</div><div style={{ fontSize:10, color:C.muted }}>Step 1・依上面設定的分流總額</div></div>
+        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資（規劃）</div><div style={{ fontSize:10, color:C.muted }}>依上面投資分流規劃加總，僅供參考</div></div>
         <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{fmt(alloc.investAmt)}</div>
       </div>
 
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>🍜 生活費預算</div><div style={{ fontSize:10, color:C.muted }}>Step 2・自動抓近{alloc.historyMonths}個月平均，可調整</div></div>
+        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>🍜 生活費預算</div><div style={{ fontSize:10, color:C.muted }}>自動抓近{alloc.historyMonths}個月平均，可調整</div></div>
         <input type="number" value={livingOverride ?? alloc.livingAmt} onChange={e => setLivingOverride(e.target.value)} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
       </div>
 
-      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 3・專案存錢池（依優先級，收入越多分越多）</div>}
+      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>專案存錢池（依優先級，收入越多分越多）</div>}
       {alloc.goalAllocs.map(g => (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:g.isDone?`${C.teal}12`:C.card, border:`1px solid ${g.isDone?C.teal+"44":C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
@@ -572,7 +578,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
       ))}
       {alloc.goalAllocs.length === 0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有設定「專案存錢池」類型的目標</div>}
 
-      {alloc.wishlistAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 4・自由願望池（用剩餘溢流資金填滿）</div>}
+      {alloc.wishlistAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>自由願望池（用剩餘溢流資金填滿）</div>}
       {alloc.wishlistAllocs.map(g => (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
@@ -587,32 +593,39 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
       ))}
 
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44` }}>
-        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 存錢／預備金</div><div style={{ fontSize:10, color:C.muted }}>Step 5・分配完剩下的都存起來</div></div>
+        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 存錢／預備金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
         <div style={{ fontWeight:900, fontSize:18, color:C.teal }}>{fmt(alloc.reserveAmt)}</div>
       </div>
     </div>
 
-    <Btn style={{ width:"100%" }} onClick={() => {
-      confirm("確定依這份分流建議套用嗎？各目標會設定本月存錢目標，投資的部分會依設定產生轉帳", () => {
-        investAllocs.forEach(r => {
-          if (r.fromAccId && r.toAccId && (+r.amt||0) > 0) {
-            doAccountTransfer(r.fromAccId, r.toAccId, +r.amt, "智慧分流：股票投資");
+    <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:6 }}>要套用到哪些月份的存錢目標？</div>
+    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+      {monthOptions.map(ym => (
+        <button key={ym} onClick={() => setApplyMonths(p => p.includes(ym) ? p.filter(x=>x!==ym) : [...p, ym])}
+          style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:applyMonths.includes(ym)?`${C.accent}28`:C.card, color:applyMonths.includes(ym)?C.accentL:C.muted, border:`1px solid ${applyMonths.includes(ym)?C.accent:C.border}`, cursor:"pointer" }}>
+          {ym}{ym===curYm?"（本月）":""}
+        </button>
+      ))}
+    </div>
+
+    <Btn style={{ width:"100%" }} disabled={applyMonths.length===0} onClick={() => {
+      confirm(`確定把這份分流建議套用到 ${applyMonths.join("、")}？只會設定各目標的存錢目標提醒，不會自動轉帳`, () => {
+        applyMonths.forEach(ym => {
+          [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
+            if (g.alloc <= 0) return;
+            const accId = g.accIds?.[0] || null;
+            const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+            if (accId || bucketId) setSavingsTarget(ym, accId, bucketId, g.alloc, `智慧分流：${g.name}`);
+          });
+          if (allocSettings.reserveBucketId && alloc.reserveAmt > 0) {
+            setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：預備金");
           }
         });
-        [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
-          if (g.alloc <= 0) return;
-          const accId = g.accIds?.[0] || null;
-          const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-          if (accId || bucketId) setSavingsTarget(curYm, accId, bucketId, g.alloc, `智慧分流：${g.name}`);
-        });
-        if (allocSettings.reserveBucketId && alloc.reserveAmt > 0) {
-          setSavingsTarget(curYm, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：預備金");
-        }
         close();
       }, "確認套用");
-    }}>✅ 一鍵套用這份分流建議</Btn>
+    }}>✅ 套用到存錢目標（{applyMonths.length} 個月份）</Btn>
     <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
-      套用後：投資（如有設定轉出帳戶）會實際轉帳；各目標與生活費、預備金會設定成這個月的「存錢目標」提醒，實際存錢動作還是要你自己去操作對應帳戶／子帳戶。
+      套用後：各目標與預備金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。
     </div>
     <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
       📅 切換到年度現金流預測排程 →
@@ -646,7 +659,7 @@ function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt
 }
 
 /* ── 月底零錢一鍵掃入：生活區結餘掃進願望池或存錢區 ── */
-function SweepMoneySheet({ title, amount, amountLabel, goals, buckets, updateBucket, confirm, close, C, fmt, Btn, Sheet }) {
+function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount, goals, buckets, updateBucket, confirm, close, C, fmt, Btn, Sheet }) {
   const wishGoals = goals.filter(g => g.goalType === "wishlist" && (g.bucketIds||[]).length > 0);
   const [target, setTarget] = useState(null); // { bucketId, label }
   const options = [];
@@ -675,35 +688,99 @@ function SweepMoneySheet({ title, amount, amountLabel, goals, buckets, updateBuc
       if (!target || amount <= 0) return;
       confirm(`確定把 ${fmt(amount)} 掃進「${target.label}」？`, () => {
         updateBucket(target.bucketId, { allocated: (buckets.find(b=>b.id===target.bucketId)?.allocated||0) + amount });
+        if (ym && kind && addSweptAmount) addSweptAmount(ym, kind, amount);
         close();
       }, "確認掃入");
     }}>🧹 一鍵掃入</Btn>
+    <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
+      掃過的金額會記起來，這個月不會再重複被算進來。
+    </div>
   </Sheet>;
 }
 
 /* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
-function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, setIncomeSchedule, close, setModal, C, iSt, fmt, Btn, Sheet }) {
-  const [editingYm, setEditingYm] = useState(null);
-  const [draft, setDraft] = useState("");
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, getIncomeItems, setIncomeItems, accs, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+  const [expandedYm, setExpandedYm] = useState(null);
+  const [draftItems, setDraftItems] = useState([]);
+
+  const openMonth = (ym) => {
+    if (expandedYm === ym) { setExpandedYm(null); return; }
+    setExpandedYm(ym);
+    setDraftItems(getIncomeItems(ym).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
+  };
+  const saveDraft = (ym, items) => { setIncomeItems(ym, items); };
+  const patchDraft = (ym, id, patch) => { const next = draftItems.map(it => it.id===id ? { ...it, ...patch } : it); setDraftItems(next); saveDraft(ym, next); };
+  const addDraft = (ym) => { const next = [...draftItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]; setDraftItems(next); saveDraft(ym, next); };
+  const removeDraft = (ym, id) => { const next = draftItems.filter(it => it.id!==id); setDraftItems(next); saveDraft(ym, next); };
+
   return <Sheet title="📅 年度現金流預測排程" onClose={close}>
     <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-      已經過去或本月會自動帶入實際收入；還沒到的月份可以點擊修改預估值，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
+      已經過去或本月會自動帶入實際收入；還沒到的月份預設參考「去年同月」的實際收入（沒有歷史資料才用固定預設值），點一個月份可以展開填各項收入來源，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣</div>
-    <div style={{ display:"flex", flexDirection:"column", gap:1, marginBottom:20, maxHeight:220, overflowY:"auto" }}>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣（點月份展開填收入來源）</div>
+    <div style={{ display:"flex", flexDirection:"column", gap:1, marginBottom:20, maxHeight:320, overflowY:"auto" }}>
       {yearlySchedule.map((m, i) => (
-        <div key={m.ym} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background: m.isCurrent ? `${C.accent}12` : "transparent", borderTop:i>0?`1px solid ${C.border}`:undefined, borderRadius:m.isCurrent?8:0 }}>
-          <span style={{ fontSize:12, color:C.text, fontWeight:m.isCurrent?900:400 }}>{m.label}{m.isCurrent?" (本月)":""}</span>
-          {m.actualIncome != null ? (
-            <span style={{ fontSize:13, fontWeight:700, color:C.income }}>{fmt(m.actualIncome)}<span style={{ fontSize:10, color:C.muted, fontWeight:400 }}> 實際</span></span>
-          ) : editingYm === m.ym ? (
-            <input autoFocus type="number" value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { setIncomeSchedule(m.ym, draft); setEditingYm(null); }} onKeyDown={e => { if (e.key==="Enter") { setIncomeSchedule(m.ym, draft); setEditingYm(null); } }} style={{ ...iSt, width:100, textAlign:"right", padding:"4px 8px" }} />
-          ) : (
-            <button onClick={() => { setEditingYm(m.ym); setDraft(String(m.projected)); }} style={{ background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:700, color:C.accentL }}>{fmt(m.projected)} <span style={{ fontSize:10, color:C.muted, fontWeight:400 }}>預估 ✏️</span></button>
+        <div key={m.ym} style={{ background: m.isCurrent ? `${C.accent}12` : "transparent", borderTop:i>0?`1px solid ${C.border}`:undefined, borderRadius:m.isCurrent?8:0 }}>
+          <button onClick={() => openMonth(m.ym)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background:"none", border:"none", cursor:"pointer" }}>
+            <span style={{ fontSize:12, color:C.text, fontWeight:m.isCurrent?900:400 }}>{m.label}{m.isCurrent?" (本月)":""}</span>
+            {m.actualIncome != null ? (
+              <span style={{ fontSize:13, fontWeight:700, color:C.income }}>{fmt(m.actualIncome)}<span style={{ fontSize:10, color:C.muted, fontWeight:400 }}> 實際</span></span>
+            ) : (
+              <span style={{ fontSize:13, fontWeight:700, color:C.accentL }}>{fmt(m.projected)} <span style={{ fontSize:10, color:C.muted, fontWeight:400 }}>{m.isSeasonalEstimate?"去年同月 ✏️":"預估 ✏️"}</span></span>
+            )}
+          </button>
+          {expandedYm === m.ym && (
+            <div style={{ padding:"0 10px 10px" }}>
+              <div style={{ borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 1fr 20px", gap:4, padding:"5px 6px", background:C.card, fontSize:10, fontWeight:700, color:C.muted }}>
+                  <span>來源</span><span>金額</span><span>帳戶</span><span></span>
+                </div>
+                {draftItems.map(it => (
+                  <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 80px 1fr 20px", gap:4, padding:"5px 6px", borderTop:`1px solid ${C.border}`, alignItems:"center" }}>
+                    <input value={it.label} onChange={e => patchDraft(m.ym, it.id, { label:e.target.value })} placeholder="零用錢/薪水…" style={{ ...iSt, padding:"4px 6px", fontSize:11 }} />
+                    <input type="number" value={it.amt} onChange={e => patchDraft(m.ym, it.id, { amt:+e.target.value||0 })} style={{ ...iSt, padding:"4px 6px", fontSize:11, fontWeight:700 }} />
+                    <select value={it.accId||""} onChange={e => patchDraft(m.ym, it.id, { accId:e.target.value })} style={{ ...iSt, padding:"4px 2px", fontSize:10 }}>
+                      <option value="">—</option>
+                      {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                    <button onClick={() => removeDraft(m.ym, it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => addDraft(m.ym)} style={{ width:"100%", marginTop:6, padding:6, borderRadius:8, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>＋ 新增收入來源</button>
+            </div>
           )}
         </div>
       ))}
+    </div>
+
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／預備金 ⑤ 累加水位）</div>
+    <div style={{ overflowX:"auto", marginBottom:20 }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+        <thead>
+          <tr style={{ background:C.card }}>
+            {["月份","①流入","②剛性扣除","③專案存錢","④溢流/預備金","⑤累加水位"].map(h => (
+              <th key={h} style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.muted, whiteSpace:"nowrap" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {yearlyForecastTable.map(row => (
+            <tr key={row.ym} style={{ background: row.isCurrent ? `${C.accent}12` : "transparent", borderTop:`1px solid ${C.border}` }}>
+              <td style={{ padding:"6px 8px", fontWeight:row.isCurrent?900:400, color:C.text, whiteSpace:"nowrap" }}>{row.label}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", color:C.income }}>{fmt(row.income)}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", color:C.expense }}>−{fmt(row.rigid)}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", color:C.accentL }}>{fmt(row.sinkingAlloc)}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", color:C.teal }}>{fmt(row.overflowAmt)}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.text }}>{fmt(row.cumulative)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
+      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷；④欄把「自由願望池」跟「存錢/預備金」合併呈現（實際細分要看各目標當下的真實進度）；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
     </div>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的平滑排程</div>
