@@ -18,7 +18,7 @@ export default function StockModals({
   nS, setNS, S0, selSub, setSelSub, saveSub, addSub,
   nB, setNB, B0, selBill, setSelBill, saveBill, addBill,
   nAcc, setNAcc, addAcc, payF, setPayF, doPayCred,
-  showHDP, setShowHDP, doBuy, doSell, doInit,
+  showHDP, setShowHDP, doBuy, doSell, doInit, deleteTrade,
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
@@ -358,7 +358,7 @@ export default function StockModals({
                       </div>
                     </div>
                   ) : (
-                    <SwipeRow onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？（不會自動退回帳戶餘額）`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); }}>
+                    <SwipeRow onDelete={() => confirm(t.linkedTxnId ? `刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？帳戶餘額會一併退回` : `刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？（這筆是舊資料，沒有連動帳戶，不會自動退回帳戶餘額）`, () => deleteTrade(st.id, t.id))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                         <div style={{ flex:1, minWidth:0 }}>

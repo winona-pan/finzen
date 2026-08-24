@@ -609,16 +609,16 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
     </div>
 
     <Btn style={{ width:"100%" }} disabled={applyMonths.length===0} onClick={() => {
-      confirm(`確定把這份分流建議套用到 ${applyMonths.join("、")}？只會設定各目標的存錢目標提醒，不會自動轉帳`, () => {
+      confirm(`確定把這份分流建議套用到 ${applyMonths.join("、")}？只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字`, () => {
         applyMonths.forEach(ym => {
           [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
             if (g.alloc <= 0) return;
             const accId = g.accIds?.[0] || null;
             const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-            if (accId || bucketId) setSavingsTarget(ym, accId, bucketId, g.alloc, `智慧分流：${g.name}`);
+            setSavingsTarget(ym, accId, bucketId, g.alloc, `智慧分流：${g.name}`, g.id);
           });
           if (allocSettings.reserveBucketId && alloc.reserveAmt > 0) {
-            setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：預備金");
+            setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：預備金", "reserve");
           }
         });
         close();
@@ -780,10 +780,10 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       </table>
     </div>
     <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
-      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷；④欄把「自由願望池」跟「存錢/預備金」合併呈現（實際細分要看各目標當下的真實進度）；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
+      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷（都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「存錢/預備金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的平滑排程</div>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算）</div>
     {yearlyGoalSchedule.length === 0 ? (
       <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
     ) : yearlyGoalSchedule.map(g => (
@@ -794,9 +794,9 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
         </div>
         <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
           {g.perMonth.map(m => (
-            <div key={m.ym} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:C.bg }}>
-              <div style={{ fontSize:9, color:C.muted }}>{m.label}</div>
-              <div style={{ fontSize:11, fontWeight:700, color:C.accentL }}>{fmt(m.alloc)}</div>
+            <div key={m.ym} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent" }}>
+              <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
+              <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
             </div>
           ))}
         </div>

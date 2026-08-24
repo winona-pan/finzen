@@ -17,8 +17,8 @@ export default function WalletModals({
   premAmt, setPremAmt, premAcc, setPremAcc,
   surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
-  nS, setNS, S0, selSub, setSelSub, saveSub, addSub,
-  nB, setNB, B0, selBill, setSelBill, saveBill, addBill,
+  nS, setNS, S0, selSub, setSelSub, saveSub, addSub, deleteSub,
+  nB, setNB, B0, selBill, setSelBill, saveBill, addBill, deleteBill,
   nAcc, setNAcc, addAcc: addAccFn, payF, setPayF,
   showHDP, setShowHDP, doBuy, doSell, doInit,
   nD, setND, addDebt, editDebt, setEditDebt,
@@ -373,7 +373,7 @@ export default function WalletModals({
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個訂閱的修改？", () => saveSub(selSub), "確認編輯")}>儲存</Btn>
-            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？`, () => { upd("subs", p => p.filter(x => x.id !== selSub.id)); close(); })}>刪除</Btn>
+            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）`, () => { deleteSub(selSub.id); close(); })}>刪除</Btn>
           </div>
         </Sheet>}
 
@@ -456,7 +456,7 @@ export default function WalletModals({
             <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆開銷的修改？", saveBill, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
-          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { upd("bills", p => p.filter(x => x.id !== selBill.id)); close(); })}>🗑 刪除</Btn>
+          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { deleteBill(selBill.id); close(); })}>🗑 刪除</Btn>
         </Sheet>}
 
         {modal === "bucketTransfer" && (() => {
