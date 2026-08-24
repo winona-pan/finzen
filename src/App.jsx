@@ -263,15 +263,20 @@ function DatePicker({ value, onChange, onClose }) {
     onChange({ s:ns, e:ne });
     onClose();
   };
+  const pickDate = (which, val) => {
+    if (which === "s") { setS(val); if (val && e && val <= e) onChange({ s:val, e }); }
+    else { setE(val); if (s && val && s <= val) onChange({ s, e:val }); }
+  };
   return <div style={{ position:"fixed", inset:0, zIndex:120, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.75)" }} onClick={ev => { if (ev.target === ev.currentTarget) onClose(); }}>
     <div style={{ width:"100%", maxWidth:420, maxHeight:"85dvh", overflowY:"auto", background:C.surface, borderRadius:"20px 20px 0 0", padding:20, paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))" }}>
       <div style={{ fontWeight:900, fontSize:15, color:C.text, marginBottom:14 }}>選擇區間</div>
       <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
         {[{l:"本月",m:1},{l:"近3月",m:3},{l:"近6月",m:6},{l:"近12月",m:12}].map(o => <button key={o.l} onClick={() => quick(o.m)} style={{ padding:"6px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, color:C.textSub, fontSize:12, fontWeight:700, cursor:"pointer" }}>{o.l}</button>)}
       </div>
+      <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>手動選日期，兩邊都選好就會直接套用</div>
       <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => setS(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
-        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => setE(ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>起</label><input type="date" value={s} onChange={ev => pickDate("s", ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
+        <div style={{ flex:1 }}><label style={{ fontSize:11, color:C.textSub, display:"block", marginBottom:4 }}>迄</label><input type="date" value={e} onChange={ev => pickDate("e", ev.target.value)} style={{ ...iSt, colorScheme:themeMode==="dark"?"dark":"light" }} /></div>
       </div>
       <div style={{ display:"flex", gap:8 }}>
         <button onClick={() => { onChange({ s, e }); onClose(); }} style={{ flex:1, padding:12, borderRadius:12, background:C.accent, color:"#fff", border:"none", fontWeight:900, cursor:"pointer" }}>確定</button>
@@ -626,7 +631,7 @@ export default function App() {
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
-  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null };
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false };
   const [nG, setNG] = useState(G0);
   const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
@@ -806,6 +811,39 @@ export default function App() {
     }
     setNS(S0); close();
   }, [nS, upd, updMulti]);
+
+  /* ── 訂閱/開銷 啟用停用：啟用當下立即記一筆本期帳，不用等重新整理頁面 ── */
+  const toggleSub = useCallback((s) => {
+    if (s.active) { upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:false } : x)); return; }
+    upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:true, lastBilled:TODAY } : x));
+    const amt = s.amt;
+    if (s.deferExpense && s.freq === "year") {
+      const originId = Date.now();
+      const poolId = "ep" + originId;
+      const monthlyAmt = Math.round(amt / 12);
+      updMulti({
+        txns: p => [...p,
+          { id:originId, type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${s.name}（共 ${amt}）`, acc:s.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:s.id },
+          { id:originId+1, type:"expense", cat:s.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${s.name}`, acc:s.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:s.id, noBalanceEffect:true, poolId, poolType:"expense" },
+        ],
+        accs: p => s.acc ? p.map(a => a.name===s.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      });
+      upd("expensePools", p => [...(p||[]), { id:poolId, desc:s.name, cat:s.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:s.acc||"", subId:s.id, originTxnId:originId }]);
+    } else {
+      updMulti({
+        txns: p => [...p, { id:Date.now(), type:"expense", cat:s.cat||"訂閱", amt, desc:s.name, acc:s.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:s.id }],
+        accs: p => s.acc ? p.map(a => a.name===s.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      });
+    }
+  }, [upd, updMulti]);
+  const toggleBill = useCallback((b) => {
+    if (b.active) { upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:false } : x)); return; }
+    upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:true, lastBilled:TODAY } : x));
+    updMulti({
+      txns: p => [...p, { id:Date.now(), type:"expense", cat:b.cat||"家居", amt:b.amt, desc:b.name, acc:b.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:b.id }],
+      accs: p => b.acc ? p.map(a => a.name===b.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+b.amt} : {...a, bal:a.bal-b.amt}) : a) : p,
+    });
+  }, [upd, updMulti]);
 
   /* ── 基本開銷：編輯 / 新增 ── */
   const saveBill = useCallback(() => { if (!selBill) return; upd("bills", p => p.map(x => x.id === selBill.id ? selBill : x)); close(); }, [selBill, upd]);
@@ -1070,8 +1108,9 @@ export default function App() {
   const totDebt = useMemo(() => accs.filter(a => a.type === "credit" && a.vis).reduce((s, c) => s + (c.payable || 0), 0), [accs]);
   const totRec = useMemo(() => debts.filter(x => x.type === "receivable" && !x.settled).reduce((s, x) => s + (x.amt - (x.installPaidAmt||0)), 0), [debts]);
   const totPay = useMemo(() => debts.filter(x => x.type === "payable" && !x.settled).reduce((s, x) => s + (x.amt - (x.installPaidAmt||0)), 0), [debts]);
-  const subsMo = useMemo(() => subs.filter(s => s.active).reduce((s, x) => s + x.amt, 0), [subs]);
-  const billsMo = useMemo(() => (bills || []).filter(b => b.active).reduce((s, x) => s + x.amt, 0), [bills]);
+  const monthlyEquiv = (item) => item.freq === "year" ? item.amt / 12 : item.freq === "week" ? item.amt * (52/12) : item.amt;
+  const subsMo = useMemo(() => subs.filter(s => s.active).reduce((s, x) => s + monthlyEquiv(x), 0), [subs]);
+  const billsMo = useMemo(() => (bills || []).filter(b => b.active).reduce((s, x) => s + monthlyEquiv(x), 0), [bills]);
   const totPools = useMemo(() => pools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [pools]);
   const totExpensePools = useMemo(() => expensePools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [expensePools]);
 
@@ -1552,7 +1591,7 @@ export default function App() {
     C, tab, setTab, iSt, fmt, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
     accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
     stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
-    ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
+    ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, monthlyEquiv, DAYS,
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
     dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
     watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
@@ -1571,7 +1610,7 @@ export default function App() {
     premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
-    nS, setNS, S0, saveSub, addSub, nB, setNB, B0, saveBill, addBill,
+    nS, setNS, S0, saveSub, addSub, toggleSub, nB, setNB, B0, saveBill, addBill, toggleBill,
     nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit,
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
