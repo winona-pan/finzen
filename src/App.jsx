@@ -89,6 +89,11 @@ function fmt(n, cur = "TWD") {
   if (["JPY","KRW","VND"].includes(cur)) return `${s}${Math.round(n).toLocaleString()}`;
   return `${s}${Number(n).toLocaleString("en", { maximumFractionDigits: 2 })}`;
 }
+/* ── 個股每股單價專用格式化：固定顯示到小數點第二位（市價/均成本/成交價都適用）── */
+function fmtPrice(n) {
+  if (n == null || isNaN(n)) return "—";
+  return `NT$${Number(n).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 /* ── Constants ── */
 const CE = { 食物:"🍔",交通:"🚌",家居:"🏠",娛樂:"🎬",訂閱:"📱",薪資:"💰",家教:"📖",零用錢:"🏮",利息:"🏦",股息:"📈",紅包:"🧧",投資收益:"📈",教育:"🎓",醫療:"💊",美容:"💄",帳戶調整:"✨",其他:"📦",其他收入:"💴",往來帳:"🤝",股票:"📈" };
@@ -425,7 +430,7 @@ function StockPriceChart({ ticker, market, fetchStockRange }) {
             <LineChart data={data} margin={{ top:5, right:5, bottom:0, left:0 }}>
               <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:8 }} axisLine={false} tickLine={false} interval={Math.ceil(data.length/5)} />
               <YAxis hide domain={["auto","auto"]} />
-              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[v,"價格"]} />
+              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[Number(v).toFixed(2),"價格"]} />
               <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -506,6 +511,16 @@ export default function App() {
       return (p||[]).map(b => orderMap[b.id] !== undefined ? { ...b, order:orderMap[b.id] } : b);
     });
   }, [upd]);
+  const doAccountTransfer = useCallback((fromId, toId, amount, desc) => {
+    const amt = +amount || 0;
+    if (amt <= 0 || fromId === toId) return;
+    const fromAcc = accs.find(a => a.id === fromId), toAcc = accs.find(a => a.id === toId);
+    if (!fromAcc || !toAcc) return;
+    updMulti({
+      accs: p => p.map(a => a.id===fromId ? { ...a, bal:a.bal-amt } : a.id===toId ? (a.type==="credit" ? {...a, payable:Math.max(0,(a.payable||0)-amt)} : {...a, bal:a.bal+amt}) : a),
+      txns: p => [...p, { id:Date.now(), type:"transfer", cat:"帳戶調整", amt, desc:desc||`轉帳：${fromAcc.name} → ${toAcc.name}`, acc:fromAcc.name, toAcc:toAcc.name, date:TODAY, tags:"#分流引擎" }],
+    });
+  }, [accs, updMulti]);
   const transferBucket = useCallback((fromId, toId, amount) => {
     const amt = +amount || 0;
     if (amt <= 0 || fromId === toId) return;
@@ -634,7 +649,7 @@ export default function App() {
   const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
-  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false };
+  const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false, priority:0 };
   const [nG, setNG] = useState(G0);
   const PL0 = { name:"", insurer:"", premium:"", premiumFreq:"year", startDate:TODAY, maturityDate:"", surrenderVal:"", totalPaid:"", cur:"TWD", emoji:"🛡️" };
   const [nPL, setNPL] = useState(PL0);
@@ -1151,6 +1166,7 @@ export default function App() {
   const curSavingsTarget = savingsTargets.find(x => x.ym === curYm);
   const nextSavingsTarget = savingsTargets.find(x => x.ym === nextYm);
   const showNextMonthReminder = new Date(TODAY).getDate() >= 24 && !nextSavingsTarget;
+
   const cashBal = useMemo(() => accs.filter(a => a.type !== "credit" && a.type !== "investment" && a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
 
   const stSum = useMemo(() => stocks.map(st => {
@@ -1529,6 +1545,107 @@ export default function App() {
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
   const moInc = useMemo(() => moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [moTxns]);
   const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0), [moTxns]);
+
+  /* ── 目標目前進度金額（共用邏輯，Overview/Charts/分流引擎都用這個）── */
+  const goalCurrentAmount = useCallback((g) => {
+    const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
+    const hasSpecificScope = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0);
+    if (!hasSpecificScope) {
+      const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s,b) => {
+        const acc = accs.find(a=>a.id===b.accId);
+        return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
+      }, 0);
+      const accBal = visA.reduce((s,a) => {
+        if (a.type === "investment") {
+          const stForAcc = stSum.filter(st=>st.acc===a.name);
+          const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+          const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+          return s + (goalUseMv ? (mv>0?mv:cost) : cost);
+        }
+        return s + toTWD(a.bal, a.cur, rates);
+      }, 0) - excludedBucketTotal;
+      return accBal - totDebt - totPay + totRec;
+    }
+    return accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
+      if (a.type==="investment") {
+        const stForAcc = stSum.filter(st=>st.acc===a.name);
+        const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+        const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+        return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
+      }
+      return s + toTWD(a.bal,a.cur,rates);
+    },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b)=>{
+      const acc = accs.find(a=>a.id===b.accId);
+      return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
+    },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0);
+  }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA]);
+
+  /* ── 固定投資設定（智慧分流用）── */
+  const allocSettings = d.allocSettings || { investAmt:6000, investAccId:"", livingBucketId:"", reserveBucketId:"" };
+  const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...(p||{investAmt:6000,investAccId:"",livingBucketId:"",reserveBucketId:""}), ...patch })), [upd]);
+
+  /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘存進預備金 ── */
+  const computeAllocation = useCallback((totalIncome, overrides = {}) => {
+    const income = +totalIncome || 0;
+    const investAmt = overrides.investAmt != null ? overrides.investAmt : (allocSettings.investAmt || 0);
+    let remaining = income - investAmt;
+
+    // 生活費：近3個月平均實際支出（自適應學習），若指定生活區子帳戶則改用該子帳戶的月度變動當基準
+    const months = [];
+    for (let i = 1; i <= 3; i++) {
+      const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
+      months.push({ y: dt.getFullYear(), m: dt.getMonth() + 1 });
+    }
+    const histVariable = months.map(({ y, m }) => {
+      const ym = `${y}-${String(m).padStart(2, "0")}`;
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
+        .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
+    }).filter(v => v > 0);
+    const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : 11000;
+    const livingAmt = overrides.livingAmt != null ? overrides.livingAmt : adaptiveLiving;
+
+    // 各存錢目標：依優先級（高到低）分配，未達標才分配，額度不夠就依序遞減分配
+    const activeGoals = goals.filter(g => g.target > 0 && g.deadline).map(g => {
+      const cur = goalCurrentAmount(g);
+      const deadline = new Date(g.deadline);
+      const monthsLeft = Math.max(1, Math.round((deadline - new Date(TODAY)) / (30*24*60*60*1000)));
+      const needed = Math.max(0, (g.target - cur) / monthsLeft);
+      const isDone = cur >= g.target;
+      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority||0, target:g.target, cur, monthsLeft, needed:Math.round(needed), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
+    }).sort((a,b) => (b.priority - a.priority) || (a.monthsLeft - b.monthsLeft));
+
+    let poolForGoals = Math.max(0, remaining - livingAmt);
+    const goalAllocs = activeGoals.map(g => {
+      if (g.isDone) return { ...g, alloc:0 };
+      const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : g.needed;
+      const alloc = Math.max(0, Math.min(want, poolForGoals));
+      poolForGoals -= alloc;
+      return { ...g, alloc };
+    });
+
+    const reserveAmt = Math.max(0, poolForGoals);
+
+    return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, reserveAmt };
+  }, [allocSettings, goals, goalCurrentAmount, txns]);
+
+  /* ── 本月理財建議：算固定支出、近3個月平均變動支出、估出可以存多少 ── */
+  const financialSuggestion = useMemo(() => {
+    const fixedMo = subsMo + billsMo;
+    // 近 3 個「已結束」的月份（不含本月，避免因為月中資料不完整而低估）
+    const months = [];
+    for (let i = 1; i <= 3; i++) {
+      const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
+      months.push({ y: dt.getFullYear(), m: dt.getMonth() + 1 });
+    }
+    const histVariable = months.map(({ y, m }) => {
+      const ym = `${y}-${String(m).padStart(2, "0")}`;
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
+        .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
+    }).filter(v => v > 0);
+    const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : moExp;
+    const suggested = Math.max(0, Math.round(moInc - fixedMo - avgVariable));
+    return { income: moInc, fixed: Math.round(fixedMo), avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
+  }, [moInc, subsMo, billsMo, moExp, txns]);
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const incCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").forEach(t => { m[t.cat] = (m[t.cat] || 0) + t.amt; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
   const alertAmt = useMemo(() => moTxns.filter(t => t.type === "expense" && ["食物","交通","家居"].includes(t.cat)).reduce((s, t) => s + t.amt, 0), [moTxns]);
@@ -1591,7 +1708,7 @@ export default function App() {
 
   /* ── 統一組裝共用 props，傳給所有頁面與彈窗元件 ── */
   const p = {
-    C, tab, setTab, iSt, fmt, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
+    C, tab, setTab, iSt, fmt, fmtPrice, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
     accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
     stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
     ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, monthlyEquiv, DAYS,
@@ -1619,8 +1736,9 @@ export default function App() {
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
-    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder,
-    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, growthBucket, setGrowthBucket,
+    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, financialSuggestion,
+    goalCurrentAmount, allocSettings, setAllocSettings, computeAllocation,
+    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, growthBucket, setGrowthBucket,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
