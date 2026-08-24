@@ -6,7 +6,7 @@ export default function TxnModals({
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, offsetGoal, setOffsetGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
-  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
+  incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -335,7 +335,7 @@ export default function TxnModals({
 
         {modal === "allocEngine" && (
           <AllocEngineSheet
-            allocSettings={allocSettings} setAllocSettings={setAllocSettings}
+            allocSettings={allocSettings} setAllocSettings={setAllocSettings} startNextMonthPlan={startNextMonthPlan}
             computeAllocation={computeAllocation} financialSuggestion={financialSuggestion}
             getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} setDefaultIncomeItems={setDefaultIncomeItems}
             accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
@@ -347,7 +347,8 @@ export default function TxnModals({
         {modal === "yearlyForecast" && (
           <YearlyForecastSheet
             yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} yearlyForecastTable={yearlyForecastTable}
-            setIncomeSchedule={setIncomeSchedule} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget}
+            setIncomeSchedule={setIncomeSchedule} setRigidOverride={setRigidOverride} startNextMonthPlan={startNextMonthPlan} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
+            allocSettings={allocSettings} setAllocSettings={setAllocSettings} curYm={curYm} nextYm={nextYm}
             close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
           />
         )}
@@ -438,7 +439,7 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
+function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
   /* 這個分流引擎現在操作的「目標月份」：如果有設定計畫起始月份且晚於這個月（例如這個月還不想開始規劃），就用那個月，不然就是這個月 */
   const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
   /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到「目標月份」的排程 */
@@ -467,6 +468,15 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
   const removeIncomeItem = (id) => updateIncomeItems(incomeItems.filter(it => it.id !== id));
   const patchIncomeItem = (id, patch) => updateIncomeItems(incomeItems.map(it => it.id===id ? { ...it, ...patch } : it));
 
+  /* 清空這裡目前顯示的所有數字（收入細項、投資分流、生活費／目標覆寫），讓你重新輸入，不會被之前留下的數字卡住 */
+  const resetAll = () => {
+    updateIncomeItems([{ id:"inc"+Date.now(), label:"", amt:0, accId:"" }]);
+    setInvestAllocsLocal([]);
+    setAllocSettings({ investAllocs:[], investAmt:0, investAccId:"" });
+    setLivingOverride(null);
+    setGoalOverrides({});
+  };
+
   const updateInvestAllocs = (next) => { setInvestAllocsLocal(next); setAllocSettings({ investAllocs: next, investAmt: next.reduce((s,r)=>s+(+r.amt||0),0), investAccId: next[0]?.toAccId || "" }); };
   const addInvestAlloc = () => updateInvestAllocs([...investAllocs, { id:"inv"+Date.now(), amt:0, toAccId:"", fromAccId:"" }]);
   const removeInvestAlloc = (id) => updateInvestAllocs(investAllocs.filter(r => r.id !== id));
@@ -479,9 +489,22 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
   });
 
   return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
-    <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:14, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:allocSettings.planStartYm && allocSettings.planStartYm>curYm?`${C.teal}12`:C.card, border:`1px solid ${allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal+"44":C.border}`, marginBottom:10 }}>
+      <div style={{ fontSize:12, color:allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal:C.text }}>
+        {allocSettings.planStartYm && allocSettings.planStartYm>curYm
+          ? <>📌 目前從 <strong>{allocSettings.planStartYm}</strong> 開始規劃，{curYm} 不列入</>
+          : "這個月也算在規劃裡"}
+      </div>
+      {allocSettings.planStartYm && allocSettings.planStartYm>curYm ? (
+        <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ padding:"6px 10px", borderRadius:8, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>取消</button>
+      ) : (
+        <button onClick={startNextMonthPlan} style={{ padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>從下個月開始</button>
+      )}
+    </div>
+    <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:8, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
       這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部變成「剩餘資金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
     </div>
+    <button onClick={() => confirm("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？", resetAll)} style={{ width:"100%", marginBottom:14, padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>🗑 清空以上規劃，重新輸入</button>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
       <span>💵 這個月的收入來源</span>
@@ -702,11 +725,13 @@ function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount,
 }
 
 /* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
-function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, getIncomeItems, setIncomeItems, accs, setSavingsTarget, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, setRigidOverride, startNextMonthPlan, getIncomeItems, setIncomeItems, accs, setSavingsTarget, removeSavingsTarget, allocSettings, setAllocSettings, curYm, nextYm, close, setModal, C, iSt, fmt, Btn, Sheet }) {
   const [expandedYm, setExpandedYm] = useState(null);
   const [draftItems, setDraftItems] = useState([]);
   const [editingChip, setEditingChip] = useState(null); // `${goalId}_${ym}`
+  const [editingRigid, setEditingRigid] = useState(null); // ym
   const matrixRef = useRef(null);
+  const goalScheduleRef = useRef(null);
 
   const openMonth = (ym) => {
     if (expandedYm === ym) { setExpandedYm(null); return; }
@@ -714,12 +739,25 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
     setDraftItems(getIncomeItems(ym).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
   };
   const jumpToMonth = (ym) => { openMonth(ym); matrixRef.current?.scrollIntoView({ behavior:"smooth", block:"start" }); };
+  const jumpToGoalSchedule = () => { goalScheduleRef.current?.scrollIntoView({ behavior:"smooth", block:"start" }); };
   const saveDraft = (ym, items) => { setIncomeItems(ym, items); };
   const patchDraft = (ym, id, patch) => { const next = draftItems.map(it => it.id===id ? { ...it, ...patch } : it); setDraftItems(next); saveDraft(ym, next); };
   const addDraft = (ym) => { const next = [...draftItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]; setDraftItems(next); saveDraft(ym, next); };
   const removeDraft = (ym, id) => { const next = draftItems.filter(it => it.id!==id); setDraftItems(next); saveDraft(ym, next); };
 
   return <Sheet title="📅 年度現金流預測排程" onClose={close}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:allocSettings.planStartYm && allocSettings.planStartYm>curYm?`${C.teal}12`:C.card, border:`1px solid ${allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal+"44":C.border}`, marginBottom:14 }}>
+      <div style={{ fontSize:12, color:allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal:C.text }}>
+        {allocSettings.planStartYm && allocSettings.planStartYm>curYm
+          ? <>📌 目前從 <strong>{allocSettings.planStartYm}</strong> 開始規劃，{curYm} 不列入</>
+          : "這個月也算在規劃裡"}
+      </div>
+      {allocSettings.planStartYm && allocSettings.planStartYm>curYm ? (
+        <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ padding:"6px 10px", borderRadius:8, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>取消</button>
+      ) : (
+        <button onClick={startNextMonthPlan} style={{ padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>從下個月開始</button>
+      )}
+    </div>
     <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
       已經過去或本月會自動帶入實際收入；還沒到的月份預設參考「去年同月」的實際收入（沒有歷史資料才用固定預設值），點一個月份可以展開填各項收入來源，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
     </div>
@@ -776,20 +814,29 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
             <tr key={row.ym} style={{ background: row.isCurrent ? `${C.accent}12` : "transparent", borderTop:`1px solid ${C.border}` }}>
               <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", fontWeight:row.isCurrent?900:400, color:C.text, whiteSpace:"nowrap", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted", textDecorationColor:C.muted }}>{row.label}</td>
               <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", textAlign:"right", color:C.income, cursor:"pointer" }}>{fmt(row.income)} ✏️</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", color:C.expense }}>−{fmt(row.rigid)}</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", color:C.accentL }}>{fmt(row.sinkingAlloc)}</td>
+              <td style={{ padding:"6px 8px", textAlign:"right", color:C.expense, cursor:"pointer" }} onClick={() => editingRigid !== row.ym && setEditingRigid(row.ym)}>
+                {editingRigid === row.ym ? (
+                  <input autoFocus type="number" defaultValue={row.rigid}
+                    onBlur={e => { setRigidOverride(row.ym, e.target.value === "" ? null : +e.target.value); setEditingRigid(null); }}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...iSt, width:70, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"right" }} />
+                ) : (
+                  <>−{fmt(row.rigid)} {row.isRigidOverride ? "✏️" : ""}</>
+                )}
+              </td>
+              <td onClick={jumpToGoalSchedule} style={{ padding:"6px 8px", textAlign:"right", color:C.accentL, cursor:"pointer" }}>{fmt(row.sinkingAlloc)} ✏️</td>
               <td style={{ padding:"6px 8px", textAlign:"right", color:C.teal }}>{fmt(row.overflowAmt)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-    <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>👆 點「月份」或「①流入」可以跳回上面收入矩陣直接編輯那個月；②③④是系統算出來的，目前不能直接點著改，要改就去調整生活費／投資預設值，或各專案目標的優先級與金額。</div>
+    <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>👆 點「月份」「①流入」可以跳回收入矩陣編輯；點「②剛性扣除」可以直接覆寫那個月的金額（清空恢復自動計算）；點「③專案存錢」會跳到下面各專案的排程，那邊格子也能直接點著改；④是income−②−③算出來的餘數，不能單獨改，想讓它變多就去調整①②③。</div>
     <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
       ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現。
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算，點格子可以直接改）</div>
+    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算，點格子可以直接改，applied 的可以點右上角✕移除）</div>
     {yearlyGoalSchedule.length === 0 ? (
       <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
     ) : yearlyGoalSchedule.map(g => (
@@ -803,24 +850,30 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
             const chipKey = `${g.id}_${m.ym}`;
             const isEditing = editingChip === chipKey;
             return (
-              <div key={m.ym} onClick={() => !isEditing && setEditingChip(chipKey)} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent", cursor:"pointer" }}>
-                <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
-                {isEditing ? (
-                  <input
-                    autoFocus type="number" defaultValue={m.alloc}
-                    onBlur={e => {
-                      const val = +e.target.value || 0;
-                      const accId = g.accIds?.[0] || null;
-                      const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-                      setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
-                      setEditingChip(null);
-                    }}
-                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...iSt, width:48, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
-                  />
-                ) : (
-                  <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
+              <div key={m.ym} style={{ position:"relative", flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent" }}>
+                {m.isApplied && !isEditing && (
+                  <button onClick={(e) => { e.stopPropagation(); const accId = g.accIds?.[0] || null; const bucketId = !accId ? (g.bucketIds?.[0] || null) : null; removeSavingsTarget(m.ym, g.id); }}
+                    style={{ position:"absolute", top:-6, right:-6, width:16, height:16, borderRadius:"50%", background:C.expense, color:"#fff", border:"none", fontSize:9, lineHeight:"16px", padding:0, cursor:"pointer" }}>✕</button>
                 )}
+                <div onClick={() => !isEditing && setEditingChip(chipKey)} style={{ cursor:"pointer" }}>
+                  <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
+                  {isEditing ? (
+                    <input
+                      autoFocus type="number" defaultValue={m.alloc}
+                      onBlur={e => {
+                        const val = +e.target.value || 0;
+                        const accId = g.accIds?.[0] || null;
+                        const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+                        setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
+                        setEditingChip(null);
+                      }}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                      style={{ ...iSt, width:48, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
+                    />
+                  ) : (
+                    <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
+                  )}
+                </div>
               </div>
             );
           })}
