@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function InvestPage({ 
-  C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+  C, tab, iSt, fmt, fmtPrice, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
@@ -247,7 +247,7 @@ export default function InvestPage({
                                 </div>
                                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted }}>
                                   <span>{st.totalSh}股 · 均 {fmt(Math.round(st.avgCost || 0))}/股</span>
-                                  {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmt(st.curPrice)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost)}</span>}
+                                  {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmtPrice(st.curPrice)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost)}</span>}
                                 </div>
                               </div>
                             </SwipeRow>
@@ -305,7 +305,7 @@ export default function InvestPage({
                         <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                           <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                           <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmt(t.price)}</div>
+                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmtPrice(t.price)}</div>
                             <div style={{ fontSize:10, color:C.muted }}>{t.date}</div>
                           </div>
                           <div style={{ fontWeight:900, fontSize:12, color:C.text, flexShrink:0 }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
@@ -524,7 +524,7 @@ export default function InvestPage({
                             <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmt(w.curPrice) : "—"}</div>
+                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmtPrice(w.curPrice) : "—"}</div>
                             {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
                           </div>
                         </div>

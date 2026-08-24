@@ -14,7 +14,7 @@ export default function ChartsPage({
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
-  nG, setNG, editGoal, setEditGoal, nPL, setNPL, setSelPolicy: _sp,
+  nG, setNG, editGoal, setEditGoal, nPL, setNPL, setSelPolicy: _sp, goalCurrentAmount,
   moDate, setMoDate, searchQ, setSearchQ, APP_VER, changeTheme, THEMES,
   showHDP, setShowHDP, nS, setNS, nB, setNB, sortMode, setSortMode, visMode, setVisMode, nD, setND,
   // 接收全域 UI Atoms 元件
@@ -188,37 +188,7 @@ export default function ChartsPage({
           )}
           {(goals||[]).map(g => {
             const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-            const hasSpecificScope = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0);
-            const goalNetWorth = (() => {
-              const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s,b) => {
-                const acc = accs.find(a=>a.id===b.accId);
-                return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
-              }, 0);
-              const accBal = visA.reduce((s,a) => {
-                if (a.type === "investment") {
-                  const stForAcc = stSum.filter(st=>st.acc===a.name);
-                  const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-                  const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
-                  return s + (goalUseMv ? (mv>0?mv:cost) : cost);
-                }
-                return s + toTWD(a.bal, a.cur, rates);
-              }, 0) - excludedBucketTotal;
-              return accBal - totDebt - totPay + totRec;
-            })();
-            const current = hasSpecificScope
-              ? accs.filter(a => (g.accIds||[]).includes(a.id)).reduce((s,a) => {
-                  if (a.type==="investment") {
-                    const stForAcc = stSum.filter(st=>st.acc===a.name);
-                    const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
-                    return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
-                  }
-                  return s + toTWD(a.bal,a.cur,rates);
-                }, 0) + buckets.filter(b => (g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b) => {
-                  const acc = accs.find(a=>a.id===b.accId);
-                  return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
-                }, 0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0)
-              : goalNetWorth;
+            const current = goalCurrentAmount(g);
             const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
             const remaining = Math.max(0, g.target - current);
             const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
@@ -230,7 +200,10 @@ export default function ChartsPage({
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <span style={{ fontSize:24 }}>{g.emoji}</span>
                     <div>
-                      <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{g.name}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{g.name}</div>
+                        {(g.priority||0) > 0 && <span style={{ fontSize:10, fontWeight:700, color:g.priority===2?C.expense:C.warn, background:`${g.priority===2?C.expense:C.warn}18`, padding:"1px 6px", borderRadius:6 }}>{g.priority===2?"最優先":"優先"}</span>}
+                      </div>
                       {g.deadline && <div style={{ fontSize:11, color:isExpired?C.danger:daysLeft<=30?C.warn:C.muted, marginTop:2 }}>{isExpired ? "⚠️ 已到期" : `⏳ 還有 ${daysLeft} 天（${g.deadline}）`}</div>}
                     </div>
                   </div>

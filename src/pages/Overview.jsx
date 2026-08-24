@@ -7,7 +7,7 @@ export default function OverviewPage({
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
-  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder,
+  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
@@ -69,7 +69,10 @@ export default function OverviewPage({
               <div style={{ margin:"0 16px 12px", padding:14, borderRadius:14, background:C.card, border:`1px solid ${C.border}` }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:target?8:0 }}>
                   <span style={{ fontSize:13, fontWeight:900, color:C.text }}>💰 這個月的存錢目標</span>
-                  <button onClick={() => setModal("savingsTarget")} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:12, fontWeight:700 }}>{target?"✏️ 調整":"＋ 設定"}</button>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={() => setModal("allocEngine")} style={{ background:"none", border:"none", cursor:"pointer", color:C.teal, fontSize:12, fontWeight:700 }}>🧠 智慧分流</button>
+                    <button onClick={() => setModal("savingsTarget")} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:12, fontWeight:700 }}>{target?"✏️ 調整":"＋ 設定"}</button>
+                  </div>
                 </div>
                 {target ? (
                   <div>
@@ -94,38 +97,7 @@ export default function OverviewPage({
           
           {/* Goal progress bars in overview */}
           {(goals||[]).filter(g=>g.target>0 && g.pinned).map(g => {
-            const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-            const hasSpecificScope = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0);
-            const goalNetWorth = (() => {
-              const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s,b) => {
-                const acc = accs.find(a=>a.id===b.accId);
-                return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
-              }, 0);
-              const accBal = visA.reduce((s,a) => {
-                if (a.type === "investment") {
-                  const stForAcc = stSum.filter(st=>st.acc===a.name);
-                  const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-                  const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
-                  return s + (goalUseMv ? (mv>0?mv:cost) : cost);
-                }
-                return s + toTWD(a.bal, a.cur, rates);
-              }, 0) - excludedBucketTotal;
-              return accBal - totDebt - totPay + totRec;
-            })();
-            const cur = hasSpecificScope
-              ? accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
-                  if (a.type==="investment") {
-                    const stForAcc = stSum.filter(st=>st.acc===a.name);
-                    const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
-                    return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
-                  }
-                  return s + toTWD(a.bal,a.cur,rates);
-                },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b)=>{
-                  const acc = accs.find(a=>a.id===b.accId);
-                  return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
-                },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0)
-              : goalNetWorth;
+            const cur = goalCurrentAmount(g);
             const pct = Math.min(100, cur>0?(cur/g.target*100):0);
             const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
             const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
