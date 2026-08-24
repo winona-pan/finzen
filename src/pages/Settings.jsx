@@ -7,8 +7,9 @@ export default function SettingsPage({
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
   collapsed, toggleSection, APP_VER, changeTheme, THEMES, theme,
   customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
+  allocSettings, setAllocSettings,
   // 接收全域共用 UI 元件
-  Card, SH, Btn
+  Card, SH, Btn, Sl
 }) {
 
   /* ── 內部封裝的備份匯出函數 ── */
@@ -52,6 +53,30 @@ export default function SettingsPage({
                   </button>
                 ))}
               </div>
+            </Card>
+
+            {/* 智慧分流：預設參數設定 */}
+            <Card style={{ padding:20, marginBottom:16 }}>
+              <SH title="🧠 智慧分流：預設參數" />
+              <div style={{ fontSize:11, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
+                分流引擎和年度現金流預測排程，沒有特別設定時都會用這裡的預設值。
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設每月收入</label>
+                <input type="number" defaultValue={allocSettings.defaultIncome} onBlur={e => setAllocSettings({ defaultIncome:+e.target.value||0 })} style={iSt} />
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設生活費上限</label>
+                <input type="number" defaultValue={allocSettings.defaultLivingCap} onBlur={e => setAllocSettings({ defaultLivingCap:+e.target.value||0 })} style={iSt} />
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設投資額</label>
+                <input type="number" defaultValue={allocSettings.defaultInvestAmt} onBlur={e => setAllocSettings({ defaultInvestAmt:+e.target.value||0 })} style={iSt} />
+              </div>
+              <Sl label="預設證券帳戶" value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })}>
+                <option value="">— 不指定 —</option>
+                {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Sl>
             </Card>
 
             {/* Category management */}
