@@ -78,6 +78,9 @@ function getC(theme) { return THEMES[theme] || THEMES.dark; }
 const PIE = ["#f43f5e","#7c7cf8","#4ade80","#fb923c","#06b6d4","#ec4899","#a78bfa","#34d399"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TODAY = new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/* 生活費預算：2026年先固定用預設值（比較準），從2027年開始才改用近3個月自動學習平均 */
+const USE_ADAPTIVE_LIVING_FROM = "2027-01-01";
+const useAdaptiveLiving = TODAY >= USE_ADAPTIVE_LIVING_FROM;
 
 /* ── Currency ── */
 const DEF_RATES = { TWD:1,USD:32.5,EUR:35.2,JPY:0.22,GBP:41.0,HKD:4.17,SGD:24.1,CNY:4.48,KRW:0.024,AUD:21.0,CAD:23.8,CHF:36.5,MYR:7.3,THB:0.93,VND:0.0013 };
@@ -1732,15 +1735,16 @@ export default function App() {
     const income = +totalIncome || 0;
     const investAmt = overrides.investAmt != null ? overrides.investAmt : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
 
-    // Step 2【生活費】：近3個月平均實際支出（自適應學習），沒有歷史資料時用「預設生活費上限」，可手動覆寫
+    // Step 2【生活費】：2027年之前先固定用預設值，2027年開始才改用近3個月平均實際支出（自適應學習），可手動覆寫
     const months = [];
     for (let i = 1; i <= 3; i++) {
       const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
       months.push({ y: dt.getFullYear(), m: dt.getMonth() + 1 });
     }
-    const histVariable = months.map(({ y, m }) => {
+    const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
+      // 排除訂閱/基本開銷自動記的帳（tags #自動記帳、#分攤認列），這些已經算在「剛性扣除」的固定支出裡了，這裡只抓非固定的生活變動支出，避免重複扣
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 11000);
@@ -1791,20 +1795,21 @@ export default function App() {
       const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
       months.push({ y: dt.getFullYear(), m: dt.getMonth() + 1 });
     }
-    const histVariable = months.map(({ y, m }) => {
+    const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
+      // 排除訂閱/基本開銷自動記的帳，這裡的 fixedMo 已經另外算過了，避免同一筆訂閱費被算兩次
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
-    const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : moExp;
+    const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : (allocSettings.defaultLivingCap || 11000);
     const suggested = Math.max(0, Math.round(moInc - fixedMo - avgVariable));
     return { income: moInc, fixed: Math.round(fixedMo), avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
-  }, [moInc, subsMo, billsMo, moExp, txns]);
+  }, [moInc, subsMo, billsMo, allocSettings, txns]);
 
   /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
     const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
-    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
+    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
