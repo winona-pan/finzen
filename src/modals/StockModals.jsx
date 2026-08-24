@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 export default function StockModals({ 
-  C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+  C, modal, close, iSt, fmt, fmtPrice, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
@@ -141,7 +141,7 @@ export default function StockModals({
             </Fld>
             <div style={{ padding:10, borderRadius:10, marginBottom:8, background:C.card, fontSize:12 }}>
               <div style={{ fontWeight:900, fontSize:13, color:C.text, marginBottom:2 }}>{st.ticker} {st.name}</div>
-              <div style={{ color:C.textSub }}>持股 <strong style={{ color:C.accentL }}>{st.totalSh}股</strong> · 均成本 {fmt(Math.round(st.avgCost||0))}{st.curPrice>0?` · 現價 ${fmt(st.curPrice)}`:""}</div>
+              <div style={{ color:C.textSub }}>持股 <strong style={{ color:C.accentL }}>{st.totalSh}股</strong> · 均成本 {fmtPrice(st.avgCost||0)}{st.curPrice>0?` · 現價 ${fmtPrice(st.curPrice)}`:""}</div>
             </div>
             <Inp label="賣出股數" type="number" placeholder={String(st.totalSh)} value={sellF.shares} onChange={e => setSellF(p => ({ ...p, shares:e.target.value }))} />
             <CalcInp label="賣出總金額" value={sellF.totalProceeds} onChange={v => setSellF(p => ({ ...p, totalProceeds:v }))} />
@@ -245,7 +245,7 @@ export default function StockModals({
               {hasPrice && <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:`1px solid ${C.border}` }}>
                 <div>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>現價</div>
-                  <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(st.curPrice)}/股</div>
+                  <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmtPrice(st.curPrice)}/股</div>
                   <div style={{ fontSize:10, color:C.muted }}>均 {fmt(Math.round(st.avgCost||0))}/股</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
@@ -295,7 +295,7 @@ export default function StockModals({
                 {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
               </div>
               {st.stopLossPct && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
-                停損線：均成本 {fmt(Math.round(st.avgCost||0))} × (1−{st.stopLossPct}%) ≈ {fmt(Math.round((st.avgCost||0)*(1-st.stopLossPct/100)))} /股
+                停損線：均成本 {fmtPrice(st.avgCost||0)} × (1−{st.stopLossPct}%) ≈ {fmtPrice((st.avgCost||0)*(1-st.stopLossPct/100))} /股
                 {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ 已達停損！</span>}
               </div>}
             </div>
@@ -362,7 +362,7 @@ export default function StockModals({
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} 股 ＠ {fmt(t.price)}</div>
+                          <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} 股 ＠ {fmtPrice(t.price)}</div>
                           <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>

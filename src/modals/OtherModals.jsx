@@ -37,7 +37,7 @@ export default function OtherModals({
   const [showCatEP, setShowCatEP] = useState(false);
 
   /* ── 表單預設值 ── */
-  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null, includeDebts: false };
+  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null, includeDebts: false, priority: 0 };
   const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
 
   /* ── 新增理財目標 ── */
@@ -114,6 +114,13 @@ export default function OtherModals({
               <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
             </button>
           )}
+          <Fld label="優先級（智慧分流時，數字越大越優先分配到錢）">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:0,l:"一般"},{v:1,l:"優先"},{v:2,l:"最優先"}].map(o => (
+                <button key={o.v} onClick={() => setNG(p => ({ ...p, priority:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(nG.priority||0)===o.v?`${C.accent}28`:C.card, color:(nG.priority||0)===o.v?C.accentL:C.muted, border:`1px solid ${(nG.priority||0)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addGoal}>新增</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -171,6 +178,13 @@ export default function OtherModals({
               <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
             </button>
           )}
+          <Fld label="優先級（智慧分流時，數字越大越優先分配到錢）">
+            <div style={{ display:"flex", gap:8 }}>
+              {[{v:0,l:"一般"},{v:1,l:"優先"},{v:2,l:"最優先"}].map(o => (
+                <button key={o.v} onClick={() => setEditGoal(p => ({ ...p, priority:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(editGoal.priority||0)===o.v?`${C.accent}28`:C.card, color:(editGoal.priority||0)===o.v?C.accentL:C.muted, border:`1px solid ${(editGoal.priority||0)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
+              ))}
+            </div>
+          </Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個目標的修改？", () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
