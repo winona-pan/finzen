@@ -516,9 +516,9 @@ export default function InvestPage({
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {watchStocks.map(w => (
-                    <SwipeRow key={w.id} onDelete={() => confirm(`移除自選股「${w.ticker}」？`, () => removeWatchStock(w.id))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
-                      <Card style={{ padding:14 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <Card key={w.id} style={{ padding:0, overflow:"hidden" }}>
+                      <SwipeRow onDelete={() => confirm(`移除自選股「${w.ticker}」？`, () => removeWatchStock(w.id))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
+                        <div style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                           <div>
                             <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>
                             <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
@@ -528,13 +528,15 @@ export default function InvestPage({
                             {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
                           </div>
                         </div>
-                        {expandedWatch === w.id && (
-                          <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                      </SwipeRow>
+                      {expandedWatch === w.id && (
+                        <div style={{ padding:14, paddingTop:0 }}>
+                          <div style={{ paddingTop:12, borderTop:`1px solid ${C.border}` }}>
                             <StockPriceChart ticker={w.ticker} market={w.market} fetchStockRange={fetchStockRange} />
                           </div>
-                        )}
-                      </Card>
-                    </SwipeRow>
+                        </div>
+                      )}
+                    </Card>
                   ))}
                 </div>
               )}

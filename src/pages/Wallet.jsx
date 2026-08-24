@@ -4,10 +4,10 @@ export default function WalletPage({
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
-  ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
+  ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, monthlyEquiv,
   ALL_CURS, rates: _rates,
   collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket, moveBucket, growthBucket, setGrowthBucket,
-  selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy,
+  selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy, toggleSub, toggleBill,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
   // 共用 UI atoms
   InfoBtn, SH, Card, SwipeRow, Bdg, Btn, EmojiPicker
@@ -24,12 +24,7 @@ export default function WalletPage({
 
   /* ── 重新啟用訂閱/開銷時，把 lastBilled 重設為「上個月最後一天」，
         讓自動記帳只從當月開始算，不補停用期間錯過的月份 ── */
-  const lastDayOfPrevMonth = () => {
-    const d = new Date(TODAY); d.setDate(0);
-    return d.toISOString().slice(0, 10);
-  };
-  const toggleSubActive = (s) => upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
-  const toggleBillActive = (b) => upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:!x.active, ...(!x.active ? { lastBilled: lastDayOfPrevMonth() } : {}) } : x));
+  const [accDetailMonth, setAccDetailMonth] = useState(null);
 
   /* ── 資料匯出 ── */
   const exportData = () => { 
@@ -112,12 +107,12 @@ export default function WalletPage({
               return <div key={grp.type}>
                 <SH title={grp.label} right={fmt(total)} />
                 <Card style={{ overflow:"hidden" }}>
-                  {all.map((a, i) => (
-                    <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => { upd("accs", p => p.filter(x => x.id !== a.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== a.id)); }); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
+                  {all.map((a, i) => {
+                    const accRowContent = (
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, opacity:a.vis?1:0.45 }}>
                         {wMode === "sort" && <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:2 }}>
-                          <button onClick={e => { e.stopPropagation(); moveAcc(a.id, -1); }} disabled={i === 0} style={{ width:24, height:22, borderRadius:6, background:i === 0 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === 0 ? "default" : "pointer", color:i === 0 ? C.muted : C.accentL, fontSize:13 }}>▲</button>
-                          <button onClick={e => { e.stopPropagation(); moveAcc(a.id, 1); }} disabled={i === all.length - 1} style={{ width:24, height:22, borderRadius:6, background:i === all.length - 1 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === all.length - 1 ? "default" : "pointer", color:i === all.length - 1 ? C.muted : C.accentL, fontSize:13 }}>▼</button>
+                          <button onClick={() => moveAcc(a.id, -1)} disabled={i === 0} style={{ width:24, height:22, borderRadius:6, background:i === 0 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === 0 ? "default" : "pointer", color:i === 0 ? C.muted : C.accentL, fontSize:13 }}>▲</button>
+                          <button onClick={() => moveAcc(a.id, 1)} disabled={i === all.length - 1} style={{ width:24, height:22, borderRadius:6, background:i === all.length - 1 ? C.muted + "22" : C.accent + "33", border:"none", cursor:i === all.length - 1 ? "default" : "pointer", color:i === all.length - 1 ? C.muted : C.accentL, fontSize:13 }}>▼</button>
                         </div>}
                         <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{a.icon || AT[a.type] || "💳"}</div>
                         <div style={{ flex:1 }}>
@@ -131,10 +126,17 @@ export default function WalletPage({
                           <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(a.bal, a.cur)}</div>
                           {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted }}>≈{fmt(toTWD(a.bal, a.cur, rates))}</div>}
                         </div>
-                        <span style={{ color:C.muted, fontSize:13, marginLeft:4 }}>✏️</span>
+                        {wMode !== "sort" && <span style={{ color:C.muted, fontSize:13, marginLeft:4 }}>✏️</span>}
                       </div>
-                    </SwipeRow>
-                  ))}
+                    );
+                    return wMode === "sort" ? (
+                      <div key={a.id} style={{ borderTop:i > 0 ? `1px solid ${C.border}` : undefined }}>{accRowContent}</div>
+                    ) : (
+                      <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => { upd("accs", p => p.filter(x => x.id !== a.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== a.id)); }); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
+                        {accRowContent}
+                      </SwipeRow>
+                    );
+                  })}
                 </Card>
                 {grp.type === "debit" && all.map(a => {
                   const myBuckets = buckets.filter(b => b.accId === a.id).sort((x,y) => (x.order||0)-(y.order||0));
@@ -161,14 +163,24 @@ export default function WalletPage({
                           <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
                           {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
                           <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
-                          {(b.history||[]).length > 1 && <button onClick={e => { e.stopPropagation(); setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>📈</button>}
-                          <button onClick={e => { e.stopPropagation(); confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>{b.vis===false?"🙈":"👁️"}</button>
                         </div>
                       );
-                      return wMode === "sort" ? (
-                        <div key={b.id}>{bucketRowContent}</div>
-                      ) : (
-                        <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>{bucketRowContent}</SwipeRow>
+                      const bucketActionBtns = wMode !== "sort" && editingBucket !== b.id ? (
+                        <>
+                          {(b.history||[]).length > 1 && <button onClick={() => { setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, padding:"0 10px" }}>📈</button>}
+                          <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.muted, fontSize:14, flexShrink:0, padding:"0 10px" }}>{b.vis===false?"🙈":"👁️"}</button>
+                        </>
+                      ) : null;
+                      if (wMode === "sort") return <div key={b.id}>{bucketRowContent}</div>;
+                      return (
+                        <div key={b.id} style={{ display:"flex", gap:6, alignItems:"stretch", marginBottom: editingBucket===b.id ? 0 : 1 }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            {editingBucket === b.id ? bucketRowContent : (
+                              <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>{bucketRowContent}</SwipeRow>
+                            )}
+                          </div>
+                          {bucketActionBtns}
+                        </div>
                       );
                     })}
                   </div>;
@@ -270,22 +282,31 @@ export default function WalletPage({
             <button onClick={() => toggleSection("subs")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["subs"]?4:8, marginTop:4 }}>
               <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>訂閱管理</span>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>月費 {fmt(subsMo)}</span>
+                <span style={{ fontSize:11, color:C.textSub }}>月費約 {fmt(subsMo)}</span>
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["subs"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
             {!collapsed["subs"] && <div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => <SwipeRow key={s.id} onDelete={() => confirm(`確定刪除訂閱「${s.name}」？`, () => upd("subs", p => p.filter(x => x.id !== s.id)))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
-                    <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
-                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
-                      {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
-                    </div></div>
-                    <span style={{ fontWeight:900, fontSize:14, color:C.expense, marginRight:8 }}>{fmt(s.amt)}</span>
-                    <button onClick={e => { e.stopPropagation(); toggleSubActive(s); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
+                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => (
+                  <div key={s.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <SwipeRow onDelete={() => confirm(`確定刪除訂閱「${s.name}」？`, () => upd("subs", p => p.filter(x => x.id !== s.id)))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }}>
+                          <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
+                          <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
+                            {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
+                          </div></div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontWeight:900, fontSize:14, color:C.expense }}>{fmt(s.amt)}{s.freq==="year"?"/年":s.freq==="week"?"/週":"/月"}</div>
+                            {s.freq!=="month" && <div style={{ fontSize:10, color:C.muted }}>≈{fmt(Math.round(monthlyEquiv(s)))}/月</div>}
+                          </div>
+                        </div>
+                      </SwipeRow>
+                    </div>
+                    <button onClick={() => confirm(s.active ? `確定停用「${s.name}」？` : `確定啟用「${s.name}」？會立刻記一筆本期扣款`, () => toggleSub(s), s.active ? "確認停用" : "確認啟用")} style={{ padding:"0 12px", borderRadius:14, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
                   </div>
-                </SwipeRow>)}
+                ))}
               </div>
               <Btn onClick={() => setModal("addSub")} v="secondary" style={{ width:"100%" }}>＋ 新增訂閱</Btn>
               <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
@@ -298,22 +319,31 @@ export default function WalletPage({
                 <InfoBtn msg="適合水電費、房租等固定支出。停用狀態不計入月費，但保留記錄。到期日自動記帳需重新開啟 App 才會觸發。" />
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                {billsMo > 0 && <span style={{ fontSize:11, color:C.textSub }}>月費 {fmt(billsMo)}</span>}
+                {billsMo > 0 && <span style={{ fontSize:11, color:C.textSub }}>月費約 {fmt(billsMo)}</span>}
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["bills"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
             {!collapsed["bills"] && <div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => <SwipeRow key={b.id} onDelete={() => confirm(`確定刪除「${b.name}」？`, () => upd("bills", p => p.filter(x => x.id !== b.id)))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
-                    <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
-                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>
-                      {b.freq==="week" ? `每週${"日一二三四五六"[(+b.weekday)||1]}` : b.freq==="year" ? `每年${b.yearMonth||1}月${b.day}日` : `每月${b.day}日`}{b.active && <span style={{ color:C.warn }}> · 計算中</span>}
-                    </div></div>
-                    <span style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted, marginRight:8 }}>{fmt(b.amt)}</span>
-                    <button onClick={e => { e.stopPropagation(); toggleBillActive(b); }} style={{ padding:"4px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
+                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => (
+                  <div key={b.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <SwipeRow onDelete={() => confirm(`確定刪除「${b.name}」？`, () => upd("bills", p => p.filter(x => x.id !== b.id)))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }}>
+                          <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
+                          <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>
+                            {b.freq==="week" ? `每週${"日一二三四五六"[(+b.weekday)||1]}` : b.freq==="year" ? `每年${b.yearMonth||1}月${b.day}日` : `每月${b.day}日`}{b.active && <span style={{ color:C.warn }}> · 計算中</span>}
+                          </div></div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted }}>{fmt(b.amt)}{b.freq==="year"?"/年":b.freq==="week"?"/週":"/月"}</div>
+                            {b.freq!=="month" && <div style={{ fontSize:10, color:C.muted }}>≈{fmt(Math.round(monthlyEquiv(b)))}/月</div>}
+                          </div>
+                        </div>
+                      </SwipeRow>
+                    </div>
+                    <button onClick={() => confirm(b.active ? `確定停用「${b.name}」？` : `確定啟用「${b.name}」？會立刻記一筆本期扣款`, () => toggleBill(b), b.active ? "確認停用" : "確認啟用")} style={{ padding:"0 12px", borderRadius:14, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
                   </div>
-                </SwipeRow>)}
+                ))}
               </div>
               <Btn onClick={() => setModal("addBill")} v="secondary" style={{ width:"100%" }}>＋ 新增基本開銷</Btn>
               <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>

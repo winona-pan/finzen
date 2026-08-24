@@ -95,7 +95,24 @@ export default function OverviewPage({
           {/* Goal progress bars in overview */}
           {(goals||[]).filter(g=>g.target>0 && g.pinned).map(g => {
             const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-            const cur = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0)
+            const hasSpecificScope = (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0);
+            const goalNetWorth = (() => {
+              const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s,b) => {
+                const acc = accs.find(a=>a.id===b.accId);
+                return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
+              }, 0);
+              const accBal = visA.reduce((s,a) => {
+                if (a.type === "investment") {
+                  const stForAcc = stSum.filter(st=>st.acc===a.name);
+                  const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+                  const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+                  return s + (goalUseMv ? (mv>0?mv:cost) : cost);
+                }
+                return s + toTWD(a.bal, a.cur, rates);
+              }, 0) - excludedBucketTotal;
+              return accBal - totDebt - totPay + totRec;
+            })();
+            const cur = hasSpecificScope
               ? accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
                   if (a.type==="investment") {
                     const stForAcc = stSum.filter(st=>st.acc===a.name);
@@ -107,8 +124,8 @@ export default function OverviewPage({
                 },0) + buckets.filter(b=>(g.bucketIds||[]).includes(b.id) && !(g.accIds||[]).includes(b.accId)).reduce((s,b)=>{
                   const acc = accs.find(a=>a.id===b.accId);
                   return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
-                },0)
-              : netWorth;
+                },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0)
+              : goalNetWorth;
             const pct = Math.min(100, cur>0?(cur/g.target*100):0);
             const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
             const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
