@@ -14,7 +14,7 @@ export default function ChartsPage({
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
-  nG, setNG, editGoal, setEditGoal, nPL, setNPL, setSelPolicy: _sp, goalCurrentAmount,
+  nG, setNG, editGoal, setEditGoal, nPL, setNPL, setSelPolicy: _sp, goalCurrentAmount, isGoalArchived, setOffsetGoal,
   moDate, setMoDate, searchQ, setSearchQ, APP_VER, changeTheme, THEMES,
   showHDP, setShowHDP, nS, setNS, nB, setNB, sortMode, setSortMode, visMode, setVisMode, nD, setND,
   // 接收全域 UI Atoms 元件
@@ -140,10 +140,10 @@ export default function ChartsPage({
             {chartData.length > 1 ? (
               assetView === "level" ? (
                 <ResponsiveContainer width="100%" height={150}>
-                  <AreaChart data={chartData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                  <AreaChart data={chartData} margin={{ top:5, right:5, bottom:14, left:0 }}>
                     <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(chartData.length / 8) - 1)} />
+                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(chartData.length / 8) - 1)} dy={4} />
                     <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} domain={assetYDomain} />
                     <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
                     <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
@@ -151,7 +151,7 @@ export default function ChartsPage({
                 </ResponsiveContainer>
               ) : (
                 <ResponsiveContainer width="100%" height={150}>
-                  <LineChart data={changeData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                  <LineChart data={changeData} margin={{ top:5, right:5, bottom:14, left:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(changeData.length / 8) - 1)} />
                     <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
@@ -175,60 +175,6 @@ export default function ChartsPage({
               </div>
             ))}
           </Card>
-
-          {/* Goals */}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, marginTop:8 }}>
-            <span style={{ fontWeight:900, fontSize:14, color:C.text }}>🎯 我的目標</span>
-            <Btn sz="sm" onClick={() => setModal("addGoal")}>＋ 新增目標</Btn>
-          </div>
-          {(!goals || goals.length === 0) && (
-            <Card style={{ padding:20, textAlign:"center", marginBottom:16 }}>
-              <div style={{ color:C.muted, fontSize:13 }}>還沒有設定目標，點右上角新增！</div>
-            </Card>
-          )}
-          {(goals||[]).map(g => {
-            const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-            const current = goalCurrentAmount(g);
-            const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
-            const remaining = Math.max(0, g.target - current);
-            const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
-            const isExpired = g.deadline && daysLeft === 0;
-            const col = daysLeft !== null && daysLeft <= 30 ? C.warn : C.accent;
-            return (
-              <Card key={g.id} style={{ padding:20, marginBottom:12, border:`1px solid ${pct>=100?C.teal:C.border}` }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:24 }}>{g.emoji}</span>
-                    <div>
-                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{g.name}</div>
-                        {(g.priority||0) > 0 && <span style={{ fontSize:10, fontWeight:700, color:g.priority===2?C.expense:C.warn, background:`${g.priority===2?C.expense:C.warn}18`, padding:"1px 6px", borderRadius:6 }}>{g.priority===2?"最優先":"優先"}</span>}
-                      </div>
-                      {g.deadline && <div style={{ fontSize:11, color:isExpired?C.danger:daysLeft<=30?C.warn:C.muted, marginTop:2 }}>{isExpired ? "⚠️ 已到期" : `⏳ 還有 ${daysLeft} 天（${g.deadline}）`}</div>}
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
-                    <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
-                    <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
-                  </div>
-                </div>
-                <div style={{ height:10, borderRadius:5, background:C.border, marginBottom:8 }}>
-                  <div style={{ height:"100%", borderRadius:5, background:pct>=100?C.teal:col, width:`${pct}%`, transition:"width .5s" }} />
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                  <span style={{ color:C.textSub }}>目前 {fmt(current)}</span>
-                  <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
-                  <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
-                </div>
-                <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-                  {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
-                </div>
-                {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
-                {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
-              </Card>
-            );
-          })}
         </div>
       )}
       

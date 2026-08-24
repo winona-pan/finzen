@@ -137,7 +137,7 @@ export default function InvestPage({
                         invGrowth.length > 1 ? (
                           <div>
                             <ResponsiveContainer width="100%" height={180}>
-                              <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                              <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:14, left:0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                                 <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(invGrowth.length / 6) - 1)} />
                                 <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
@@ -159,7 +159,7 @@ export default function InvestPage({
                         ) : dailyGrowth.length > 1 ? (
                           <div>
                             <ResponsiveContainer width="100%" height={180}>
-                              <LineChart data={dailyGrowth} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                              <LineChart data={dailyGrowth} margin={{ top:5, right:5, bottom:14, left:0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                                 <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(dailyGrowth.length/6)} />
                                 <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} domain={["auto","auto"]} />
@@ -403,7 +403,7 @@ export default function InvestPage({
                 {benchmarkData.length > 1 ? (
                   <div>
                     <ResponsiveContainer width="100%" height={160}>
-                      <LineChart data={benchmarkData} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                      <LineChart data={benchmarkData} margin={{ top:5, right:5, bottom:14, left:0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(benchmarkData.length/6)} />
                         <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v}%`} />

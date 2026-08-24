@@ -17,9 +17,6 @@ export default function WalletPage({
   const [wMode, setWMode] = useState("normal");
   const [editingBucket, setEditingBucket] = useState(null);
   const [bucketEPFor, setBucketEPFor] = useState(null);
-  const [trFrom, setTrFrom] = useState("");
-  const [trTo, setTrTo] = useState("");
-  const [trAmt, setTrAmt] = useState("");
   const [localRates, setLocalRates] = useState(() => ({ ...rates }));
 
   /* ── 重新啟用訂閱/開銷時，把 lastBilled 重設為「上個月最後一天」，
@@ -61,8 +58,12 @@ export default function WalletPage({
               </div>
             </div>
             {wMode === "vis" && <div style={{ borderRadius:14, padding:12, marginBottom:16, background:C.card, border:`1px solid ${C.borderL}` }}>
-              <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>點擊切換顯示</div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{accs.map(a => <button key={a.id} onClick={() => upd("accs", p => p.map(x => x.id === a.id ? { ...x, vis:!x.vis } : x))} style={{ fontSize:12, padding:"4px 10px", borderRadius:10, fontWeight:700, background:a.vis ? `${C.accent}28` : C.surface, color:a.vis ? C.accentL : C.muted, border:`1px solid ${a.vis ? C.accent : C.border}`, cursor:"pointer" }}>{AT[a.type] || ""} {a.name}</button>)}</div>
+              <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>點擊切換顯示（帳戶）</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:buckets.length>0?14:0 }}>{accs.map(a => <button key={a.id} onClick={() => upd("accs", p => p.map(x => x.id === a.id ? { ...x, vis:!x.vis } : x))} style={{ fontSize:12, padding:"4px 10px", borderRadius:10, fontWeight:700, background:a.vis ? `${C.accent}28` : C.surface, color:a.vis ? C.accentL : C.muted, border:`1px solid ${a.vis ? C.accent : C.border}`, cursor:"pointer" }}>{AT[a.type] || ""} {a.name}</button>)}</div>
+              {buckets.length > 0 && <>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>點擊切換顯示（子帳戶，隱藏的不計入總資產）</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{buckets.map(b => { const acc = accs.find(a=>a.id===b.accId); return <button key={b.id} onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ fontSize:12, padding:"4px 10px", borderRadius:10, fontWeight:700, background:b.vis!==false ? `${C.teal}28` : C.surface, color:b.vis!==false ? C.teal : C.muted, border:`1px solid ${b.vis!==false ? C.teal : C.border}`, cursor:"pointer" }}>{b.emoji} {acc?.name}・{b.name}</button>; })}</div>
+              </>}
             </div>}
             <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:3 }}>總資產淨值</div>
             <div style={{ fontWeight:900, fontSize:34, color:C.text, letterSpacing:"-1.5px", marginBottom:18 }}>{fmt(netWorth)}</div>
@@ -75,7 +76,9 @@ export default function WalletPage({
           <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
             {/* Quick actions */}
             <div style={{ display:"flex", gap:8 }}>
-              <button onClick={() => { setTrFrom(""); setTrTo(""); setTrAmt(""); setModal("transfer"); }} style={{ flex:1, padding:10, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, color:C.text, fontWeight:700, fontSize:13, cursor:"pointer" }}>↔️ 帳戶轉帳</button>
+              {(accs.filter(a=>a.type!=="credit").length + buckets.length) > 1 && (
+                <button onClick={() => setModal("bucketTransfer")} style={{ flex:1, padding:10, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontWeight:700, fontSize:13, cursor:"pointer" }}>🔄 轉帳</button>
+              )}
               <button onClick={() => { const c = accs.find(a => a.type === "credit" && (a.payable || 0) > 0) || accs.find(a => a.type === "credit"); if (c) setModal("payCred"); }} style={{ flex:1, padding:10, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>💳 信用卡繳費</button>
             </div>
 
@@ -90,9 +93,6 @@ export default function WalletPage({
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
-            {buckets.length > 1 && !collapsed["assets"] && (
-              <button onClick={() => setModal("bucketTransfer")} style={{ width:"100%", marginBottom:8, padding:"7px 10px", borderRadius:10, background:C.card, border:`1px dashed ${C.border}`, color:C.accentL, fontSize:12, fontWeight:700, cursor:"pointer" }}>🔄 子帳戶互轉</button>
-            )}
             {!collapsed["assets"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
               const items = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
               const all = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
@@ -168,11 +168,8 @@ export default function WalletPage({
                           <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
                         </div>
                       );
-                      const bucketActionBtns = wMode !== "sort" && editingBucket !== b.id ? (
-                        <>
-                          {(b.history||[]).length > 1 && <button onClick={() => { setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, padding:"0 10px" }}>📈</button>}
-                          <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.muted, fontSize:14, flexShrink:0, padding:"0 10px" }}>{b.vis===false?"🙈":"👁️"}</button>
-                        </>
+                      const bucketActionBtns = wMode !== "sort" && editingBucket !== b.id && (b.history||[]).length > 1 ? (
+                        <button onClick={() => { setGrowthBucket(b.id); setModal("bucketGrowth"); }} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, padding:"0 10px" }}>📈</button>
                       ) : null;
                       if (wMode === "sort") return <div key={b.id}>{bucketRowContent}</div>;
                       return (
@@ -207,18 +204,20 @@ export default function WalletPage({
               <Card style={{ overflow:"hidden" }}>
                 {accs.filter(a => a.type === "credit").map((c, i) => {
                   const pct = c.limit > 0 ? Math.round(c.payable / c.limit * 100) : 0;
-                  const col = pct > 70 ? C.warn : pct > 40 ? C.income : C.textSub;
+                  const overLimit = pct > 100;
+                  const col = overLimit ? C.danger : pct > 70 ? C.warn : pct > 40 ? C.income : C.textSub;
                   return <SwipeRow key={c.id} onDelete={() => confirm(`確定刪除「${c.name}」？`, () => upd("accs", p => p.filter(a => a.id !== c.id)))} onEdit={() => { setSelAcc({ ...c }); setModal("editCredit"); }}>
                     <div style={{ padding:"14px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, cursor:"pointer" }}
                       onClick={() => { setSelAcc({ ...c }); setNewBal(String(c.payable || 0)); setModal("accDetail"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
                         <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>💳</div>
-                        <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{c.name}</div><div style={{ fontSize:12, color:C.muted }}>應付 <span style={{ color:col }}>{fmt(c.payable)}</span> / {fmt(c.limit)}</div></div>
+                        <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{c.name}</div><div style={{ fontSize:12, color:C.muted }}>應付 <span style={{ color:col, fontWeight:overLimit?700:400 }}>{fmt(c.payable)}</span> / {fmt(c.limit)}</div></div>
                         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                          <Bdg color={col}>{pct}%</Bdg>
+                          <Bdg color={col}>{overLimit ? `⚠️ ${pct}%` : `${pct}%`}</Bdg>
                         </div>
                       </div>
-                      <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${pct}%`, background:col }} /></div>
+                      <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, width:`${Math.min(100, pct)}%`, background:col }} /></div>
+                      {overLimit && <div style={{ fontSize:11, color:C.danger, marginTop:4 }}>已超過信用額度 {fmt(c.payable - c.limit)}</div>}
                     </div>
                   </SwipeRow>;
                 })}
@@ -276,80 +275,6 @@ export default function WalletPage({
                   <Btn v="secondary" style={{ width:"100%" }} onClick={() => { setModal("addPolicy"); }}>＋ 新增保單</Btn>
                 </div>
               </Card>}
-            </div>}
-            
-            {/* ── 分隔線 ── */}
-            <div style={{ height:1, background:C.border, margin:"8px 0" }} />
-
-            {/* Subscriptions */}
-            <button onClick={() => toggleSection("subs")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["subs"]?4:8, marginTop:4 }}>
-              <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>訂閱管理</span>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>月費約 {fmt(subsMo)}</span>
-                <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["subs"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
-              </div>
-            </button>
-            {!collapsed["subs"] && <div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => (
-                  <div key={s.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <SwipeRow onDelete={() => confirm(`確定刪除訂閱「${s.name}」？`, () => upd("subs", p => p.filter(x => x.id !== s.id)))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }}>
-                          <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
-                          <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
-                            {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
-                          </div></div>
-                          <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:900, fontSize:14, color:C.expense }}>{fmt(s.amt)}{s.freq==="year"?"/年":s.freq==="week"?"/週":"/月"}</div>
-                            {s.freq!=="month" && <div style={{ fontSize:10, color:C.muted }}>≈{fmt(Math.round(monthlyEquiv(s)))}/月</div>}
-                          </div>
-                        </div>
-                      </SwipeRow>
-                    </div>
-                    <button onClick={() => confirm(s.active ? `確定停用「${s.name}」？` : `確定啟用「${s.name}」？會立刻記一筆本期扣款`, () => toggleSub(s), s.active ? "確認停用" : "確認啟用")} style={{ padding:"0 12px", borderRadius:14, fontSize:12, fontWeight:700, background:s.active ? `${C.teal}25` : `${C.muted}25`, color:s.active ? C.teal : C.muted, border:`1px solid ${s.active ? C.teal : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{s.active ? "啟用" : "停用"}</button>
-                  </div>
-                ))}
-              </div>
-              <Btn onClick={() => setModal("addSub")} v="secondary" style={{ width:"100%" }}>＋ 新增訂閱</Btn>
-              <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
-            </div>}
-
-            {/* Bills */}
-            <button onClick={() => toggleSection("bills")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["bills"]?4:8, marginTop:8 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>基本開銷</span>
-                <InfoBtn msg="適合水電費、房租等固定支出。停用狀態不計入月費，但保留記錄。到期日自動記帳需重新開啟 App 才會觸發。" />
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                {billsMo > 0 && <span style={{ fontSize:11, color:C.textSub }}>月費約 {fmt(billsMo)}</span>}
-                <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["bills"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
-              </div>
-            </button>
-            {!collapsed["bills"] && <div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => (
-                  <div key={b.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <SwipeRow onDelete={() => confirm(`確定刪除「${b.name}」？`, () => upd("bills", p => p.filter(x => x.id !== b.id)))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }}>
-                          <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
-                          <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>
-                            {b.freq==="week" ? `每週${"日一二三四五六"[(+b.weekday)||1]}` : b.freq==="year" ? `每年${b.yearMonth||1}月${b.day}日` : `每月${b.day}日`}{b.active && <span style={{ color:C.warn }}> · 計算中</span>}
-                          </div></div>
-                          <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:900, fontSize:14, color:b.active ? C.warn : C.muted }}>{fmt(b.amt)}{b.freq==="year"?"/年":b.freq==="week"?"/週":"/月"}</div>
-                            {b.freq!=="month" && <div style={{ fontSize:10, color:C.muted }}>≈{fmt(Math.round(monthlyEquiv(b)))}/月</div>}
-                          </div>
-                        </div>
-                      </SwipeRow>
-                    </div>
-                    <button onClick={() => confirm(b.active ? `確定停用「${b.name}」？` : `確定啟用「${b.name}」？會立刻記一筆本期扣款`, () => toggleBill(b), b.active ? "確認停用" : "確認啟用")} style={{ padding:"0 12px", borderRadius:14, fontSize:12, fontWeight:700, background:b.active ? `${C.warn}25` : `${C.muted}25`, color:b.active ? C.warn : C.muted, border:`1px solid ${b.active ? C.warn : C.muted}44`, cursor:"pointer", flexShrink:0 }}>{b.active ? "開啟" : "停用"}</button>
-                  </div>
-                ))}
-              </div>
-              <Btn onClick={() => setModal("addBill")} v="secondary" style={{ width:"100%" }}>＋ 新增基本開銷</Btn>
-              <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>💡 到期日自動記帳，需重新開啟 App 才會觸發</div>
             </div>}
           </div>
         </div>
