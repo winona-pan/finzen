@@ -3,7 +3,7 @@ import { useState } from "react";
 export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
-  setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal,
+  setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal, setDepositGoal,
   curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, yearlyGoalSchedule,
   Card, Btn
 }) {
@@ -90,6 +90,12 @@ export default function GoalsPage({
                   if (stillShort <= 0) return <div style={{ marginTop:4, fontSize:11, color:C.teal, textAlign:"center" }}>✅ 照目前規劃的節奏，到期前存得完</div>;
                   return <div style={{ marginTop:4, fontSize:11, color:C.warn, textAlign:"center" }}>⚠️ 照目前規劃的節奏，到期時預估還會差 {fmt(stillShort)}</div>;
                 })()}
+                {g.goalType === "sinking" && current > 0 && (
+                  <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>💸 花這筆錢了，記一筆支出（不算進生活費）</button>
+                )}
+                {g.goalType !== "milestone" && ((g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0)) && (
+                  <button onClick={() => { setDepositGoal(g); setModal("goalDeposit"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>💰 這個月多存的錢，存入這個目標</button>
+                )}
               </Card>
             );
           })}
@@ -103,7 +109,8 @@ export default function GoalsPage({
               {showArchivedGoals && (goals||[]).filter(g=>isGoalArchived(g)).map(g => {
                 const current = goalCurrentAmount(g);
                 const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
-                const canOffset = g.goalType === "wishlist" && pct >= 100 && !g.wishPurchased;
+                const isWishlist = g.goalType === "wishlist";
+                const canOffset = isWishlist ? (pct >= 100 && !g.wishPurchased) : current > 0;
                 return (
                   <Card key={g.id} style={{ padding:14, marginBottom:8, opacity:0.75 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -120,7 +127,7 @@ export default function GoalsPage({
                       </div>
                     </div>
                     {canOffset && (
-                      <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>🎁 已實現願望，記一筆對沖</button>
+                      <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>{isWishlist ? "🎁 已實現願望，記一筆對沖" : "💸 開始花這筆錢了，記一筆支出（不算進生活費）"}</button>
                     )}
                   </Card>
                 );
