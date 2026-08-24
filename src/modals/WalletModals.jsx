@@ -218,18 +218,29 @@ export default function WalletModals({
               return <div style={{ marginBottom:16 }}>
                 <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.1em", color:C.muted, marginBottom:8 }}>子帳戶（願望、旅費、存錢等分類）</div>
                 {myBuckets.map(b => (
-                  <SwipeRow key={b.id} onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1 }}>
+                  <div key={b.id}>
+                  {editingBucketId === b.id ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}` }}>
                       <button onClick={() => setBucketEPFor(b.id)} style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, border:"none", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, cursor:"pointer" }}>{b.emoji}</button>
-                      {editingBucketId === b.id ? (
-                        <input autoFocus value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} onBlur={() => setEditingBucketId(null)} onKeyDown={e => { if (e.key==="Enter") setEditingBucketId(null); }} style={{ ...iSt, flex:1, padding:"4px 8px" }} />
-                      ) : (
-                        <div onClick={() => setEditingBucketId(b.id)} style={{ flex:1, fontWeight:700, fontSize:13, color:C.text, cursor:"pointer" }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
-                      )}
-                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0 }}>{b.vis===false?"🙈":"👁️"}</button>
+                      <input autoFocus value={b.name} onChange={e => updateBucket(b.id, { name:e.target.value })} style={{ ...iSt, flex:1, padding:"4px 8px" }} />
                       <input type="number" value={b.allocated} onChange={e => updateBucket(b.id, { allocated:+e.target.value||0 })} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px" }} />
+                      <button onClick={() => setEditingBucketId(null)} style={{ padding:"6px 10px", borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer", flexShrink:0 }}>完成</button>
                     </div>
-                  </SwipeRow>
+                  ) : (
+                    <div style={{ display:"flex", gap:8, alignItems:"stretch" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))} onClick={() => setEditingBucketId(b.id)}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1, cursor:"pointer" }}>
+                            <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
+                            <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
+                            <span style={{ fontSize:13, fontWeight:700, color:C.text, minWidth:70, textAlign:"right" }}>{fmt(b.allocated)}</span>
+                          </div>
+                        </SwipeRow>
+                      </div>
+                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0, padding:"0 12px" }}>{b.vis===false?"🙈":"👁️"}</button>
+                    </div>
+                  )}
+                  </div>
                 ))}
                 {bucketEPFor && <EmojiPicker onSelect={e => { updateBucket(bucketEPFor, { emoji:e }); setBucketEPFor(null); }} onClose={() => setBucketEPFor(null)} />}
                 <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 4px", fontSize:12, color:unassigned<0?C.expense:C.muted, fontWeight:700 }}>

@@ -203,6 +203,10 @@ export default function TxnModals({
               <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.date}</div></div>
               {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.teal }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
               <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
+              <button onClick={() => confirm(`確定刪除「${p.desc}」整筆分月認列？連同已認列的紀錄都會一起清除`, () => {
+                if (p.originTxnId) { delTxn(p.originTxnId); }
+                else { upd("pools", pr => pr.filter(x => x.id !== p.id)); upd("txns", pr => pr.filter(x => x.poolId !== p.id)); }
+              }, "確認刪除")} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
             </div>
             {editPool?.id === p.id && (
               <div style={{ padding:10, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, marginBottom:10 }}>
@@ -234,7 +238,7 @@ export default function TxnModals({
 
         {modal === "expensePools" && <Sheet title="年繳分攤進度" onClose={close}>
           <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-            這些是開了「分攤認列」的訂閱或支出。扣款當下不會整筆算進支出，而是每個月自動認列一部分，直到全額認列完畢。
+            這些是開了「分攤認列」的訂閱或支出。扣款/入帳當下就已經是那一筆錢的最終去向了（現金帳戶會扣款、信用卡會計入應付），這裡只是把同一筆錢拆開顯示在每個月的支出統計裡，不會再額外扣一次錢。
           </div>
           {expensePools.filter(p => p.totalAmt - p.recognized > 0).length === 0 && <div style={{ padding:"32px 0", textAlign:"center", color:C.muted }}>目前沒有進行中的分攤</div>}
           {expensePools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
@@ -242,6 +246,10 @@ export default function TxnModals({
               <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} 開始・每期 {fmt(p.monthlyAmt)}</div></div>
               {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
               <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
+              <button onClick={() => confirm(`確定刪除「${p.desc}」整筆分攤？連同已扣款、已認列的紀錄都會一起清除`, () => {
+                if (p.originTxnId) { delTxn(p.originTxnId); }
+                else { upd("expensePools", pr => pr.filter(x => x.id !== p.id)); upd("txns", pr => pr.filter(x => x.poolId !== p.id)); }
+              }, "確認刪除")} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
             </div>
             {editPool?.id === p.id && (
               <div style={{ padding:10, borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:10 }}>

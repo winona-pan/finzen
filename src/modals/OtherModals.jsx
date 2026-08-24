@@ -37,7 +37,7 @@ export default function OtherModals({
   const [showCatEP, setShowCatEP] = useState(false);
 
   /* ── 表單預設值 ── */
-  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null };
+  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null, includeDebts: false };
   const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
 
   /* ── 新增理財目標 ── */
@@ -99,14 +99,20 @@ export default function OtherModals({
               })}
             </div>
           </Fld>}
-          {stocks.length > 0 && (nG.accIds||[]).some(id => accs.find(a=>a.id===id)?.type==="investment") && (
-            <Fld label="證券帳戶要不要算未實現損益">
+          {stocks.length > 0 && (
+            <Fld label="證券部分要不要算未實現損益">
               <div style={{ display:"flex", gap:8 }}>
                 {[{v:null,l:"跟隨全域設定"},{v:true,l:"計入市值"},{v:false,l:"只算成本"}].map(o => (
                   <button key={String(o.v)} onClick={() => setNG(p => ({ ...p, useMv:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(nG.useMv??null)===o.v?`${C.accent}28`:C.card, color:(nG.useMv??null)===o.v?C.accentL:C.muted, border:`1px solid ${(nG.useMv??null)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
                 ))}
               </div>
             </Fld>
+          )}
+          {((nG.accIds||[]).length>0 || (nG.bucketIds||[]).length>0) && (
+            <button onClick={() => setNG(p => ({ ...p, includeDebts:!p.includeDebts }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:nG.includeDebts ? `${C.teal}22` : C.card, color:nG.includeDebts ? C.teal : C.textSub, border:`1px solid ${nG.includeDebts ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
+              <span>{nG.includeDebts ? "✅" : "⬜"}</span>
+              <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
+            </button>
           )}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addGoal}>新增</Btn>
@@ -150,14 +156,20 @@ export default function OtherModals({
               })}
             </div>
           </Fld>}
-          {stocks.length > 0 && (editGoal.accIds||[]).some(id => accs.find(a=>a.id===id)?.type==="investment") && (
-            <Fld label="證券帳戶要不要算未實現損益">
+          {stocks.length > 0 && (
+            <Fld label="證券部分要不要算未實現損益">
               <div style={{ display:"flex", gap:8 }}>
                 {[{v:null,l:"跟隨全域設定"},{v:true,l:"計入市值"},{v:false,l:"只算成本"}].map(o => (
                   <button key={String(o.v)} onClick={() => setEditGoal(p => ({ ...p, useMv:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(editGoal.useMv??null)===o.v?`${C.accent}28`:C.card, color:(editGoal.useMv??null)===o.v?C.accentL:C.muted, border:`1px solid ${(editGoal.useMv??null)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
                 ))}
               </div>
             </Fld>
+          )}
+          {((editGoal.accIds||[]).length>0 || (editGoal.bucketIds||[]).length>0) && (
+            <button onClick={() => setEditGoal(p => ({ ...p, includeDebts:!p.includeDebts }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:editGoal.includeDebts ? `${C.teal}22` : C.card, color:editGoal.includeDebts ? C.teal : C.textSub, border:`1px solid ${editGoal.includeDebts ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
+              <span>{editGoal.includeDebts ? "✅" : "⬜"}</span>
+              <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
+            </button>
           )}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個目標的修改？", () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }, "確認編輯")}>儲存</Btn>

@@ -332,30 +332,33 @@ export default function StockModals({
                 <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>點一筆可以編輯股數/單價；編輯或刪除都不會自動調整帳戶餘額，需要的話請自行到錢包調整</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                   {monthTrades.map((t, i) => (
-                  <SwipeRow key={t.id||i} onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？（不會自動退回帳戶餘額）`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))} onClick={() => { if (editingTrade===t.id) { setEditingTrade(null); } else { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); } }}>
-                    {editingTrade === t.id ? (
-                      <div style={{ padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined, background:`${C.accent}08` }}>
-                        <div style={{ display:"flex", gap:8, marginBottom:6 }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>股數</div>
-                            <input type="number" value={tradeDraft.shares} onChange={e => setTradeDraft(d => ({ ...d, shares:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} onClick={e=>e.stopPropagation()} />
-                          </div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>單價</div>
-                            <input type="number" value={tradeDraft.price} onChange={e => setTradeDraft(d => ({ ...d, price:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} onClick={e=>e.stopPropagation()} />
-                          </div>
+                  <div key={t.id||i}>
+                  {editingTrade === t.id ? (
+                    <div style={{ padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined, background:`${C.accent}08` }}>
+                      <div style={{ display:"flex", gap:8, marginBottom:6 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>股數</div>
+                          <input type="number" value={tradeDraft.shares} onChange={e => setTradeDraft(d => ({ ...d, shares:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} />
                         </div>
-                        <button onClick={e => {
-                          e.stopPropagation();
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>單價</div>
+                          <input type="number" value={tradeDraft.price} onChange={e => setTradeDraft(d => ({ ...d, price:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} />
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button onClick={() => {
                           const newShares = +tradeDraft.shares||0, newPrice = +tradeDraft.price||0;
                           if (newShares === t.shares && newPrice === t.price) { setEditingTrade(null); return; }
                           confirm(`確定修改這筆${t.type==="buy"?"買進":"賣出"}紀錄？會影響這檔股票的總股數/成本/總資產顯示`, () => {
                             upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newPrice*newShares+(x.fee||0) : x.totalCost } : x) } : s));
                             setEditingTrade(null);
                           }, "確認編輯");
-                        }} style={{ width:"100%", padding:8, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
+                        }} style={{ flex:1, padding:8, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>完成</button>
+                        <button onClick={() => setEditingTrade(null)} style={{ padding:"8px 16px", borderRadius:8, background:C.card, color:C.text, border:`1px solid ${C.border}`, fontWeight:700, fontSize:12, cursor:"pointer" }}>取消</button>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    <SwipeRow onDelete={() => confirm(`刪除這筆${t.type==="buy"?"買進":"賣出"}紀錄？（不會自動退回帳戶餘額）`, () => upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.filter(x => x.id!==t.id) } : s)))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                         <div style={{ flex:1, minWidth:0 }}>
@@ -368,8 +371,9 @@ export default function StockModals({
                         </div>
                         <span style={{ color:C.muted, fontSize:12 }}>✏️</span>
                       </div>
-                    )}
-                  </SwipeRow>
+                    </SwipeRow>
+                  )}
+                  </div>
                 ))}
                 </div>
               </div>;
