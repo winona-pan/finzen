@@ -101,8 +101,11 @@ export default function WalletPage({
               const moveAcc = (id, dir) => {
                 const sorted = [...all], idx = sorted.findIndex(a => a.id === id), swapIdx = idx + dir;
                 if (swapIdx < 0 || swapIdx >= sorted.length) return;
-                const o1 = sorted[idx].order, o2 = sorted[swapIdx].order;
-                upd("accs", p => p.map(a => { if (a.id === sorted[idx].id) return { ...a, order:o2 }; if (a.id === sorted[swapIdx].id) return { ...a, order:o1 }; return a; }));
+                const reordered = [...sorted];
+                [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+                const orderMap = {};
+                reordered.forEach((a, i) => { orderMap[a.id] = i; });
+                upd("accs", p => p.map(a => orderMap[a.id] !== undefined ? { ...a, order:orderMap[a.id] } : a));
               };
               return <div key={grp.type}>
                 <SH title={grp.label} right={fmt(total)} />
