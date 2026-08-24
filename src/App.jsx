@@ -849,6 +849,14 @@ export default function App() {
 
   /* ── 訂閱：編輯 / 新增 ── */
   const saveSub = useCallback((sub) => { upd("subs", p => p.map(x => x.id === sub.id ? sub : x)); close(); }, [upd]);
+  /* ── 刪除訂閱：連動清掉還沒認列完的「年繳分攤」池，避免留下孤兒紀錄污染分攤總額。已經發生過的分攤記錄（歷史支出）不動，只停止繼續追蹤 ── */
+  const deleteSub = useCallback((subId) => {
+    upd("expensePools", p => (p||[]).filter(x => x.subId !== subId));
+    upd("subs", p => p.filter(x => x.id !== subId));
+  }, [upd]);
+  const deleteBill = useCallback((billId) => {
+    upd("bills", p => p.filter(x => x.id !== billId));
+  }, [upd]);
   const addSub = useCallback(() => {
     if (!nS.name || !nS.amt) return;
     const amt = +nS.amt;
@@ -944,7 +952,8 @@ export default function App() {
   const doBuy = useCallback(() => {
     if (!buyF.ticker || !buyF.shares || !buyF.acc) return;
     const shares = +buyF.shares, totalCost = +buyF.totalCost || (shares * (+buyF.avgCost||0)) + (+buyF.fee||0);
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"" };
+    const linkedTxnId = buyF.fromAcc ? Date.now() : null;
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"", linkedTxnId, linkedAcc: buyF.fromAcc||null };
     upd("stocks", p => {
       const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
       if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
@@ -953,7 +962,7 @@ export default function App() {
     if (buyF.fromAcc) {
       updMulti({
         accs: p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a),
-        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, date:TODAY, tags:"#股票" }],
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, date:TODAY, tags:"#股票" }],
       });
     }
     setBuyF(BF0); close();
@@ -975,18 +984,39 @@ export default function App() {
     const stopLoss = (st?.stopLossPct && entryPrice > 0) ? entryPrice * (1 - st.stopLossPct / 100) : null;
     const rValue = (stopLoss != null && entryPrice > 0 && entryPrice !== stopLoss) ? (sellPrice - entryPrice) / Math.abs(entryPrice - stopLoss) : null;
     const brokeDiscipline = stopLoss != null ? (entryPrice > stopLoss ? sellPrice < stopLoss : sellPrice > stopLoss) : false;
-    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: sellPrice, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0, entryPrice, stopLoss, rValue, brokeDiscipline }] } : s));
+    const linkedTxnId = (sellF.returnAcc && proceeds) ? Date.now() : null;
+    const linkedPnlTxnId = (sellF.pnl && +sellF.pnl !== 0) ? Date.now() + 1 : null;
+    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: sellPrice, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0, entryPrice, stopLoss, rValue, brokeDiscipline, linkedTxnId, linkedAcc: sellF.returnAcc||null, linkedPnlTxnId }] } : s));
     if (sellF.returnAcc && proceeds) {
       updMulti({
         accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
-        txns: p => [...p, { id:Date.now(), type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
       });
     }
     if (sellF.pnl && +sellF.pnl !== 0) {
-      upd("txns", p => [...p, { id:Date.now()+1, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票" }]);
+      upd("txns", p => [...p, { id:linkedPnlTxnId, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票", noBalanceEffect:true }]);
     }
     setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
   }, [sellF, stocks, upd, updMulti]);
+
+  /* ── 刪除交易紀錄：連動退回帳戶餘額（買進退回成本、賣出扣掉收回的錢），並清掉對應的轉帳/損益紀錄 ── */
+  const deleteTrade = useCallback((stockId, tradeId) => {
+    const st = stocks.find(s => s.id === stockId);
+    const t = st?.trades.find(x => x.id === tradeId);
+    updMulti({
+      stocks: p => p.map(s => s.id === stockId ? { ...s, trades: s.trades.filter(x => x.id !== tradeId) } : s),
+      txns: p => p.filter(x => x.id !== t?.linkedTxnId && x.id !== t?.linkedPnlTxnId),
+      accs: p => {
+        if (!t || !t.linkedTxnId || !t.linkedAcc) return p;
+        return p.map(a => {
+          if (a.name !== t.linkedAcc) return a;
+          if (t.type === "buy") return { ...a, bal: a.bal + t.totalCost }; // 買進時扣了 totalCost，刪除要還回去
+          if (t.type === "sell") return { ...a, bal: a.bal - (t.totalCost != null ? t.totalCost : (t.price*t.shares - (t.fee||0))) }; // 賣出時加了 proceeds-fee，刪除要扣回去
+          return a;
+        });
+      },
+    });
+  }, [stocks, updMulti]);
 
   /* ── 更新個股的停損價 / 產業別標記 ── */
   const updateStockMeta = useCallback((stockId, patch) => {
@@ -1185,6 +1215,16 @@ export default function App() {
     upd("goals", () => patched);
   }, [goals, upd]);
 
+  /* ── 一次性清理：訂閱本尊已經被刪掉、但年繳分攤池沒有一起清掉的孤兒紀錄（舊版刪除訂閱時沒連動清理造成的），
+     這種孤兒池的 totalAmt/recognized 常常是壞掉的（例如 totalAmt 被改成 0 但 recognized 還留著），會讓「年繳分攤中」總額算錯 ── */
+  useEffect(() => {
+    const subIds = new Set(subs.map(s => s.id));
+    const orphans = expensePools.filter(p => p.subId && !subIds.has(p.subId));
+    if (orphans.length === 0) return;
+    const orphanIds = new Set(orphans.map(p => p.id));
+    upd("expensePools", p => (p||[]).filter(x => !orphanIds.has(x.id)));
+  }, [subs, expensePools, upd]);
+
   /* ── 財務核心計算邏輯 ── */
   const visA = useMemo(() => accs.filter(a => a.type !== "credit" && a.vis), [accs]);
   const totDebt = useMemo(() => accs.filter(a => a.type === "credit" && a.vis).reduce((s, c) => s + (c.payable || 0), 0), [accs]);
@@ -1196,16 +1236,23 @@ export default function App() {
   const totPools = useMemo(() => pools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [pools]);
   const totExpensePools = useMemo(() => expensePools.reduce((s, p) => s + (p.totalAmt - p.recognized), 0), [expensePools]);
 
-  /* ── 每月存錢目標（提醒自己這個月/下個月要存多少錢到哪個帳戶）── */
+  /* ── 每月存錢目標（提醒自己這個月/下個月要存多少錢到哪個帳戶）。用 slotKey 區分同一個月的多筆目標
+     （slotKey 不給＝手動設定的單一「這個月存錢目標」；slotKey=目標id＝分流引擎套用到特定專案；slotKey="reserve"＝預備金）── */
   const savingsTargets = d.savingsTargets || [];
-  const setSavingsTarget = useCallback((ym, accId, bucketId, amount, note) => {
+  const setSavingsTarget = useCallback((ym, accId, bucketId, amount, note, slotKey) => {
+    const key = slotKey || null;
     upd("savingsTargets", p => {
-      const rest = (p||[]).filter(x => x.ym !== ym);
+      const rest = (p||[]).filter(x => !(x.ym === ym && (x.slotKey||null) === key));
       if (!amount || +amount <= 0) return rest;
-      return [...rest, { id:"sv"+ym, ym, accId:accId||null, bucketId:bucketId||null, amount:+amount, note:note||"" }];
+      return [...rest, { id:"sv"+ym+"_"+(key||"main"), ym, slotKey:key, accId:accId||null, bucketId:bucketId||null, amount:+amount, note:note||"" }];
     });
   }, [upd]);
-  const removeSavingsTarget = useCallback((ym) => upd("savingsTargets", p => (p||[]).filter(x=>x.ym!==ym)), [upd]);
+  const removeSavingsTarget = useCallback((ym, slotKey) => {
+    const key = slotKey || null;
+    upd("savingsTargets", p => (p||[]).filter(x => !(x.ym===ym && (x.slotKey||null)===key)));
+  }, [upd]);
+  /* 這個月套用到各專案目標的存錢金額（分流引擎套用時寫入，年度預測會優先採用這個實際值而不是重新估算）*/
+  const getGoalSavingsTarget = useCallback((ym, goalId) => savingsTargets.find(x => x.ym===ym && x.slotKey===goalId)?.amount ?? null, [savingsTargets]);
 
   const curYm = TODAY.slice(0,7);
   const nextYm = (() => { const d2 = new Date(TODAY); d2.setMonth(d2.getMonth()+1); return d2.toISOString().slice(0,7); })();
@@ -1233,8 +1280,10 @@ export default function App() {
       return s;
     }, 0);
   }, [accs, buckets, txns]);
-  const curSavingsTarget = savingsTargets.find(x => x.ym === curYm);
-  const nextSavingsTarget = savingsTargets.find(x => x.ym === nextYm);
+  const curSavingsTarget = savingsTargets.find(x => x.ym === curYm && !x.slotKey);
+  const nextSavingsTarget = savingsTargets.find(x => x.ym === nextYm && !x.slotKey);
+  /* 這個月由分流引擎套用到各專案／預備金的存錢目標（slotKey 有值的那些） */
+  const curYmGoalTargets = savingsTargets.filter(x => x.ym === curYm && x.slotKey);
   const showNextMonthReminder = new Date(TODAY).getDate() >= 24 && !nextSavingsTarget;
 
   const cashBal = useMemo(() => accs.filter(a => a.type !== "credit" && a.type !== "investment" && a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
@@ -1799,44 +1848,74 @@ export default function App() {
     return months;
   }, [incomeSchedule, allocSettings, curYm, txns]);
 
-  // 依各月「可用資金水位」的權重，把每個專案存錢目標的剩餘需求平滑分配到各月（收入高的月多存、低的月少存，不是死板平分）
+  // 依「每月剩餘可分配資金」跟目標優先級，把各專案存錢池分配到各月：同一個月的剩餘資金是所有專案共用的一個池子，
+  // 依優先級（數字越小越優先）依序把每個目標「這個月該存多少」的份額分掉，不是各自獨立按權重評分，也不會互相重疊。
+  // 如果那個月、那個目標已經透過分流引擎「套用」過實際存錢目標，優先採用那個實際數字。
   const yearlyGoalSchedule = useMemo(() => {
     const fixedMo = subsMo + billsMo;
-    const livingAmt = guiltFreeGauge.livingBudget || allocSettings.defaultLivingCap || 11000;
+    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    return goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g)).map(g => {
-      const cur = goalCurrentAmount(g);
-      const totalNeeded = Math.max(0, g.target - cur);
-      const relevantMonths = yearlySchedule.filter(m => m.ym <= g.deadline.slice(0,7));
-      const monthsLeft = Math.max(1, relevantMonths.length);
-      const surplus = relevantMonths.map(m => Math.max(0, m.effectiveIncome - fixedMo - livingAmt - investAmt));
-      const totalSurplus = surplus.reduce((s,v)=>s+v, 0);
-      const perMonth = relevantMonths.map((m, i) => {
-        const w = totalSurplus > 0 ? (surplus[i] / totalSurplus) : (1 / monthsLeft);
-        return { ym: m.ym, label: m.label, alloc: Math.round(totalNeeded * w) };
-      });
-      return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur, totalNeeded, monthsLeft, perMonth };
-    });
-  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, subsMo, billsMo, guiltFreeGauge, allocSettings]);
+    const rigid = fixedMo + livingAmt + investAmt;
 
-  /* ── 年度現金流預測：5大元素（①總流入 ②剛性扣除 ③專案存錢池 ④自由溢流願望 ⑤月底純現金總水位累加）── */
+    const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
+      .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
+        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7) }))
+      .sort((a,b) => a.priority - b.priority);
+
+    // 剩餘需求會隨著每個月被分掉的金額累減，模擬「這個月存了，下個月要存的就變少」
+    const remainingNeed = {};
+    activeGoals.forEach(g => { remainingNeed[g.id] = Math.max(0, g.target - g.cur); });
+    const perGoalPerMonth = {};
+    activeGoals.forEach(g => { perGoalPerMonth[g.id] = []; });
+
+    yearlySchedule.forEach(m => {
+      let monthSurplus = Math.max(0, m.effectiveIncome - rigid);
+      const activeThisMonth = activeGoals.filter(g => m.ym <= g.deadlineYm && remainingNeed[g.id] > 0);
+      const monthsLeftFor = (g) => Math.max(1, yearlySchedule.filter(mm => mm.ym >= m.ym && mm.ym <= g.deadlineYm).length);
+      activeThisMonth.forEach(g => {
+        const applied = getGoalSavingsTarget(m.ym, g.id);
+        const suggested = Math.round(remainingNeed[g.id] / monthsLeftFor(g));
+        const want = applied != null ? applied : Math.min(suggested, monthSurplus);
+        const alloc = Math.max(0, Math.min(want, applied != null ? applied : monthSurplus));
+        monthSurplus = Math.max(0, monthSurplus - alloc);
+        remainingNeed[g.id] = Math.max(0, remainingNeed[g.id] - alloc);
+        perGoalPerMonth[g.id].push({ ym:m.ym, label:m.label, alloc, isApplied: applied != null });
+      });
+      // 這個月沒輪到或已達標的目標，這個月份額補 0，讓每個目標的 perMonth 陣列長度對齊全部月份
+      activeGoals.forEach(g => {
+        if (!perGoalPerMonth[g.id].some(x => x.ym === m.ym)) perGoalPerMonth[g.id].push({ ym:m.ym, label:m.label, alloc:0, isApplied:false });
+      });
+    });
+
+    return activeGoals.map(g => {
+      const totalNeeded = Math.max(0, g.target - g.cur);
+      const perMonth = perGoalPerMonth[g.id].filter(m => m.ym <= g.deadlineYm);
+      const monthsLeft = perMonth.length;
+      return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth };
+    });
+  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, subsMo, billsMo, guiltFreeGauge, allocSettings, getGoalSavingsTarget]);
+
+  /* ── 年度現金流預測：5大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/預備金 ⑤月底純現金總水位累加）── */
   const yearlyForecastTable = useMemo(() => {
     const fixedMo = subsMo + billsMo;
-    const livingAmt = guiltFreeGauge.livingBudget || allocSettings.defaultLivingCap || 11000;
+    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
     const rigid = fixedMo + livingAmt + investAmt;
     let cumulative = 0;
     return yearlySchedule.map(m => {
-      const sinkingAlloc = yearlyGoalSchedule.reduce((s,g) => s + (g.perMonth.find(pm=>pm.ym===m.ym)?.alloc || 0), 0);
+      const sinkingBreakdown = yearlyGoalSchedule
+        .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, alloc: g.perMonth.find(pm=>pm.ym===m.ym)?.alloc || 0 }))
+        .filter(x => x.alloc > 0);
+      const sinkingAlloc = sinkingBreakdown.reduce((s,x) => s + x.alloc, 0);
       // 願望池與存錢/預備金都屬於「溢流」性質，一起算進這一格；真正細拆要看實際進度，這裡先合併呈現
       const overflowAmt = Math.max(0, m.effectiveIncome - rigid - sinkingAlloc);
       cumulative += overflowAmt;
       return { ym:m.ym, label:m.label, isPast:m.isPast, isCurrent:m.isCurrent, isSeasonalEstimate:m.isSeasonalEstimate,
-        income:m.effectiveIncome, rigid, sinkingAlloc, overflowAmt, cumulative };
+        income:m.effectiveIncome, rigid, sinkingAlloc, sinkingBreakdown, overflowAmt, cumulative };
     });
   }, [yearlySchedule, yearlyGoalSchedule, subsMo, billsMo, guiltFreeGauge, allocSettings]);
 
@@ -1928,13 +2007,13 @@ export default function App() {
     premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
-    nS, setNS, S0, saveSub, addSub, toggleSub, nB, setNB, B0, saveBill, addBill, toggleBill,
-    nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit,
+    nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
+    nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit, deleteTrade,
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
-    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
+    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
