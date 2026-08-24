@@ -95,7 +95,10 @@ export default function OtherModals({
           )}
           {nG.goalType !== "milestone" && (
             <Fld label="優先級（1-10，數字越小分流時越優先）">
-              <input type="number" min="1" max="10" value={nG.priority} onChange={e => setNG(p => ({ ...p, priority:Math.max(1,Math.min(10,+e.target.value||5)) }))} style={iSt} />
+              <input type="number" min="1" max="10" value={nG.priority}
+                onChange={e => { const raw = e.target.value; setNG(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
+                onBlur={() => setNG(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
+                style={iSt} />
             </Fld>
           )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
@@ -174,7 +177,10 @@ export default function OtherModals({
           )}
           {editGoal.goalType !== "milestone" && (
             <Fld label="優先級（1-10，數字越小分流時越優先）">
-              <input type="number" min="1" max="10" value={editGoal.priority??5} onChange={e => setEditGoal(p => ({ ...p, priority:Math.max(1,Math.min(10,+e.target.value||5)) }))} style={iSt} />
+              <input type="number" min="1" max="10" value={editGoal.priority??5}
+                onChange={e => { const raw = e.target.value; setEditGoal(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
+                onBlur={() => setEditGoal(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
+                style={iSt} />
             </Fld>
           )}
           <Fld label="計算哪些帳戶（不選則用總資產）">

@@ -5,7 +5,7 @@ export default function TxnModals({
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, offsetGoal, setOffsetGoal, guiltFreeGauge, updateBucket, passiveMo,
-  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule,
+  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -340,6 +340,7 @@ export default function TxnModals({
           <AllocEngineSheet
             allocSettings={allocSettings} setAllocSettings={setAllocSettings}
             computeAllocation={computeAllocation} financialSuggestion={financialSuggestion}
+            getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} setDefaultIncomeItems={setDefaultIncomeItems}
             accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
             confirm={confirm} close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt}
             Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} Sheet={Sheet}
@@ -439,53 +440,111 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
-  const [income, setIncome] = useState(String(Math.round(financialSuggestion.income + financialSuggestion.fixed + financialSuggestion.avgVariable)));
-  const [investAmt, setInvestAmt] = useState(String(allocSettings.investAmt || 6000));
-  const [investAccId, setInvestAccId] = useState(allocSettings.investAccId || "");
-  const [investFromAccId, setInvestFromAccId] = useState("");
+function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
+  /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到這個月的排程 */
+  const [incomeItems, setIncomeItemsLocal] = useState(() => getIncomeItems(curYm).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
+  /* 投資分流：可以同時分好幾筆到不同證券戶／不同來源帳戶 */
+  const [investAllocs, setInvestAllocsLocal] = useState(() => {
+    if (allocSettings.investAllocs && allocSettings.investAllocs.length > 0) return allocSettings.investAllocs;
+    if (allocSettings.investAccId || allocSettings.investAmt) return [{ id:"inv"+Date.now(), amt: allocSettings.investAmt || 0, toAccId: allocSettings.investAccId || "", fromAccId: "" }];
+    return [];
+  });
   const [livingOverride, setLivingOverride] = useState(null);
   const [goalOverrides, setGoalOverrides] = useState({});
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(true);
+  const [savedDefault, setSavedDefault] = useState(false);
+
+  const income = incomeItems.reduce((s, it) => s + (+it.amt || 0), 0);
+  const investAmt = investAllocs.reduce((s, r) => s + (+r.amt || 0), 0);
+
+  const updateIncomeItems = (next) => { setIncomeItemsLocal(next); setIncomeItems(curYm, next); };
+  const addIncomeItem = () => updateIncomeItems([...incomeItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]);
+  const removeIncomeItem = (id) => updateIncomeItems(incomeItems.filter(it => it.id !== id));
+  const patchIncomeItem = (id, patch) => updateIncomeItems(incomeItems.map(it => it.id===id ? { ...it, ...patch } : it));
+
+  const updateInvestAllocs = (next) => { setInvestAllocsLocal(next); setAllocSettings({ investAllocs: next, investAmt: next.reduce((s,r)=>s+(+r.amt||0),0), investAccId: next[0]?.toAccId || "" }); };
+  const addInvestAlloc = () => updateInvestAllocs([...investAllocs, { id:"inv"+Date.now(), amt:0, toAccId:"", fromAccId:"" }]);
+  const removeInvestAlloc = (id) => updateInvestAllocs(investAllocs.filter(r => r.id !== id));
+  const patchInvestAlloc = (id, patch) => updateInvestAllocs(investAllocs.map(r => r.id===id ? { ...r, ...patch } : r));
 
   const alloc = computeAllocation(income, {
-    investAmt: +investAmt || 0,
+    investAmt,
     livingAmt: livingOverride != null ? +livingOverride : null,
     goalOverrides: Object.fromEntries(Object.entries(goalOverrides).map(([k,v]) => [k, v===""?null:+v])),
   });
 
   return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
-    <CalcInp label="本月總流入（零用錢＋預估薪資/家教等）" value={income} onChange={setIncome} />
+    <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:14, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
+      這筆錢會依序被分配：① 先填下面每一筆收入實際會進哪個帳戶 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部進「存錢／預備金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>
+    </div>
 
-    <button onClick={() => setShowSettings(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginBottom:showSettings?8:14 }}>
-      <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>⚙️ 投資分流設定</span>
+    <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <span>💵 這個月的收入來源</span>
+      <span style={{ color:C.income, fontWeight:900 }}>合計 {fmt(income)}</span>
+    </div>
+    <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:8 }}>
+      {incomeItems.map(it => (
+        <div key={it.id} style={{ padding:10, borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+            <input value={it.label} onChange={e => patchIncomeItem(it.id, { label:e.target.value })} placeholder="例如：零用錢、薪水、家教" style={{ ...iSt, flex:1, padding:"6px 8px", fontSize:12 }} />
+            <button onClick={() => removeIncomeItem(it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14, padding:"0 4px" }}>✕</button>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <input type="number" value={it.amt} onChange={e => patchIncomeItem(it.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, width:100, padding:"6px 8px", fontSize:13, fontWeight:700 }} />
+            <select value={it.accId||""} onChange={e => patchIncomeItem(it.id, { accId:e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px", fontSize:12 }}>
+              <option value="">— 要進哪個帳戶（選填）—</option>
+              {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+        </div>
+      ))}
+      <button onClick={addIncomeItem} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆收入</button>
+      {!savedDefault ? (
+        <button onClick={() => { setDefaultIncomeItems(incomeItems); setSavedDefault(true); }} style={{ width:"100%", padding:6, background:"none", border:"none", color:C.muted, fontSize:11, cursor:"pointer" }}>把這份收入細項設成以後每個月的預設值</button>
+      ) : (
+        <div style={{ textAlign:"center", fontSize:11, color:C.teal }}>✅ 已設成以後每月的預設收入</div>
+      )}
+    </div>
+
+    <button onClick={() => setShowSettings(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginBottom:showSettings?8:14, marginTop:10 }}>
+      <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>📊 投資分流設定（可以同時分到不同帳戶）</span>
       <span style={{ fontSize:12, color:C.muted }}>{showSettings?"▲":"▼"}</span>
     </button>
     {showSettings && (
       <div style={{ padding:12, borderRadius:10, background:C.card, border:`1px solid ${C.border}`, marginBottom:14 }}>
-        <CalcInp label="固定投資金額" value={investAmt} onChange={setInvestAmt} />
-        <Sl label="投資目標帳戶（證券戶）" value={investAccId} onChange={e => { setInvestAccId(e.target.value); setAllocSettings({ investAccId:e.target.value }); }}>
-          <option value="">— 不指定 —</option>
-          {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </Sl>
-        {investAccId && (
-          <Sl label="投資款項要從哪個帳戶轉出" value={investFromAccId} onChange={e => setInvestFromAccId(e.target.value)}>
-            <option value="">— 不自動轉帳，只顯示建議 —</option>
-            {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </Sl>
-        )}
+        {investAllocs.map(r => (
+          <div key={r.id} style={{ padding:10, borderRadius:10, background:C.bg, border:`1px solid ${C.border}`, marginBottom:8 }}>
+            <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+              <input type="number" value={r.amt} onChange={e => patchInvestAlloc(r.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, width:100, padding:"6px 8px", fontSize:13, fontWeight:700 }} />
+              <button onClick={() => removeInvestAlloc(r.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14, padding:"0 4px", marginLeft:"auto" }}>✕</button>
+            </div>
+            <select value={r.toAccId||""} onChange={e => patchInvestAlloc(r.id, { toAccId:e.target.value })} style={{ ...iSt, width:"100%", padding:"6px 8px", fontSize:12, marginBottom:6 }}>
+              <option value="">— 投資目標帳戶（證券戶）—</option>
+              {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            {r.toAccId && (
+              <select value={r.fromAccId||""} onChange={e => patchInvestAlloc(r.id, { fromAccId:e.target.value })} style={{ ...iSt, width:"100%", padding:"6px 8px", fontSize:12 }}>
+                <option value="">— 從哪個帳戶轉出（不選則只顯示建議）—</option>
+                {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            )}
+          </div>
+        ))}
+        <button onClick={addInvestAlloc} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆投資分流</button>
         {buckets.length > 0 && (
-          <Sl label="存錢／預備金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
-            <option value="">— 不自動設定 —</option>
-            {buckets.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
-          </Sl>
+          <div style={{ marginTop:10 }}>
+            <Sl label="存錢／預備金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
+              <option value="">— 不自動設定 —</option>
+              {buckets.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
+            </Sl>
+          </div>
         )}
       </div>
     )}
 
     <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資</div><div style={{ fontSize:10, color:C.muted }}>Step 1・固定金額</div></div>
+        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資</div><div style={{ fontSize:10, color:C.muted }}>Step 1・依上面設定的分流總額</div></div>
         <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{fmt(alloc.investAmt)}</div>
       </div>
 
@@ -494,7 +553,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
         <input type="number" value={livingOverride ?? alloc.livingAmt} onChange={e => setLivingOverride(e.target.value)} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
       </div>
 
-      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 3・專案存錢池（依優先級）</div>}
+      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 3・專案存錢池（依優先級，收入越多分越多）</div>}
       {alloc.goalAllocs.map(g => (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:g.isDone?`${C.teal}12`:C.card, border:`1px solid ${g.isDone?C.teal+"44":C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
@@ -535,9 +594,11 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
 
     <Btn style={{ width:"100%" }} onClick={() => {
       confirm("確定依這份分流建議套用嗎？各目標會設定本月存錢目標，投資的部分會依設定產生轉帳", () => {
-        if (investFromAccId && investAccId && alloc.investAmt > 0) {
-          doAccountTransfer(investFromAccId, investAccId, alloc.investAmt, "智慧分流：股票投資");
-        }
+        investAllocs.forEach(r => {
+          if (r.fromAccId && r.toAccId && (+r.amt||0) > 0) {
+            doAccountTransfer(r.fromAccId, r.toAccId, +r.amt, "智慧分流：股票投資");
+          }
+        });
         [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
           if (g.alloc <= 0) return;
           const accId = g.accIds?.[0] || null;
