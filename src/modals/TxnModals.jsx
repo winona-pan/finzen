@@ -308,11 +308,7 @@ export default function TxnModals({
                 <span style={{ fontSize:14, fontWeight:700, color:C.income }}>{fmt(fs.income)}</span>
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 4px", borderTop:`1px solid ${C.border}` }}>
-                <span style={{ fontSize:13, color:C.textSub }}>固定支出（訂閱＋基本開銷，換算成月費）</span>
-                <span style={{ fontSize:14, fontWeight:700, color:C.expense }}>− {fmt(fs.fixed)}</span>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 4px", borderTop:`1px solid ${C.border}` }}>
-                <span style={{ fontSize:13, color:C.textSub }}>預留變動支出（近{fs.historyMonths || 0}個月平均）</span>
+                <span style={{ fontSize:13, color:C.textSub }}>生活費預算（含訂閱／基本開銷{fs.historyMonths?`，近${fs.historyMonths}個月平均`:"，目前用設定頁的預設值"}）</span>
                 <span style={{ fontSize:14, fontWeight:700, color:C.expense }}>− {fmt(fs.avgVariable)}</span>
               </div>
             </div>
@@ -780,7 +776,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       </table>
     </div>
     <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
-      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷（都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
+      ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
     </div>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算）</div>
