@@ -1735,7 +1735,7 @@ export default function App() {
     const income = +totalIncome || 0;
     const investAmt = overrides.investAmt != null ? overrides.investAmt : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
 
-    // Step 2【生活費】：2027年之前先固定用預設值，2027年開始才改用近3個月平均實際支出（自適應學習），可手動覆寫
+    // Step 2【生活費】：包含訂閱／基本開銷在內（你已經自己規劃好了，不再另外重複扣一次）。2027年之前先固定用預設值，2027年開始才改用近3個月平均實際支出（自適應學習），可手動覆寫
     const months = [];
     for (let i = 1; i <= 3; i++) {
       const dt = new Date(TODAY); dt.setMonth(dt.getMonth() - i);
@@ -1743,8 +1743,7 @@ export default function App() {
     }
     const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      // 排除訂閱/基本開銷自動記的帳（tags #自動記帳、#分攤認列），這些已經算在「剛性扣除」的固定支出裡了，這裡只抓非固定的生活變動支出，避免重複扣
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 11000);
@@ -1786,9 +1785,8 @@ export default function App() {
     return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, wishlistAllocs, reserveAmt };
   }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns]);
 
-  /* ── 本月理財建議：算固定支出、近3個月平均變動支出、估出可以存多少 ── */
+  /* ── 本月理財建議：生活費（已包含訂閱與基本開銷，不再另外重複扣一次）＋ 估出可以存多少 ── */
   const financialSuggestion = useMemo(() => {
-    const fixedMo = subsMo + billsMo;
     // 近 3 個「已結束」的月份（不含本月，避免因為月中資料不完整而低估）
     const months = [];
     for (let i = 1; i <= 3; i++) {
@@ -1797,19 +1795,18 @@ export default function App() {
     }
     const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      // 排除訂閱/基本開銷自動記的帳，這裡的 fixedMo 已經另外算過了，避免同一筆訂閱費被算兩次
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : (allocSettings.defaultLivingCap || 11000);
-    const suggested = Math.max(0, Math.round(moInc - fixedMo - avgVariable));
-    return { income: moInc, fixed: Math.round(fixedMo), avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
-  }, [moInc, subsMo, billsMo, allocSettings, txns]);
+    const suggested = Math.max(0, Math.round(moInc - avgVariable));
+    return { income: moInc, avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
+  }, [moInc, allocSettings, txns]);
 
   /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
     const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
-    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && t.tags !== "#自動記帳" && t.tags !== "#分攤認列")
+    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
@@ -1857,12 +1854,12 @@ export default function App() {
   // 依優先級（數字越小越優先）依序把每個目標「這個月該存多少」的份額分掉，不是各自獨立按權重評分，也不會互相重疊。
   // 如果那個月、那個目標已經透過分流引擎「套用」過實際存錢目標，優先採用那個實際數字。
   const yearlyGoalSchedule = useMemo(() => {
-    const fixedMo = subsMo + billsMo;
+    // 生活費（allocSettings.defaultLivingCap）已經包含訂閱／基本開銷了，剛性扣除不再另外加 subsMo/billsMo，避免重複扣
     const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const rigid = fixedMo + livingAmt + investAmt;
+    const rigid = livingAmt + investAmt;
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
@@ -1900,16 +1897,16 @@ export default function App() {
       const monthsLeft = perMonth.length;
       return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth };
     });
-  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, subsMo, billsMo, guiltFreeGauge, allocSettings, getGoalSavingsTarget]);
+  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget]);
 
   /* ── 年度現金流預測：5大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/預備金 ⑤月底純現金總水位累加）── */
   const yearlyForecastTable = useMemo(() => {
-    const fixedMo = subsMo + billsMo;
+    // 生活費已經包含訂閱／基本開銷了，不再另外加 subsMo/billsMo
     const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const rigid = fixedMo + livingAmt + investAmt;
+    const rigid = livingAmt + investAmt;
     let cumulative = 0;
     return yearlySchedule.map(m => {
       const sinkingBreakdown = yearlyGoalSchedule
@@ -1922,7 +1919,7 @@ export default function App() {
       return { ym:m.ym, label:m.label, isPast:m.isPast, isCurrent:m.isCurrent, isSeasonalEstimate:m.isSeasonalEstimate,
         income:m.effectiveIncome, rigid, sinkingAlloc, sinkingBreakdown, overflowAmt, cumulative };
     });
-  }, [yearlySchedule, yearlyGoalSchedule, subsMo, billsMo, guiltFreeGauge, allocSettings]);
+  }, [yearlySchedule, yearlyGoalSchedule, guiltFreeGauge, allocSettings]);
 
 
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
