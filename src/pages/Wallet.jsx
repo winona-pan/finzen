@@ -89,14 +89,30 @@ export default function WalletPage({
                 <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>資產</span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.reduce((s,a)=>s+toTWD(a.bal,a.cur,rates),0))}</span>
+                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.reduce((s,a) => {
+                  if (a.type === "investment") {
+                    const stForAcc = stByAcc[a.name] || [];
+                    const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
+                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+                    return s + toTWD(mv > 0 ? mv : cost, a.cur, rates);
+                  }
+                  return s + toTWD(a.bal, a.cur, rates);
+                }, 0))}</span>
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
             {!collapsed["assets"] && [{ label:"現金", type:"cash" }, { label:"金融卡", type:"debit" }, { label:"證券帳戶", type:"investment" }].map(grp => {
               const items = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
               const all = accs.filter(a => a.type === grp.type).sort((a,b) => (a.order||0)-(b.order||0));
-              const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0);
+              // 證券帳戶顯示的是持股市值（沒有報價就顯示成本），不是帳戶自己的 bal 欄位——買股票的錢是變成股票，不會留在帳戶餘額裡
+              const accDisplayVal = (a) => {
+                if (a.type !== "investment") return a.bal;
+                const stForAcc = stByAcc[a.name] || [];
+                const mv = stForAcc.reduce((s,st)=>s+st.mv,0);
+                const cost = stForAcc.reduce((s,st)=>s+st.totalCost,0);
+                return mv > 0 ? mv : cost;
+              };
+              const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(accDisplayVal(a), a.cur, rates), 0);
               if (!all.length) return null;
               const moveAcc = (id, dir) => {
                 const sorted = [...all], idx = sorted.findIndex(a => a.id === id), swapIdx = idx + dir;
@@ -126,8 +142,9 @@ export default function WalletPage({
                           <div style={{ fontSize:12, color:C.muted }}>{a.cur}</div>
                         </div>
                         <div style={{ textAlign:"right" }}>
-                          <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(a.bal, a.cur)}</div>
-                          {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted }}>≈{fmt(toTWD(a.bal, a.cur, rates))}</div>}
+                          <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(accDisplayVal(a), a.cur)}</div>
+                          {a.type==="investment" && <div style={{ fontSize:10, color:C.muted }}>{(stByAcc[a.name]||[]).reduce((s,st)=>s+st.mv,0) > 0 ? "市值" : "成本（尚無報價）"}</div>}
+                          {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted }}>≈{fmt(toTWD(accDisplayVal(a), a.cur, rates))}</div>}
                         </div>
                         {wMode !== "sort" && <span style={{ color:C.muted, fontSize:13, marginLeft:4 }}>✏️</span>}
                       </div>

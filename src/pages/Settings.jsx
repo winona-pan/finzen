@@ -77,6 +77,13 @@ export default function SettingsPage({
                 <option value="">— 不指定 —</option>
                 {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </Sl>
+              <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${C.border}` }}>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>計畫起始月份（選填）</label>
+                <div style={{ fontSize:10, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
+                  年度現金流預測、各專案的每月排程，都會從這個月開始算，比這個月更早的月份不會出現、也不會被算進「已存了多少」。留空＝從這個月開始。
+                </div>
+                <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={iSt} />
+              </div>
             </Card>
 
             {/* Category management */}

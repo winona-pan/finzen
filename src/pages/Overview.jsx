@@ -7,7 +7,7 @@ export default function OverviewPage({
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo, DAYS,
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
-  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, guiltFreeGauge,
+  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, guiltFreeGauge, allocSettings,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
@@ -50,6 +50,8 @@ export default function OverviewPage({
           </div>
 
           {(() => {
+            // 如果設定了「計畫起始月份」而且還沒到，這個月先不顯示生活費安全水位（避免規劃還沒開始就被判定超支/安全）
+            if (allocSettings.planStartYm && curYm < allocSettings.planStartYm) return null;
             const g = guiltFreeGauge;
             const isSafe = g.hasAllocated && g.remaining >= 0;
             const dayOfMonth = new Date(TODAY).getDate();
