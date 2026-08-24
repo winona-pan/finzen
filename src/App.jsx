@@ -1654,8 +1654,22 @@ export default function App() {
   }, [goalCurrentAmount]);
 
   /* ── 固定投資設定（智慧分流用）── */
-  const allocSettings = d.allocSettings || { investAmt:6000, investAccId:"", livingBucketId:"", reserveBucketId:"" };
-  const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...(p||{investAmt:6000,investAccId:"",livingBucketId:"",reserveBucketId:""}), ...patch })), [upd]);
+  const ALLOC_DEFAULT = { investAmt:6000, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"", defaultIncomeItems:[{ id:"inc_default", label:"零用錢", amt:11000, accId:"" }] };
+  const allocSettings = d.allocSettings ? { ...ALLOC_DEFAULT, ...d.allocSettings } : ALLOC_DEFAULT;
+  const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...ALLOC_DEFAULT, ...(p||{}), ...patch })), [upd]);
+  /* 這個月（或指定月份）預估收入細項：有存過就用存的，沒有就用預設收入項目樣板 */
+  const getIncomeItems = useCallback((ym) => {
+    const stored = (d.incomeSchedule||{})[ym]?.items;
+    if (stored && stored.length > 0) return stored;
+    return allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0
+      ? allocSettings.defaultIncomeItems
+      : [{ id:"inc_default", label:"零用錢", amt:11000, accId:"" }];
+  }, [d.incomeSchedule, allocSettings]);
+  const setIncomeItems = useCallback((ym, items) => {
+    const total = (items||[]).reduce((s, it) => s + (+it.amt || 0), 0);
+    upd("incomeSchedule", p => ({ ...(p||{}), [ym]: { ...(p?.[ym]||{}), items, projected: total } }));
+  }, [upd]);
+  const setDefaultIncomeItems = useCallback((items) => setAllocSettings({ defaultIncomeItems: items }), [setAllocSettings]);
 
   /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘存進預備金 ── */
   const computeAllocation = useCallback((totalIncome, overrides = {}) => {
@@ -1749,7 +1763,10 @@ export default function App() {
 
   const yearlySchedule = useMemo(() => {
     const months = [];
-    const defaultProjected = Math.round(financialSuggestion.income + financialSuggestion.fixed + financialSuggestion.avgVariable) || 0;
+    const defaultIncomeItemsList = allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0
+      ? allocSettings.defaultIncomeItems
+      : [{ id:"inc_default", label:"零用錢", amt:11000, accId:"" }];
+    const defaultProjected = defaultIncomeItemsList.reduce((s, it) => s + (+it.amt || 0), 0);
     for (let i = 0; i < 12; i++) {
       const dt = new Date(TODAY); dt.setDate(1); dt.setMonth(dt.getMonth() + i);
       const ym = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
@@ -1764,7 +1781,7 @@ export default function App() {
       months.push({ ym, label, isPast, isCurrent, actualIncome, projected, effectiveIncome });
     }
     return months;
-  }, [incomeSchedule, financialSuggestion, curYm, txns]);
+  }, [incomeSchedule, allocSettings, curYm, txns]);
 
   // 依各月「可用資金水位」的權重，把每個專案存錢目標的剩餘需求平滑分配到各月（收入高的月多存、低的月少存）
   const yearlyGoalSchedule = useMemo(() => {
@@ -1879,6 +1896,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule,
+    getIncomeItems, setIncomeItems, setDefaultIncomeItems,
     goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation,
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal,
     moDate, setMoDate, searchQ, setSearchQ,
