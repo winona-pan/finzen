@@ -4,7 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, offsetGoal, setOffsetGoal, guiltFreeGauge, updateBucket, passiveMo,
+  goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
@@ -356,12 +356,25 @@ export default function TxnModals({
         {modal === "wishOffset" && offsetGoal && (() => {
           const g = offsetGoal;
           const current = goalCurrentAmount(g);
-          return <Sheet title={`🎁 ${g.name} 已實現願望`} onClose={close}>
+          const isWishlist = g.goalType === "wishlist";
+          return <Sheet title={isWishlist ? `🎁 ${g.name} 已實現願望` : `💸 ${g.name} 支出記錄`} onClose={close}>
             <div style={{ padding:14, borderRadius:12, background:`${C.teal}12`, border:`1px solid ${C.teal}44`, marginBottom:14 }}>
-              <div style={{ fontSize:12, color:C.teal }}>願望池累積金額</div>
+              <div style={{ fontSize:12, color:C.teal }}>{isWishlist ? "願望池累積金額" : "這個目標存下的錢，還剩"}</div>
               <div style={{ fontSize:22, fontWeight:900, color:C.teal }}>{fmt(current)}</div>
             </div>
             <WishOffsetForm g={g} current={current} accs={accs} buckets={buckets} confirm={confirm} close={close} upd={upd} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} />
+          </Sheet>;
+        })()}
+
+        {modal === "goalDeposit" && depositGoal && (() => {
+          const g = depositGoal;
+          const current = goalCurrentAmount(g);
+          return <Sheet title={`💰 存入「${g.name}」`} onClose={close}>
+            <div style={{ padding:14, borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}44`, marginBottom:14 }}>
+              <div style={{ fontSize:12, color:C.accentL }}>目前已存</div>
+              <div style={{ fontSize:22, fontWeight:900, color:C.accentL }}>{fmt(current)} / {fmt(g.target)}</div>
+            </div>
+            <GoalDepositForm g={g} accs={accs} buckets={buckets} doTransfer={doTransfer} confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} />
           </Sheet>;
         })()}
 
@@ -661,25 +674,60 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
 
 /* ── 願望對沖表單：記一筆消費，用願望池對沖，不干擾生活費常態分析 ── */
 function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt, fmt, TODAY, Fld, Sl, CalcInp, Btn }) {
+  const isWishlist = g.goalType === "wishlist";
   const [price, setPrice] = useState(String(Math.round(current)));
   const linkedBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
   const linkedAcc = accs.find(a => (g.accIds||[]).includes(a.id));
   return (
     <div>
-      <CalcInp label="實際購買金額" value={price} onChange={setPrice} />
+      <CalcInp label={isWishlist ? "實際購買金額" : "這筆支出金額（可以分好幾次記，不用一次花完）"} value={price} onChange={setPrice} />
       <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-        會記一筆支出（標記為願望兌現，不會拉高你的「生活費自適應學習」平均值），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」扣除對應金額` : linkedAcc ? "" : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
+        會記一筆支出（標記為{isWishlist?"願望兌現":"目標支出"}，不會拉高你的「生活費自適應學習」平均值，也不會讓「生活區安全水位」被算成超支），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」扣除對應金額` : linkedAcc ? "" : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
       </div>
       <Btn style={{ width:"100%" }} onClick={() => {
         const amt = +price || 0;
         if (amt <= 0) return;
-        confirm(`確定記錄「${g.name}」已實現，花費 ${fmt(amt)}？`, () => {
-          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`🎁 願望兌現：${g.name}`, acc:linkedAcc?.name||linkedBucket?.name&&accs.find(a=>a.id===linkedBucket.accId)?.name||"", date:TODAY, tags:"#願望兌現" }]);
+        confirm(`確定記錄「${g.name}」${isWishlist?"已實現":"支出"}，花費 ${fmt(amt)}？`, () => {
+          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`${isWishlist?"🎁 願望兌現":"💸 目標支出"}：${g.name}`, acc:linkedAcc?.name||linkedBucket?.name&&accs.find(a=>a.id===linkedBucket.accId)?.name||"", date:TODAY, tags:"#願望兌現" }]);
           if (linkedBucket) upd("buckets", p => (p||[]).map(b => b.id===linkedBucket.id ? { ...b, allocated:Math.max(0, b.allocated-amt) } : b));
-          upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
+          if (isWishlist) upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
           close();
         }, "確認記錄");
-      }}>🎁 記錄已實現</Btn>
+      }}>{isWishlist ? "🎁 記錄已實現" : "💸 記錄這筆支出"}</Btn>
+    </div>
+  );
+}
+
+/* ── 把這個月多存的錢，直接存入某個目標的連結帳戶／子帳戶 ── */
+function GoalDepositForm({ g, accs, buckets, doTransfer, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Btn }) {
+  const targetBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
+  const targetAcc = accs.find(a => (g.accIds||[]).includes(a.id));
+  const targetKey = targetBucket ? `bucket:${targetBucket.id}` : targetAcc ? `acc:${targetAcc.id}` : null;
+  const targetName = targetBucket?.name || targetAcc?.name || "";
+  const sourceOptions = accs.filter(a => a.type !== "credit" && a.id !== targetAcc?.id);
+  const [fromAccId, setFromAccId] = useState(sourceOptions[0]?.id || "");
+  const [amount, setAmount] = useState("");
+
+  if (!targetKey) return <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>這個目標沒有連結帳戶或子帳戶，沒辦法直接存入，先去編輯目標設定連結。</div>;
+
+  return (
+    <div>
+      <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+        這個月如果多存了一筆錢（例如收入比較高、或別的月份省下來的），可以直接從某個帳戶轉一筆進「{targetName}」，馬上就會反映在這個目標的進度上。
+      </div>
+      <Sl label="從哪個帳戶轉出" value={fromAccId} onChange={e => setFromAccId(e.target.value)}>
+        {sourceOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </Sl>
+      <CalcInp label="要存入多少" value={amount} onChange={setAmount} />
+      <Btn style={{ width:"100%" }} onClick={() => {
+        const amt = +amount || 0;
+        if (amt <= 0 || !fromAccId) return;
+        const fromAcc = accs.find(a => a.id === fromAccId);
+        confirm(`確定從「${fromAcc?.name}」轉 ${fmt(amt)} 存入「${targetName}」？`, () => {
+          doTransfer(`acc:${fromAccId}`, targetKey, amt);
+          close();
+        }, "確認存入");
+      }}>💰 存入</Btn>
     </div>
   );
 }
