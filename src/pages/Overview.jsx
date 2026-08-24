@@ -47,19 +47,41 @@ export default function OverviewPage({
                 </div>
               ))}
             </div>
-            {totPools > 0 && <div onClick={() => setModal("pools")} style={{ display:"flex", justifyContent:"space-between", padding:"7px 12px", borderRadius:10, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, cursor:"pointer", marginTop:4 }}>
-              <span style={{ fontSize:12, fontWeight:700, color:C.teal }}>📅 待認列收入池：{fmt(totPools)}</span>
-              <span style={{ fontSize:12, color:C.teal }}>認列 →</span>
-            </div>}
-            {totExpensePools > 0 && <div onClick={() => setModal("expensePools")} style={{ display:"flex", justifyContent:"space-between", padding:"7px 12px", borderRadius:10, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, cursor:"pointer", marginTop:4 }}>
-              <span style={{ fontSize:12, fontWeight:700, color:C.warn }}>📦 年繳分攤中：{fmt(totExpensePools)} 未認列</span>
-              <span style={{ fontSize:12, color:C.warn }}>查看 →</span>
-            </div>}
-            {passiveMo > 0 && <button onClick={() => setModal("sweepPassive")} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 12px", borderRadius:10, background:`${C.accentL}12`, border:`1px solid ${C.accentL}33`, marginTop:4, cursor:"pointer" }}>
-              <span style={{ fontSize:12, color:C.accentL }}>🏦 非勞務收入 {fmt(passiveMo)}</span>
-              <span style={{ fontSize:12, color:C.accentL, fontWeight:700 }}>分配存起來 →</span>
-            </button>}
           </div>
+
+          {(() => {
+            const g = guiltFreeGauge;
+            const isSafe = g.hasAllocated && g.remaining >= 0;
+            const dayOfMonth = new Date(TODAY).getDate();
+            const isMonthEnd = dayOfMonth >= 25;
+            return (
+              <div style={{ margin:"0 16px 12px", padding:14, borderRadius:14, background:isSafe?`${C.income}10`:C.card, border:`1px solid ${isSafe?C.income+"44":C.border}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <span style={{ fontSize:13, fontWeight:900, color:C.text }}>🍜 生活區安全水位</span>
+                  {g.hasAllocated && <span style={{ fontSize:10, fontWeight:700, color:isSafe?C.income:C.warn, background:`${isSafe?C.income:C.warn}18`, padding:"2px 8px", borderRadius:8 }}>{isSafe?"✅ 可以放心花":"⚠️ 已經超支"}</span>}
+                </div>
+                <div style={{ fontSize:20, fontWeight:900, color:isSafe?C.income:g.remaining<0?C.expense:C.text }}>{g.remaining>=0?"":"−"}{fmt(Math.abs(g.remaining))}</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>已花 {fmt(g.spentSoFar)} ／ 生活費預算 {fmt(g.livingBudget)}</div>
+                {!g.hasAllocated && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>還沒套用過本月分流建議，先點上面「🧠 智慧分流」規劃一下吧</div>}
+                {isMonthEnd && g.hasAllocated && g.remaining > 0 && (
+                  <button onClick={() => setModal("sweepMoney")} style={{ width:"100%", marginTop:10, padding:9, borderRadius:10, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>🧹 月底了，把剩下 {fmt(g.remaining)} 一鍵掃入願望池／存錢區</button>
+                )}
+              </div>
+            );
+          })()}
+
+          {totPools > 0 && <div onClick={() => setModal("pools")} style={{ margin:"0 16px 8px", display:"flex", justifyContent:"space-between", padding:"7px 12px", borderRadius:10, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, cursor:"pointer" }}>
+            <span style={{ fontSize:12, fontWeight:700, color:C.teal }}>📅 待認列收入池：{fmt(totPools)}</span>
+            <span style={{ fontSize:12, color:C.teal }}>認列 →</span>
+          </div>}
+          {totExpensePools > 0 && <div onClick={() => setModal("expensePools")} style={{ margin:"0 16px 8px", display:"flex", justifyContent:"space-between", padding:"7px 12px", borderRadius:10, background:`${C.warn}18`, border:`1px solid ${C.warn}44`, cursor:"pointer" }}>
+            <span style={{ fontSize:12, fontWeight:700, color:C.warn }}>📦 年繳分攤中：{fmt(totExpensePools)} 未認列</span>
+            <span style={{ fontSize:12, color:C.warn }}>查看 →</span>
+          </div>}
+          {passiveMo > 0 && <button onClick={() => setModal("sweepPassive")} style={{ width:"calc(100% - 32px)", margin:"0 16px 8px", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 12px", borderRadius:10, background:`${C.accentL}12`, border:`1px solid ${C.accentL}33`, cursor:"pointer" }}>
+            <span style={{ fontSize:12, color:C.accentL }}>🏦 非勞務收入 {fmt(passiveMo)}</span>
+            <span style={{ fontSize:12, color:C.accentL, fontWeight:700 }}>分配存起來 →</span>
+          </button>}
 
           {(() => {
             const target = curSavingsTarget;
@@ -85,27 +107,6 @@ export default function OverviewPage({
                     {target.note && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>{target.note}</div>}
                   </div>
                 ) : <div style={{ fontSize:12, color:C.muted }}>依這個月的收支狀況，設定這個月要存多少錢、存到哪裡</div>}
-              </div>
-            );
-          })()}
-
-          {(() => {
-            const g = guiltFreeGauge;
-            const isSafe = g.hasAllocated && g.remaining >= 0;
-            const dayOfMonth = new Date(TODAY).getDate();
-            const isMonthEnd = dayOfMonth >= 25;
-            return (
-              <div style={{ margin:"0 16px 12px", padding:14, borderRadius:14, background:isSafe?`${C.income}10`:C.card, border:`1px solid ${isSafe?C.income+"44":C.border}` }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                  <span style={{ fontSize:13, fontWeight:900, color:C.text }}>🍜 生活區安全水位</span>
-                  {g.hasAllocated && <span style={{ fontSize:10, fontWeight:700, color:isSafe?C.income:C.warn, background:`${isSafe?C.income:C.warn}18`, padding:"2px 8px", borderRadius:8 }}>{isSafe?"✅ 可以放心花":"⚠️ 已經超支"}</span>}
-                </div>
-                <div style={{ fontSize:20, fontWeight:900, color:isSafe?C.income:g.remaining<0?C.expense:C.text }}>{g.remaining>=0?"":"−"}{fmt(Math.abs(g.remaining))}</div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>已花 {fmt(g.spentSoFar)} ／ 生活費預算 {fmt(g.livingBudget)}</div>
-                {!g.hasAllocated && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>還沒套用過本月分流建議，先點上面「🧠 智慧分流」規劃一下吧</div>}
-                {isMonthEnd && g.hasAllocated && g.remaining > 0 && (
-                  <button onClick={() => setModal("sweepMoney")} style={{ width:"100%", marginTop:10, padding:9, borderRadius:10, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>🧹 月底了，把剩下 {fmt(g.remaining)} 一鍵掃入願望池／存錢區</button>
-                )}
               </div>
             );
           })()}
