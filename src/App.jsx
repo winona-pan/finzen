@@ -1819,6 +1819,19 @@ export default function App() {
   const setIncomeSchedule = useCallback((ym, projected) => {
     upd("incomeSchedule", p => ({ ...(p||{}), [ym]: { ...(p?.[ym]||{}), projected:+projected||0 } }));
   }, [upd]);
+  /* 某個月的「剛性扣除」手動覆寫（生活費＋投資），不給就用預設值算 */
+  const setRigidOverride = useCallback((ym, amount) => {
+    upd("incomeSchedule", p => ({ ...(p||{}), [ym]: { ...(p?.[ym]||{}), rigidOverride: amount === null ? null : (+amount||0) } }));
+  }, [upd]);
+  /* 「從下個月開始規劃」：把計畫起始月設成下個月，同時清掉這個月留下的收入排程／已套用的存錢目標，避免舊資料還卡在畫面上 */
+  const startNextMonthPlan = useCallback(() => {
+    const thisYm = TODAY.slice(0,7);
+    const dt = new Date(thisYm + "-01"); dt.setMonth(dt.getMonth()+1);
+    const ny = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
+    upd("allocSettings", p => ({ ...(p||{}), planStartYm: ny }));
+    upd("incomeSchedule", p => { const next = { ...(p||{}) }; delete next[thisYm]; return next; });
+    upd("savingsTargets", p => (p||[]).filter(x => x.ym !== thisYm));
+  }, [upd]);
 
   const yearlySchedule = useMemo(() => {
     const months = [];
@@ -1862,7 +1875,8 @@ export default function App() {
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const rigid = livingAmt + investAmt;
+    const defaultRigid = livingAmt + investAmt;
+    const rigidFor = (ym) => { const ov = incomeSchedule[ym]?.rigidOverride; return ov != null ? ov : defaultRigid; };
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
@@ -1876,7 +1890,7 @@ export default function App() {
     activeGoals.forEach(g => { perGoalPerMonth[g.id] = []; });
 
     yearlySchedule.forEach(m => {
-      let monthSurplus = Math.max(0, m.effectiveIncome - rigid);
+      let monthSurplus = Math.max(0, m.effectiveIncome - rigidFor(m.ym));
       const activeThisMonth = activeGoals.filter(g => m.ym <= g.deadlineYm && remainingNeed[g.id] > 0);
       const monthsLeftFor = (g) => Math.max(1, yearlySchedule.filter(mm => mm.ym >= m.ym && mm.ym <= g.deadlineYm).length);
       activeThisMonth.forEach(g => {
@@ -1900,7 +1914,7 @@ export default function App() {
       const monthsLeft = perMonth.length;
       return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth, accIds:g.accIds, bucketIds:g.bucketIds };
     });
-  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget]);
+  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget, incomeSchedule]);
 
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
   const yearlyForecastTable = useMemo(() => {
@@ -1909,8 +1923,10 @@ export default function App() {
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const rigid = livingAmt + investAmt;
+    const defaultRigid = livingAmt + investAmt;
     return yearlySchedule.map(m => {
+      const rigidOverride = incomeSchedule[m.ym]?.rigidOverride;
+      const rigid = rigidOverride != null ? rigidOverride : defaultRigid;
       const sinkingBreakdown = yearlyGoalSchedule
         .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, alloc: g.perMonth.find(pm=>pm.ym===m.ym)?.alloc || 0 }))
         .filter(x => x.alloc > 0);
@@ -1918,9 +1934,9 @@ export default function App() {
       // 願望池與存錢/預備金都屬於「溢流」性質，一起算進這一格；真正細拆要看實際進度，這裡先合併呈現
       const overflowAmt = Math.max(0, m.effectiveIncome - rigid - sinkingAlloc);
       return { ym:m.ym, label:m.label, isPast:m.isPast, isCurrent:m.isCurrent, isSeasonalEstimate:m.isSeasonalEstimate,
-        income:m.effectiveIncome, rigid, sinkingAlloc, sinkingBreakdown, overflowAmt };
+        income:m.effectiveIncome, rigid, isRigidOverride: rigidOverride != null, sinkingAlloc, sinkingBreakdown, overflowAmt };
     });
-  }, [yearlySchedule, yearlyGoalSchedule, guiltFreeGauge, allocSettings]);
+  }, [yearlySchedule, yearlyGoalSchedule, guiltFreeGauge, allocSettings, incomeSchedule]);
 
 
   const expCat = useMemo(() => { const m = {}; moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").forEach(t => { const own = t.proxyAmt ? t.amt - t.proxyAmt : t.amt; m[t.cat] = (m[t.cat] || 0) + own; }); return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); }, [moTxns]);
@@ -2018,7 +2034,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     getSweptAmount, addSweptAmount,
-    incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
+    incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
     goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation,
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal,
