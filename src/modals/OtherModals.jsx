@@ -37,7 +37,7 @@ export default function OtherModals({
   const [showCatEP, setShowCatEP] = useState(false);
 
   /* ── 表單預設值 ── */
-  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null, includeDebts: false, priority: 0 };
+  const G0 = { name: "", target: "", deadline: "", emoji: "🎯", accIds: [], bucketIds: [], useMv: null, includeDebts: false, priority: 5, goalType: "sinking" };
   const PL0 = { name: "", insurer: "", premium: "", premiumFreq: "year", startDate: TODAY, maturityDate: "", surrenderVal: "", totalPaid: "", cur: "TWD", emoji: "🛡️" };
 
   /* ── 新增理財目標 ── */
@@ -70,12 +70,34 @@ export default function OtherModals({
             <div style={{ flex:1 }}><Inp label="目標名稱" placeholder="買新電腦、旅遊基金、緊急預備金…" value={nG.name} onChange={e => setNG(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
           <CalcInp label="目標金額" value={nG.target} onChange={v => setNG(p => ({ ...p, target:v }))} />
-          <Fld label="目標期限（選填）">
-            <input type="date" value={nG.deadline||""} onChange={e => setNG(p => ({ ...p, deadline:e.target.value }))} style={iSt} min={TODAY} />
-            {nG.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
-              ⏳ 還有 {Math.max(0, Math.ceil((new Date(nG.deadline)-new Date(TODAY))/(86400000)))} 天
-            </div>}
+          <Fld label="目標性質">
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {[
+                { v:"milestone", l:"🏔️ 純資產里程碑", d:"只用來追蹤總淨值，不參與每月分流扣款" },
+                { v:"sinking", l:"🎯 專案存錢池", d:"有截止日，系統自動算每月該存多少" },
+                { v:"wishlist", l:"🎁 自由願望池", d:"沒有截止日，用分流剩下的錢慢慢存滿" },
+              ].map(o => (
+                <button key={o.v} onClick={() => setNG(p => ({ ...p, goalType:o.v, deadline: o.v==="sinking" ? p.deadline : "" }))}
+                  style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", padding:"8px 12px", borderRadius:10, background:nG.goalType===o.v?`${C.accent}20`:C.card, border:`1px solid ${nG.goalType===o.v?C.accent:C.border}`, cursor:"pointer", textAlign:"left" }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:nG.goalType===o.v?C.accentL:C.text }}>{o.l}</span>
+                  <span style={{ fontSize:11, color:C.muted }}>{o.d}</span>
+                </button>
+              ))}
+            </div>
           </Fld>
+          {nG.goalType === "sinking" && (
+            <Fld label="截止日期（專案存錢池必填）">
+              <input type="date" value={nG.deadline||""} onChange={e => setNG(p => ({ ...p, deadline:e.target.value }))} style={iSt} min={TODAY} />
+              {nG.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
+                ⏳ 還有 {Math.max(0, Math.ceil((new Date(nG.deadline)-new Date(TODAY))/(86400000)))} 天
+              </div>}
+            </Fld>
+          )}
+          {nG.goalType !== "milestone" && (
+            <Fld label="優先級（1-10，數字越小分流時越優先）">
+              <input type="number" min="1" max="10" value={nG.priority} onChange={e => setNG(p => ({ ...p, priority:Math.max(1,Math.min(10,+e.target.value||5)) }))} style={iSt} />
+            </Fld>
+          )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {accs.filter(a => a.type !== "credit").map(a => (
@@ -114,13 +136,6 @@ export default function OtherModals({
               <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
             </button>
           )}
-          <Fld label="優先級（智慧分流時，數字越大越優先分配到錢）">
-            <div style={{ display:"flex", gap:8 }}>
-              {[{v:0,l:"一般"},{v:1,l:"優先"},{v:2,l:"最優先"}].map(o => (
-                <button key={o.v} onClick={() => setNG(p => ({ ...p, priority:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(nG.priority||0)===o.v?`${C.accent}28`:C.card, color:(nG.priority||0)===o.v?C.accentL:C.muted, border:`1px solid ${(nG.priority||0)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
-              ))}
-            </div>
-          </Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={addGoal}>新增</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
@@ -134,12 +149,34 @@ export default function OtherModals({
             <div style={{ flex:1 }}><Inp label="目標名稱" value={editGoal.name||""} onChange={e => setEditGoal(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
           <CalcInp label="目標金額" value={String(editGoal.target||"")} onChange={v => setEditGoal(p => ({ ...p, target:+v }))} />
-          <Fld label="目標期限">
-            <input type="date" value={editGoal.deadline||""} onChange={e => setEditGoal(p => ({ ...p, deadline:e.target.value }))} style={iSt} />
-            {editGoal.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
-              ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}天
-            </div>}
+          <Fld label="目標性質">
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {[
+                { v:"milestone", l:"🏔️ 純資產里程碑", d:"只用來追蹤總淨值，不參與每月分流扣款" },
+                { v:"sinking", l:"🎯 專案存錢池", d:"有截止日，系統自動算每月該存多少" },
+                { v:"wishlist", l:"🎁 自由願望池", d:"沒有截止日，用分流剩下的錢慢慢存滿" },
+              ].map(o => (
+                <button key={o.v} onClick={() => setEditGoal(p => ({ ...p, goalType:o.v, deadline: o.v==="sinking" ? p.deadline : "" }))}
+                  style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", padding:"8px 12px", borderRadius:10, background:editGoal.goalType===o.v?`${C.accent}20`:C.card, border:`1px solid ${editGoal.goalType===o.v?C.accent:C.border}`, cursor:"pointer", textAlign:"left" }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:editGoal.goalType===o.v?C.accentL:C.text }}>{o.l}</span>
+                  <span style={{ fontSize:11, color:C.muted }}>{o.d}</span>
+                </button>
+              ))}
+            </div>
           </Fld>
+          {editGoal.goalType === "sinking" && (
+            <Fld label="截止日期">
+              <input type="date" value={editGoal.deadline||""} onChange={e => setEditGoal(p => ({ ...p, deadline:e.target.value }))} style={iSt} />
+              {editGoal.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
+                ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}天
+              </div>}
+            </Fld>
+          )}
+          {editGoal.goalType !== "milestone" && (
+            <Fld label="優先級（1-10，數字越小分流時越優先）">
+              <input type="number" min="1" max="10" value={editGoal.priority??5} onChange={e => setEditGoal(p => ({ ...p, priority:Math.max(1,Math.min(10,+e.target.value||5)) }))} style={iSt} />
+            </Fld>
+          )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {accs.filter(a => a.type !== "credit").map(a => (
@@ -178,13 +215,6 @@ export default function OtherModals({
               <span style={{ textAlign:"left" }}>指定帳戶時，也把「負債＋往來帳」的應收應付算進這個目標</span>
             </button>
           )}
-          <Fld label="優先級（智慧分流時，數字越大越優先分配到錢）">
-            <div style={{ display:"flex", gap:8 }}>
-              {[{v:0,l:"一般"},{v:1,l:"優先"},{v:2,l:"最優先"}].map(o => (
-                <button key={o.v} onClick={() => setEditGoal(p => ({ ...p, priority:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(editGoal.priority||0)===o.v?`${C.accent}28`:C.card, color:(editGoal.priority||0)===o.v?C.accentL:C.muted, border:`1px solid ${(editGoal.priority||0)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
-              ))}
-            </div>
-          </Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個目標的修改？", () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }, "確認編輯")}>儲存</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>

@@ -8,7 +8,7 @@ export default function WalletModals({
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
   isSingleMo, chartRange, setChartRange, healthRange, setHealthRange, useMvForAssets, fetchAllPrices,
-  buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, growthBucket,
+  buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doTransfer, growthBucket,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF, initF, setInitF,
   selPool, setSelPool, recAmt, setRecAmt, doRecognize, adjBal,
   selAcc, setSelAcc, newBal, setNewBal, adjDesc, setAdjDesc,
@@ -32,9 +32,6 @@ export default function WalletModals({
   /* ── 局部狀態 ── */
   const [curSearch, setCurSearch] = useState("");
   const [localRates, setLocalRates] = useState(() => ({ ...rates }));
-  const [trFrom, setTrFrom] = useState("");
-  const [trTo, setTrTo] = useState("");
-  const [trAmt, setTrAmt] = useState("");
   const [showAccEP, setShowAccEP] = useState(false);
   const [showDP, setShowDP] = useState(false);
   const [confirmDlg, setConfirmDlg] = useState(null);
@@ -46,24 +43,6 @@ export default function WalletModals({
   const [bkAmt, setBkAmt] = useState("");
   useEffect(() => { setAccDetailMonth(null); }, [selAcc?.id]);
   const closeConfirm = () => setConfirmDlg(null);
-
-  /* ── 帳戶轉帳處理 ── */
-  const doTransfer = () => {
-    const a = +trAmt; if (!a || !trFrom || !trTo || trFrom === trTo) return;
-    upd("accs", p => p.map(ac => { 
-      if (ac.id === trFrom) return { ...ac, bal: ac.bal - a }; 
-      if (ac.id === trTo) return { ...ac, bal: ac.bal + a }; 
-      return ac; 
-    }));
-    // 寫入轉帳交易明細
-    upd("txns", p => [...p, {
-      id: Date.now(), type: "transfer", cat: "帳戶調整", amt: a,
-      desc: `轉帳：${accs.find(x=>x.id===trFrom)?.name} ➜ ${accs.find(x=>x.id===trTo)?.name}`,
-      acc: accs.find(x=>x.id===trFrom)?.name || "", toAcc: accs.find(x=>x.id===trTo)?.name || "",
-      date: TODAY, tags: "#轉帳"
-    }]);
-    setTrFrom(""); setTrTo(""); setTrAmt(""); close();
-  };
 
   /* ── 信用卡繳費處理 ── */
   const payCredit = () => {
@@ -227,21 +206,17 @@ export default function WalletModals({
                       <button onClick={() => setEditingBucketId(null)} style={{ padding:"6px 10px", borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer", flexShrink:0 }}>完成</button>
                     </div>
                   ) : (
-                    <div style={{ display:"flex", gap:8, alignItems:"stretch" }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))} onClick={() => setEditingBucketId(b.id)}>
-                          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1, cursor:"pointer" }}>
-                            <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
-                            <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
-                            <span style={{ fontSize:13, fontWeight:700, color:C.text, minWidth:70, textAlign:"right" }}>{fmt(b.allocated)}</span>
-                          </div>
-                        </SwipeRow>
+                    <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))} onClick={() => setEditingBucketId(b.id)}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1, cursor:"pointer" }}>
+                        <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
+                        <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
+                        <span style={{ fontSize:13, fontWeight:700, color:C.text, minWidth:70, textAlign:"right" }}>{fmt(b.allocated)}</span>
                       </div>
-                      <button onClick={() => confirm(b.vis===false ? `確定讓「${b.name}」計入總資產？` : `確定隱藏「${b.name}」？金額將不計入總資產`, () => updateBucket(b.id, { vis: b.vis===false ? true : false }), b.vis===false ? "確認顯示" : "確認隱藏")} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, cursor:"pointer", color:C.muted, fontSize:15, flexShrink:0, padding:"0 12px" }}>{b.vis===false?"🙈":"👁️"}</button>
-                    </div>
+                    </SwipeRow>
                   )}
                   </div>
                 ))}
+                <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>💡 要隱藏子帳戶（不計入總資產）？到錢包頁點「顯示/隱藏」統一管理</div>
                 {bucketEPFor && <EmojiPicker onSelect={e => { updateBucket(bucketEPFor, { emoji:e }); setBucketEPFor(null); }} onClose={() => setBucketEPFor(null)} />}
                 <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 4px", fontSize:12, color:unassigned<0?C.expense:C.muted, fontWeight:700 }}>
                   <span>未分配</span><span>{fmt(unassigned)}</span>
@@ -279,16 +254,6 @@ export default function WalletModals({
             </div>
           </Sheet>;
         })()}
-
-        {modal === "transfer" && <Sheet title="帳戶轉帳" onClose={close}>
-          <Sl label="從 (From)" value={trFrom} onChange={e => setTrFrom(e.target.value)}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.id}>{a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
-          <Sl label="到 (To)" value={trTo} onChange={e => setTrTo(e.target.value)}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</Sl>
-          <Inp label="金額" type="number" value={trAmt} onChange={e => setTrAmt(e.target.value)} />
-          <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={doTransfer}>確認轉帳</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
-          </div>
-        </Sheet>}
 
         {modal === "rateSettings" && (() => {
           const usedCurs = [...new Set(accs.map(a => a.cur).filter(c => c !== "TWD"))];
@@ -495,26 +460,30 @@ export default function WalletModals({
         </Sheet>}
 
         {modal === "bucketTransfer" && (() => {
-          const bucketLabel = (b) => { const acc = accs.find(a=>a.id===b.accId); return `${b.emoji} ${acc?.name||""}・${b.name}`; };
-          const from = buckets.find(b => b.id === bkFrom) || buckets[0];
-          const to = buckets.find(b => b.id === bkTo);
-          const crossAcc = from && to && from.accId !== to.accId;
-          return <Sheet title="子帳戶互轉" onClose={close}>
-            <Sl label="從" value={bkFrom || (buckets[0]?.id||"")} onChange={e => setBkFrom(e.target.value)}>
-              {buckets.map(b => <option key={b.id} value={b.id}>{bucketLabel(b)}（{fmt(b.allocated)}）</option>)}
+          const options = [
+            ...accs.filter(a => a.type !== "credit").map(a => ({ key:`acc:${a.id}`, label:`${a.icon||AT[a.type]||"💰"} ${a.name}`, amount:a.bal })),
+            ...buckets.map(b => { const acc = accs.find(a=>a.id===b.accId); return { key:`bucket:${b.id}`, label:`${b.emoji} ${acc?.name||""}・${b.name}`, amount:b.allocated }; }),
+          ];
+          const from = options.find(o => o.key === bkFrom) || options[0];
+          const to = options.find(o => o.key === bkTo);
+          return <Sheet title="轉帳" onClose={close}>
+            <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+              帳戶跟子帳戶都可以直接互轉，不用分開操作。同一個帳戶底下的子帳戶互轉只是重新分類，不同帳戶之間才會真的搬動現金。
+            </div>
+            <Sl label="從" value={bkFrom || (options[0]?.key||"")} onChange={e => setBkFrom(e.target.value)}>
+              {options.map(o => <option key={o.key} value={o.key}>{o.label}（{fmt(o.amount)}）</option>)}
             </Sl>
             <Sl label="到" value={bkTo || ""} onChange={e => setBkTo(e.target.value)}>
               <option value="">— 選擇 —</option>
-              {buckets.filter(b => b.id !== (bkFrom||buckets[0]?.id)).map(b => <option key={b.id} value={b.id}>{bucketLabel(b)}（{fmt(b.allocated)}）</option>)}
+              {options.filter(o => o.key !== (bkFrom||options[0]?.key)).map(o => <option key={o.key} value={o.key}>{o.label}（{fmt(o.amount)}）</option>)}
             </Sl>
             <CalcInp label="金額" value={bkAmt} onChange={setBkAmt} />
-            {crossAcc && <div style={{ fontSize:12, color:C.warn, marginTop:-6, marginBottom:10 }}>⚠️ 這兩個子帳戶屬於不同銀行帳戶，會實際搬動現金餘額並記一筆轉帳交易</div>}
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
-                const f = buckets.find(b=>b.id===(bkFrom||buckets[0]?.id)), t = buckets.find(b=>b.id===bkTo);
+                const f = options.find(o=>o.key===(bkFrom||options[0]?.key)), t = options.find(o=>o.key===bkTo);
                 if (!f || !t || !bkAmt || +bkAmt<=0) return;
-                confirm(`確定從「${f.name}」轉 ${fmt(+bkAmt)} 到「${t.name}」？`, () => {
-                  transferBucket(f.id, t.id, bkAmt);
+                confirm(`確定從「${f.label}」轉 ${fmt(+bkAmt)} 到「${t.label}」？`, () => {
+                  doTransfer(f.key, t.key, bkAmt);
                   setBkFrom(null); setBkTo(null); setBkAmt(""); close();
                 }, "確認轉帳");
               }}>確認</Btn>
@@ -547,7 +516,7 @@ export default function WalletModals({
             </div>
             {data.length > 1 ? (
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data} margin={{ top:5, right:5, bottom:0, left:0 }}>
+                <LineChart data={data} margin={{ top:5, right:5, bottom:14, left:0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                   <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(data.length / 6) - 1)} />
                   <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/10000).toFixed(1)}萬`} />

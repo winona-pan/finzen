@@ -4,7 +4,8 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  goalCurrentAmount, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer,
+  goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, offsetGoal, setOffsetGoal, guiltFreeGauge, updateBucket, passiveMo,
+  incomeSchedule, setIncomeSchedule, yearlySchedule, yearlyGoalSchedule,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec,
   cashBal, ceMap, CE, AT, PIE, ALL_CURS, theme,
   collapsed, toggleSection, nT, setNT, T0, descHistory, descHistoryByCat, tagsHistory,
@@ -229,7 +230,7 @@ export default function TxnModals({
                 </div>
               </div>
             )}
-            <div style={{ height:6, borderRadius:3, background:C.border, marginBottom:12 }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.teal }} /></div>
+            <div style={{ height:6, borderRadius:3, background:C.border, marginBottom:12 }}><div style={{ height:"100%", borderRadius:3, width:`${Math.min(100,(p.recognized / p.totalAmt * 100)).toFixed(0)}%`, background:C.teal }} /></div>
             <div style={{ display:"flex", gap:8 }}>
               <input type="number" placeholder={`最多 ${fmt(p.totalAmt - p.recognized)}`} value={selPool?.id === p.id ? recAmt : ""} onFocus={() => setSelPool(p)} onChange={e => setRecAmt(e.target.value)} style={{ ...iSt, flex:1 }} />
               <Btn v="teal" sz="sm" onClick={() => { setSelPool(p); setTimeout(doRecognize, 50); }}>認列</Btn>
@@ -273,7 +274,7 @@ export default function TxnModals({
                 </div>
               </div>
             )}
-            <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${(p.recognized / p.totalAmt * 100).toFixed(0)}%`, background:C.warn }} /></div>
+            <div style={{ height:6, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${Math.min(100,(p.recognized / p.totalAmt * 100)).toFixed(0)}%`, background:C.warn }} /></div>
           </div>)}
         </Sheet>}
         {modal === "savingsTarget" && (() => {
@@ -340,9 +341,36 @@ export default function TxnModals({
             allocSettings={allocSettings} setAllocSettings={setAllocSettings}
             computeAllocation={computeAllocation} financialSuggestion={financialSuggestion}
             accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
-            confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt}
+            confirm={confirm} close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt}
             Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} Sheet={Sheet}
           />
+        )}
+
+        {modal === "yearlyForecast" && (
+          <YearlyForecastSheet
+            yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} setIncomeSchedule={setIncomeSchedule}
+            close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
+          />
+        )}
+
+        {modal === "wishOffset" && offsetGoal && (() => {
+          const g = offsetGoal;
+          const current = goalCurrentAmount(g);
+          return <Sheet title={`🎁 ${g.name} 已實現願望`} onClose={close}>
+            <div style={{ padding:14, borderRadius:12, background:`${C.teal}12`, border:`1px solid ${C.teal}44`, marginBottom:14 }}>
+              <div style={{ fontSize:12, color:C.teal }}>願望池累積金額</div>
+              <div style={{ fontSize:22, fontWeight:900, color:C.teal }}>{fmt(current)}</div>
+            </div>
+            <WishOffsetForm g={g} current={current} accs={accs} buckets={buckets} confirm={confirm} close={close} upd={upd} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} />
+          </Sheet>;
+        })()}
+
+        {modal === "sweepMoney" && (
+          <SweepMoneySheet title="🧹 月底零錢一鍵掃入" amount={guiltFreeGauge.remaining} amountLabel="這個月生活區還剩下" goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
+        )}
+
+        {modal === "sweepPassive" && (
+          <SweepMoneySheet title="🏦 被動收入分配" amount={passiveMo} amountLabel="這個月的非勞務收入" goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
         )}
     </>
   );
@@ -411,7 +439,7 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
+function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
   const [income, setIncome] = useState(String(Math.round(financialSuggestion.income + financialSuggestion.fixed + financialSuggestion.avgVariable)));
   const [investAmt, setInvestAmt] = useState(String(allocSettings.investAmt || 6000));
   const [investAccId, setInvestAccId] = useState(allocSettings.investAccId || "");
@@ -457,15 +485,21 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
 
     <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資</div><div style={{ fontSize:10, color:C.muted }}>第一順位・固定金額</div></div>
+        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資</div><div style={{ fontSize:10, color:C.muted }}>Step 1・固定金額</div></div>
         <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{fmt(alloc.investAmt)}</div>
       </div>
 
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>🍜 生活費預算</div><div style={{ fontSize:10, color:C.muted }}>Step 2・自動抓近{alloc.historyMonths}個月平均，可調整</div></div>
+        <input type="number" value={livingOverride ?? alloc.livingAmt} onChange={e => setLivingOverride(e.target.value)} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
+      </div>
+
+      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 3・專案存錢池（依優先級）</div>}
       {alloc.goalAllocs.map(g => (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:g.isDone?`${C.teal}12`:C.card, border:`1px solid ${g.isDone?C.teal+"44":C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
             <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name}{g.priority>0 && <span style={{ fontSize:10, color:C.warn, marginLeft:4 }}>({g.priority===2?"最優先":"優先"})</span>}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span></div>
               <div style={{ fontSize:10, color:C.muted }}>{g.isDone ? "🎉 已達標" : `剩 ${g.monthsLeft} 個月・進度 ${g.pct.toFixed(0)}%`}</div>
             </div>
             {g.isDone ? (
@@ -477,15 +511,24 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
           <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:g.isDone?C.teal:C.accent }} /></div>
         </div>
       ))}
-      {alloc.goalAllocs.length === 0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有設定截止日的目標，先到圖表頁新增一個吧</div>}
+      {alloc.goalAllocs.length === 0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有設定「專案存錢池」類型的目標</div>}
 
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>🍜 生活費預算</div><div style={{ fontSize:10, color:C.muted }}>自動抓近{alloc.historyMonths}個月平均，可自行調整</div></div>
-        <input type="number" value={livingOverride ?? alloc.livingAmt} onChange={e => setLivingOverride(e.target.value)} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
-      </div>
+      {alloc.wishlistAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>Step 4・自由願望池（用剩餘溢流資金填滿）</div>}
+      {alloc.wishlistAllocs.map(g => (
+        <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span></div>
+              <div style={{ fontSize:10, color:C.muted }}>進度 {g.pct.toFixed(0)}%</div>
+            </div>
+            <input type="number" value={goalOverrides[g.id] ?? g.alloc} onChange={e => setGoalOverrides(p => ({ ...p, [g.id]:e.target.value }))} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
+          </div>
+          <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:C.accent }} /></div>
+        </div>
+      ))}
 
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44` }}>
-        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 存錢／預備金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
+        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 存錢／預備金</div><div style={{ fontSize:10, color:C.muted }}>Step 5・分配完剩下的都存起來</div></div>
         <div style={{ fontWeight:900, fontSize:18, color:C.teal }}>{fmt(alloc.reserveAmt)}</div>
       </div>
     </div>
@@ -495,7 +538,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
         if (investFromAccId && investAccId && alloc.investAmt > 0) {
           doAccountTransfer(investFromAccId, investAccId, alloc.investAmt, "智慧分流：股票投資");
         }
-        alloc.goalAllocs.forEach(g => {
+        [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
           if (g.alloc <= 0) return;
           const accId = g.accIds?.[0] || null;
           const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
@@ -510,5 +553,120 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
     <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
       套用後：投資（如有設定轉出帳戶）會實際轉帳；各目標與生活費、預備金會設定成這個月的「存錢目標」提醒，實際存錢動作還是要你自己去操作對應帳戶／子帳戶。
     </div>
+    <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+      📅 切換到年度現金流預測排程 →
+    </button>
+  </Sheet>;
+}
+
+/* ── 願望對沖表單：記一筆消費，用願望池對沖，不干擾生活費常態分析 ── */
+function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt, fmt, TODAY, Fld, Sl, CalcInp, Btn }) {
+  const [price, setPrice] = useState(String(Math.round(current)));
+  const linkedBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
+  const linkedAcc = accs.find(a => (g.accIds||[]).includes(a.id));
+  return (
+    <div>
+      <CalcInp label="實際購買金額" value={price} onChange={setPrice} />
+      <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+        會記一筆支出（標記為願望兌現，不會拉高你的「生活費自適應學習」平均值），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」扣除對應金額` : linkedAcc ? "" : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
+      </div>
+      <Btn style={{ width:"100%" }} onClick={() => {
+        const amt = +price || 0;
+        if (amt <= 0) return;
+        confirm(`確定記錄「${g.name}」已實現，花費 ${fmt(amt)}？`, () => {
+          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`🎁 願望兌現：${g.name}`, acc:linkedAcc?.name||linkedBucket?.name&&accs.find(a=>a.id===linkedBucket.accId)?.name||"", date:TODAY, tags:"#願望兌現" }]);
+          if (linkedBucket) upd("buckets", p => (p||[]).map(b => b.id===linkedBucket.id ? { ...b, allocated:Math.max(0, b.allocated-amt) } : b));
+          upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
+          close();
+        }, "確認記錄");
+      }}>🎁 記錄已實現</Btn>
+    </div>
+  );
+}
+
+/* ── 月底零錢一鍵掃入：生活區結餘掃進願望池或存錢區 ── */
+function SweepMoneySheet({ title, amount, amountLabel, goals, buckets, updateBucket, confirm, close, C, fmt, Btn, Sheet }) {
+  const wishGoals = goals.filter(g => g.goalType === "wishlist" && (g.bucketIds||[]).length > 0);
+  const [target, setTarget] = useState(null); // { bucketId, label }
+  const options = [];
+  wishGoals.forEach(g => { const b = buckets.find(bb => (g.bucketIds||[]).includes(bb.id)); if (b) options.push({ bucketId:b.id, label:`${g.emoji} ${g.name}` }); });
+  buckets.forEach(b => { if (!options.some(o => o.bucketId === b.id)) options.push({ bucketId:b.id, label:`${b.emoji} ${b.name}` }); });
+
+  return <Sheet title={title} onClose={close}>
+    <div style={{ padding:14, borderRadius:12, background:`${C.teal}12`, border:`1px solid ${C.teal}44`, marginBottom:14 }}>
+      <div style={{ fontSize:12, color:C.teal }}>{amountLabel}</div>
+      <div style={{ fontSize:22, fontWeight:900, color:C.teal }}>{fmt(amount)}</div>
+    </div>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>要掃進哪裡？</div>
+    {options.length === 0 ? (
+      <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有子帳戶，先到錢包建一個吧</div>
+    ) : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+        {options.map(o => (
+          <button key={o.bucketId} onClick={() => setTarget(o)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", borderRadius:12, background:target?.bucketId===o.bucketId?`${C.teal}20`:C.card, border:`1px solid ${target?.bucketId===o.bucketId?C.teal:C.border}`, cursor:"pointer" }}>
+            <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{o.label}</span>
+            {target?.bucketId===o.bucketId && <span style={{ color:C.teal }}>✓</span>}
+          </button>
+        ))}
+      </div>
+    )}
+    <Btn style={{ width:"100%" }} disabled={!target || amount <= 0} onClick={() => {
+      if (!target || amount <= 0) return;
+      confirm(`確定把 ${fmt(amount)} 掃進「${target.label}」？`, () => {
+        updateBucket(target.bucketId, { allocated: (buckets.find(b=>b.id===target.bucketId)?.allocated||0) + amount });
+        close();
+      }, "確認掃入");
+    }}>🧹 一鍵掃入</Btn>
+  </Sheet>;
+}
+
+/* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, setIncomeSchedule, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+  const [editingYm, setEditingYm] = useState(null);
+  const [draft, setDraft] = useState("");
+  return <Sheet title="📅 年度現金流預測排程" onClose={close}>
+    <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
+      已經過去或本月會自動帶入實際收入；還沒到的月份可以點擊修改預估值，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
+    </div>
+
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣</div>
+    <div style={{ display:"flex", flexDirection:"column", gap:1, marginBottom:20, maxHeight:220, overflowY:"auto" }}>
+      {yearlySchedule.map((m, i) => (
+        <div key={m.ym} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background: m.isCurrent ? `${C.accent}12` : "transparent", borderTop:i>0?`1px solid ${C.border}`:undefined, borderRadius:m.isCurrent?8:0 }}>
+          <span style={{ fontSize:12, color:C.text, fontWeight:m.isCurrent?900:400 }}>{m.label}{m.isCurrent?" (本月)":""}</span>
+          {m.actualIncome != null ? (
+            <span style={{ fontSize:13, fontWeight:700, color:C.income }}>{fmt(m.actualIncome)}<span style={{ fontSize:10, color:C.muted, fontWeight:400 }}> 實際</span></span>
+          ) : editingYm === m.ym ? (
+            <input autoFocus type="number" value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { setIncomeSchedule(m.ym, draft); setEditingYm(null); }} onKeyDown={e => { if (e.key==="Enter") { setIncomeSchedule(m.ym, draft); setEditingYm(null); } }} style={{ ...iSt, width:100, textAlign:"right", padding:"4px 8px" }} />
+          ) : (
+            <button onClick={() => { setEditingYm(m.ym); setDraft(String(m.projected)); }} style={{ background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:700, color:C.accentL }}>{fmt(m.projected)} <span style={{ fontSize:10, color:C.muted, fontWeight:400 }}>預估 ✏️</span></button>
+          )}
+        </div>
+      ))}
+    </div>
+
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的平滑排程</div>
+    {yearlyGoalSchedule.length === 0 ? (
+      <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
+    ) : yearlyGoalSchedule.map(g => (
+      <div key={g.id} style={{ padding:14, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, marginBottom:10 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.emoji} {g.name}</span>
+          <span style={{ fontSize:11, color:C.muted }}>還差 {fmt(g.totalNeeded)}・剩 {g.monthsLeft} 個月</span>
+        </div>
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
+          {g.perMonth.map(m => (
+            <div key={m.ym} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:C.bg }}>
+              <div style={{ fontSize:9, color:C.muted }}>{m.label}</div>
+              <div style={{ fontSize:11, fontWeight:700, color:C.accentL }}>{fmt(m.alloc)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <button onClick={() => { close(); setTimeout(() => setModal("allocEngine"), 50); }} style={{ width:"100%", marginTop:8, padding:12, borderRadius:12, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:900, fontSize:13, cursor:"pointer" }}>
+      ← 切換回當月執行模式
+    </button>
   </Sheet>;
 }
