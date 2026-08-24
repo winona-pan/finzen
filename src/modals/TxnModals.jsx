@@ -481,7 +481,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
 
   return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
     <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:14, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
-      這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部進「存錢／預備金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
+      這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部變成「剩餘資金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
     </div>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -539,7 +539,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
         <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>這裡的設定會自動存起來，不用另外按套用；實際買進請你自己去操作證券戶。</div>
         {buckets.length > 0 && (
           <div style={{ marginTop:10 }}>
-            <Sl label="存錢／預備金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
+            <Sl label="剩餘資金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
               <option value="">— 不自動設定 —</option>
               {buckets.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
             </Sl>
@@ -593,7 +593,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
       ))}
 
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44` }}>
-        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 存錢／預備金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
+        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 剩餘資金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
         <div style={{ fontWeight:900, fontSize:18, color:C.teal }}>{fmt(alloc.reserveAmt)}</div>
       </div>
     </div>
@@ -618,14 +618,14 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
             setSavingsTarget(ym, accId, bucketId, g.alloc, `智慧分流：${g.name}`, g.id);
           });
           if (allocSettings.reserveBucketId && alloc.reserveAmt > 0) {
-            setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：預備金", "reserve");
+            setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：剩餘資金", "reserve");
           }
         });
         close();
       }, "確認套用");
     }}>✅ 套用到存錢目標（{applyMonths.length} 個月份）</Btn>
     <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
-      套用後：各目標與預備金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。
+      套用後：各目標與剩餘資金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。
     </div>
     <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
       📅 切換到年度現金流預測排程 →
@@ -755,12 +755,12 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       ))}
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／預備金 ⑤ 累加水位）</div>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／剩餘資金 ⑤ 累加水位）</div>
     <div style={{ overflowX:"auto", marginBottom:20 }}>
       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
         <thead>
           <tr style={{ background:C.card }}>
-            {["月份","①流入","②剛性扣除","③專案存錢","④溢流/預備金","⑤累加水位"].map(h => (
+            {["月份","①流入","②剛性扣除","③專案存錢","④剩餘資金","⑤累加水位"].map(h => (
               <th key={h} style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.muted, whiteSpace:"nowrap" }}>{h}</th>
             ))}
           </tr>
@@ -780,7 +780,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       </table>
     </div>
     <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
-      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷（都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「存錢/預備金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
+      ②剛性扣除＝固定投資＋生活費＋訂閱與基本開銷（都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
     </div>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算）</div>
