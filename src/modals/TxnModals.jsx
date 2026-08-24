@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function TxnModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -347,7 +347,7 @@ export default function TxnModals({
         {modal === "yearlyForecast" && (
           <YearlyForecastSheet
             yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} yearlyForecastTable={yearlyForecastTable}
-            setIncomeSchedule={setIncomeSchedule} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs}
+            setIncomeSchedule={setIncomeSchedule} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget}
             close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
           />
         )}
@@ -439,8 +439,10 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
 function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
-  /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到這個月的排程 */
-  const [incomeItems, setIncomeItemsLocal] = useState(() => getIncomeItems(curYm).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
+  /* 這個分流引擎現在操作的「目標月份」：如果有設定計畫起始月份且晚於這個月（例如這個月還不想開始規劃），就用那個月，不然就是這個月 */
+  const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
+  /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到「目標月份」的排程 */
+  const [incomeItems, setIncomeItemsLocal] = useState(() => getIncomeItems(planStartYm).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
   /* 投資分流：可以同時分好幾筆到不同證券戶，純粹是規劃／記錄用，不會自動幫你轉帳（因為實際買進是你自己分次操作的） */
   const [investAllocs, setInvestAllocsLocal] = useState(() => {
     if (allocSettings.investAllocs && allocSettings.investAllocs.length > 0) return allocSettings.investAllocs;
@@ -452,14 +454,15 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
   const [goalOverrides, setGoalOverrides] = useState({});
   const [showSettings, setShowSettings] = useState(true);
   const [savedDefault, setSavedDefault] = useState(false);
-  /* 要套用到哪些月份：預設只有這個月，也可以一次勾多個月一起設定存錢目標 */
-  const monthOptions = Array.from({ length: 6 }, (_, i) => { const dt = new Date(curYm+"-01"); dt.setMonth(dt.getMonth()+i); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; });
-  const [applyMonths, setApplyMonths] = useState([curYm]);
+  const [justApplied, setJustApplied] = useState(false);
+  /* 要套用到哪些月份：預設從目標月份開始，也可以一次勾多個月一起設定存錢目標 */
+  const monthOptions = Array.from({ length: 6 }, (_, i) => { const dt = new Date(planStartYm+"-01"); dt.setMonth(dt.getMonth()+i); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; });
+  const [applyMonths, setApplyMonths] = useState([planStartYm]);
 
   const income = incomeItems.reduce((s, it) => s + (+it.amt || 0), 0);
   const investAmt = investAllocs.reduce((s, r) => s + (+r.amt || 0), 0);
 
-  const updateIncomeItems = (next) => { setIncomeItemsLocal(next); setIncomeItems(curYm, next); };
+  const updateIncomeItems = (next) => { setIncomeItemsLocal(next); setIncomeItems(planStartYm, next); };
   const addIncomeItem = () => updateIncomeItems([...incomeItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]);
   const removeIncomeItem = (id) => updateIncomeItems(incomeItems.filter(it => it.id !== id));
   const patchIncomeItem = (id, patch) => updateIncomeItems(incomeItems.map(it => it.id===id ? { ...it, ...patch } : it));
@@ -599,7 +602,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
       {monthOptions.map(ym => (
         <button key={ym} onClick={() => setApplyMonths(p => p.includes(ym) ? p.filter(x=>x!==ym) : [...p, ym])}
           style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:applyMonths.includes(ym)?`${C.accent}28`:C.card, color:applyMonths.includes(ym)?C.accentL:C.muted, border:`1px solid ${applyMonths.includes(ym)?C.accent:C.border}`, cursor:"pointer" }}>
-          {ym}{ym===curYm?"（本月）":""}
+          {ym}{ym===planStartYm?"（規劃起點）":ym===curYm?"（本月）":""}
         </button>
       ))}
     </div>
@@ -617,14 +620,18 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, computeAllocation, 
             setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：剩餘資金", "reserve");
           }
         });
-        close();
+        setJustApplied(true);
       }, "確認套用");
     }}>✅ 套用到存錢目標（{applyMonths.length} 個月份）</Btn>
+    {justApplied && <div style={{ textAlign:"center", fontSize:12, color:C.teal, fontWeight:700, marginTop:8 }}>✅ 已套用，你可以繼續調整，改完再按一次套用就好</div>}
     <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
       套用後：各目標與剩餘資金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。
     </div>
     <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
       📅 切換到年度現金流預測排程 →
+    </button>
+    <button onClick={close} style={{ width:"100%", marginTop:8, padding:10, borderRadius:12, background:"none", border:"none", color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+      關閉
     </button>
   </Sheet>;
 }
@@ -695,15 +702,18 @@ function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount,
 }
 
 /* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
-function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, getIncomeItems, setIncomeItems, accs, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, getIncomeItems, setIncomeItems, accs, setSavingsTarget, close, setModal, C, iSt, fmt, Btn, Sheet }) {
   const [expandedYm, setExpandedYm] = useState(null);
   const [draftItems, setDraftItems] = useState([]);
+  const [editingChip, setEditingChip] = useState(null); // `${goalId}_${ym}`
+  const matrixRef = useRef(null);
 
   const openMonth = (ym) => {
     if (expandedYm === ym) { setExpandedYm(null); return; }
     setExpandedYm(ym);
     setDraftItems(getIncomeItems(ym).map(it => ({ ...it, id: it.id || ("inc"+Math.random().toString(36).slice(2)) })));
   };
+  const jumpToMonth = (ym) => { openMonth(ym); matrixRef.current?.scrollIntoView({ behavior:"smooth", block:"start" }); };
   const saveDraft = (ym, items) => { setIncomeItems(ym, items); };
   const patchDraft = (ym, id, patch) => { const next = draftItems.map(it => it.id===id ? { ...it, ...patch } : it); setDraftItems(next); saveDraft(ym, next); };
   const addDraft = (ym) => { const next = [...draftItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]; setDraftItems(next); saveDraft(ym, next); };
@@ -714,7 +724,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       已經過去或本月會自動帶入實際收入；還沒到的月份預設參考「去年同月」的實際收入（沒有歷史資料才用固定預設值），點一個月份可以展開填各項收入來源，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣（點月份展開填收入來源）</div>
+    <div ref={matrixRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣（點月份展開填收入來源）</div>
     <div style={{ display:"flex", flexDirection:"column", gap:1, marginBottom:20, maxHeight:320, overflowY:"auto" }}>
       {yearlySchedule.map((m, i) => (
         <div key={m.ym} style={{ background: m.isCurrent ? `${C.accent}12` : "transparent", borderTop:i>0?`1px solid ${C.border}`:undefined, borderRadius:m.isCurrent?8:0 }}>
@@ -751,12 +761,12 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       ))}
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／剩餘資金 ⑤ 累加水位）</div>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／剩餘資金）</div>
     <div style={{ overflowX:"auto", marginBottom:20 }}>
       <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
         <thead>
           <tr style={{ background:C.card }}>
-            {["月份","①流入","②剛性扣除","③專案存錢","④剩餘資金","⑤累加水位"].map(h => (
+            {["月份","①流入","②剛性扣除","③專案存錢","④剩餘資金"].map(h => (
               <th key={h} style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.muted, whiteSpace:"nowrap" }}>{h}</th>
             ))}
           </tr>
@@ -764,37 +774,56 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
         <tbody>
           {yearlyForecastTable.map(row => (
             <tr key={row.ym} style={{ background: row.isCurrent ? `${C.accent}12` : "transparent", borderTop:`1px solid ${C.border}` }}>
-              <td style={{ padding:"6px 8px", fontWeight:row.isCurrent?900:400, color:C.text, whiteSpace:"nowrap" }}>{row.label}</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", color:C.income }}>{fmt(row.income)}</td>
+              <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", fontWeight:row.isCurrent?900:400, color:C.text, whiteSpace:"nowrap", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted", textDecorationColor:C.muted }}>{row.label}</td>
+              <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", textAlign:"right", color:C.income, cursor:"pointer" }}>{fmt(row.income)} ✏️</td>
               <td style={{ padding:"6px 8px", textAlign:"right", color:C.expense }}>−{fmt(row.rigid)}</td>
               <td style={{ padding:"6px 8px", textAlign:"right", color:C.accentL }}>{fmt(row.sinkingAlloc)}</td>
               <td style={{ padding:"6px 8px", textAlign:"right", color:C.teal }}>{fmt(row.overflowAmt)}</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.text }}>{fmt(row.cumulative)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>👆 點「月份」或「①流入」可以跳回上面收入矩陣直接編輯那個月；②③④是系統算出來的，目前不能直接點著改，要改就去調整生活費／投資預設值，或各專案目標的優先級與金額。</div>
     <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
-      ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現；⑤是假設每個月都照這個節奏存，累加到當月為止的總水位。
+      ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現。
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算）</div>
+    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算，點格子可以直接改）</div>
     {yearlyGoalSchedule.length === 0 ? (
       <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
     ) : yearlyGoalSchedule.map(g => (
-      <div key={g.id} style={{ padding:14, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, marginBottom:10 }}>
+      <div key={g.id} style={{ padding:14, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, marginTop:10 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.emoji} {g.name}</span>
           <span style={{ fontSize:11, color:C.muted }}>還差 {fmt(g.totalNeeded)}・剩 {g.monthsLeft} 個月</span>
         </div>
         <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
-          {g.perMonth.map(m => (
-            <div key={m.ym} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent" }}>
-              <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
-              <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
-            </div>
-          ))}
+          {g.perMonth.map(m => {
+            const chipKey = `${g.id}_${m.ym}`;
+            const isEditing = editingChip === chipKey;
+            return (
+              <div key={m.ym} onClick={() => !isEditing && setEditingChip(chipKey)} style={{ flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent", cursor:"pointer" }}>
+                <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
+                {isEditing ? (
+                  <input
+                    autoFocus type="number" defaultValue={m.alloc}
+                    onBlur={e => {
+                      const val = +e.target.value || 0;
+                      const accId = g.accIds?.[0] || null;
+                      const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+                      setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
+                      setEditingChip(null);
+                    }}
+                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                    style={{ ...iSt, width:48, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
+                  />
+                ) : (
+                  <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     ))}
