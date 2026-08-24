@@ -4,7 +4,7 @@ export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
   setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal,
-  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget,
+  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, yearlyGoalSchedule,
   Card, Btn
 }) {
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
@@ -73,9 +73,22 @@ export default function GoalsPage({
                 {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
                 {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
                 {(() => {
-                  const applied = g.goalType !== "milestone" ? getGoalSavingsTarget(curYm, g.id) : null;
-                  if (applied == null) return null;
-                  return <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, fontSize:11, color:C.teal, textAlign:"center" }}>🧠 這個月分流引擎已套用：存 {fmt(applied)}</div>;
+                  // 這個月「已套用」的提醒：如果有設定計畫起始月份、而且這個月還沒到規劃起點，就不顯示（避免已排除的月份還殘留舊資料的badge）
+                  const monthStarted = !allocSettings.planStartYm || curYm >= allocSettings.planStartYm;
+                  const applied = (monthStarted && g.goalType !== "milestone") ? getGoalSavingsTarget(curYm, g.id) : null;
+                  return applied == null ? null : (
+                    <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, fontSize:11, color:C.teal, textAlign:"center" }}>🧠 這個月分流引擎已套用：存 {fmt(applied)}</div>
+                  );
+                })()}
+                {(() => {
+                  // 照目前「已規劃」的節奏（年度預測裡各月的套用/估算值加總），到期時是否還會有缺口
+                  if (g.goalType !== "sinking" || remaining <= 0) return null;
+                  const sched = (yearlyGoalSchedule||[]).find(x => x.id === g.id);
+                  if (!sched) return null;
+                  const plannedTotal = sched.perMonth.reduce((s,m) => s + (m.alloc||0), 0);
+                  const stillShort = Math.max(0, sched.totalNeeded - plannedTotal);
+                  if (stillShort <= 0) return <div style={{ marginTop:4, fontSize:11, color:C.teal, textAlign:"center" }}>✅ 照目前規劃的節奏，到期前存得完</div>;
+                  return <div style={{ marginTop:4, fontSize:11, color:C.warn, textAlign:"center" }}>⚠️ 照目前規劃的節奏，到期時預估還會差 {fmt(stillShort)}</div>;
                 })()}
               </Card>
             );
