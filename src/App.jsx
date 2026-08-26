@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, loadCloudData, saveCloudData } from "./firebase";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
 import OverviewPage  from "./pages/Overview";
@@ -462,13 +463,56 @@ const pnlColor = (val, C) => val > 0 ? C.income : val < 0 ? C.expense : C.textSu
 export default function App() {
   const [d, setD] = useState(loadData);
   const [updateMsg, setUpdateMsg] = useState(() => checkVer());
+
+  /* ── 雲端同步（Firebase，選用）：本機 localStorage 永遠是主要儲存，登入後額外把資料備份/同步到雲端 ── */
+  const [cloudUser, setCloudUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(firebaseEnabled);
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | pending | synced | error
+  const uidRef = useRef(null);
+  const dRef = useRef(d);
+  useEffect(() => { dRef.current = d; }, [d]);
+  const syncTimerRef = useRef(null);
+  const queueCloudSync = useCallback((data) => {
+    if (!uidRef.current) return;
+    setSyncStatus("pending");
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      saveCloudData(uidRef.current, data).then(() => setSyncStatus("synced")).catch(() => setSyncStatus("error"));
+    }, 1500);
+  }, []);
+  useEffect(() => {
+    const unsub = watchAuth(async (u) => {
+      if (u) {
+        uidRef.current = u.uid;
+        const cloud = await loadCloudData(u.uid);
+        if (cloud) {
+          // 雲端已經有資料（例如換手機登入）：用雲端的蓋過本機
+          setD(cloud);
+          saveData(cloud);
+        } else {
+          // 第一次登入：把這台裝置目前的資料當作雲端的起始版本上傳上去
+          await saveCloudData(u.uid, dRef.current);
+        }
+        setCloudUser(u);
+      } else {
+        uidRef.current = null;
+        setCloudUser(null);
+      }
+      setAuthLoading(false);
+    });
+    return unsub;
+  }, []);
+  const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
+  const doCloudLogout = useCallback(() => logoutFirebase(), []);
+
   const upd = useCallback((key, fn) => {
     setD(prev => {
       const next = { ...prev, [key]: typeof fn === "function" ? fn(prev[key]) : fn };
       saveData(next);
+      queueCloudSync(next);
       return next;
     });
-  }, []);
+  }, [queueCloudSync]);
   /* ── 帳戶餘額 + 交易紀錄 同時寫入的原子化工具（避免 React 非同步 state 批次問題）── */
   const updMulti = useCallback((patch) => {
     setD(prev => {
@@ -477,9 +521,10 @@ export default function App() {
         next[key] = typeof patch[key] === "function" ? patch[key](prev[key]) : patch[key];
       });
       saveData(next);
+      queueCloudSync(next);
       return next;
     });
-  }, []);
+  }, [queueCloudSync]);
   const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
   const expensePools = d.expensePools || [];
   const buckets = d.buckets || [];
@@ -1712,6 +1757,62 @@ export default function App() {
     return false;
   }, [goalCurrentAmount]);
 
+  /* 某檔股票目前的參考價格：有抓到報價就用報價，沒有就退回買進均價，抓不到就是0 */
+  const priceForTicker = useCallback((ticker) => {
+    const matches = stocks.filter(s => s.ticker === ticker);
+    if (matches.length === 0) return 0;
+    const withPrice = matches.find(s => s.curPrice > 0);
+    if (withPrice) return withPrice.curPrice;
+    const buys = matches.flatMap(s => (s.trades||[]).filter(t=>t.type==="buy"));
+    const sh = buys.reduce((s,t)=>s+t.shares,0);
+    const cost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0),0);
+    return sh > 0 ? cost / sh : 0;
+  }, [stocks]);
+  /* 目標的「定期定額」換算成金額：如果選的是「股數模式」，優先用你自己設定的股價（沒設定才用目前股價/均價，股價會變，所以每次都重新算）；不然就用固定金額模式 */
+  const goalRecurringAmount = useCallback((g) => {
+    if (g.recurringMode === "shares") {
+      if (!(g.recurringShares > 0 && g.shareTicker)) return 0;
+      const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
+      return Math.round(g.recurringShares * price);
+    }
+    return +g.recurringAmount || 0;
+  }, [priceForTicker]);
+
+  /* ── 定期定額自動買進（股數模式＋開了自動執行）：算出「這個月還沒買」的目標，給一個可以直接按確認的建議（金額不會超過預算，股數無條件捨去），
+     這裡故意不做成完全靜默自動下單——先讓你確認一次金額/股價再送出，確認後才是真的一筆交易，之後也能照平常方式編輯/刪除 ── */
+  const goalAutoInvested = d.goalAutoInvested || {};
+  const pendingAutoInvest = useCallback((g) => {
+    if (g.goalType !== "sinking" || !g.autoInvest || !(g.recurringBudget > 0) || !g.shareTicker || !g.recurringFromAcc || !(g.accIds||[]).length) return null;
+    if (isGoalArchived(g)) return null;
+    const thisYm = TODAY.slice(0,7);
+    if (goalAutoInvested[g.id]?.[thisYm]) return null;
+    const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
+    if (price <= 0) return null;
+    const shares = Math.floor(g.recurringBudget / price);
+    if (shares <= 0) return null;
+    return { price, shares, cost: shares * price, ym: thisYm };
+  }, [goalAutoInvested, priceForTicker, isGoalArchived]);
+
+  const confirmAutoInvest = useCallback((g, { price, shares }) => {
+    const cost = Math.round(price * shares);
+    const toAcc = accs.find(a => a.id === (g.accIds||[])[0]);
+    const fromAcc = accs.find(a => a.id === g.recurringFromAcc);
+    if (!toAcc || !fromAcc || shares <= 0) return;
+    const thisYm = TODAY.slice(0,7);
+    const linkedTxnId = Date.now();
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price, fee:0, totalCost:cost, date:TODAY, emotion:"", linkedTxnId, linkedAcc:fromAcc.name, autoInvested:true };
+    updMulti({
+      stocks: p => {
+        const ex = p.find(s => s.ticker === g.shareTicker && s.acc === toAcc.name);
+        if (ex) return p.map(s => s.id === ex.id ? { ...s, trades:[...(s.trades||[]), trade] } : s);
+        return [...p, { id:"s"+Date.now(), acc:toAcc.name, ticker:g.shareTicker, name:g.shareTicker, market:"TW", curPrice:price, trades:[trade] }];
+      },
+      accs: p => p.map(a => a.name === fromAcc.name ? { ...a, bal:a.bal - cost } : a),
+      txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:cost, desc:`🔁 定期定額：${g.name}（${g.shareTicker} ${shares}股）`, acc:fromAcc.name, toAcc:toAcc.name, date:TODAY, tags:"#股票" }],
+    });
+    upd("goalAutoInvested", p => ({ ...(p||{}), [g.id]: { ...(p?.[g.id]||{}), [thisYm]: true } }));
+  }, [accs, updMulti, upd]);
+
   /* ── 固定投資設定（智慧分流用）── */
   const ALLOC_DEFAULT = { investAmt:6000, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"",
     defaultIncome:23000, defaultLivingCap:11000, defaultInvestAmt:6000, defaultInvestAccId:"", planStartYm:"",
@@ -1756,7 +1857,7 @@ export default function App() {
       const monthsLeft = g.deadline ? Math.max(1, Math.round((new Date(g.deadline) - new Date(TODAY)) / (30*24*60*60*1000))) : null;
       const needed = monthsLeft ? Math.max(0, (g.target - cur) / monthsLeft) : Math.max(0, g.target - cur);
       const isDone = g.target > 0 && cur >= g.target;
-      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority==null?5:g.priority, target:g.target, cur, monthsLeft, needed:Math.round(needed), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
+      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority==null?5:g.priority, target:g.target, cur, monthsLeft, needed:Math.round(needed), recurringAmount:goalRecurringAmount(g), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
     };
     const activeSinking = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(mapGoal).sort((a,b) => (a.priority - b.priority) || (a.monthsLeft - b.monthsLeft));
@@ -1764,7 +1865,8 @@ export default function App() {
     let remaining = Math.max(0, income - investAmt - livingAmt);
     const goalAllocs = activeSinking.map(g => {
       if (g.isDone) return { ...g, alloc:0 };
-      const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : g.needed;
+      // 有設定「定期定額」的話優先用那個當建議金額，除非這次有手動覆寫
+      const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : (g.recurringAmount > 0 ? g.recurringAmount : g.needed);
       const alloc = Math.max(0, Math.min(want, remaining));
       remaining -= alloc;
       return { ...g, alloc };
@@ -1784,7 +1886,7 @@ export default function App() {
     const reserveAmt = Math.max(0, remaining);
 
     return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, wishlistAllocs, reserveAmt };
-  }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns]);
+  }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns, goalRecurringAmount]);
 
   /* ── 本月理財建議：生活費（已包含訂閱與基本開銷，不再另外重複扣一次）＋ 估出可以存多少 ── */
   const financialSuggestion = useMemo(() => {
@@ -1881,7 +1983,7 @@ export default function App() {
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
-        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7), accIds:g.accIds||[], bucketIds:g.bucketIds||[] }))
+        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7), accIds:g.accIds||[], bucketIds:g.bucketIds||[], recurringAmount:goalRecurringAmount(g) }))
       .sort((a,b) => a.priority - b.priority);
 
     // 剩餘需求會隨著每個月被分掉的金額累減，模擬「這個月存了，下個月要存的就變少」
@@ -1897,11 +1999,20 @@ export default function App() {
       activeThisMonth.forEach(g => {
         const applied = getGoalSavingsTarget(m.ym, g.id);
         const suggested = Math.round(remainingNeed[g.id] / monthsLeftFor(g));
-        const want = applied != null ? applied : Math.min(suggested, monthSurplus);
-        const alloc = Math.max(0, Math.min(want, applied != null ? applied : monthSurplus));
+        let alloc, isRecurring = false;
+        if (applied != null) {
+          alloc = applied;
+        } else if (g.recurringAmount > 0) {
+          // 定期定額：設定過的固定月存金額，優先於系統估算的節奏，但還是不會超過這個月的剩餘資金或這個目標還需要的錢
+          alloc = Math.min(g.recurringAmount, monthSurplus, remainingNeed[g.id]);
+          isRecurring = true;
+        } else {
+          alloc = Math.min(suggested, monthSurplus, remainingNeed[g.id]);
+        }
+        alloc = Math.max(0, alloc);
         monthSurplus = Math.max(0, monthSurplus - alloc);
         remainingNeed[g.id] = Math.max(0, remainingNeed[g.id] - alloc);
-        perGoalPerMonth[g.id].push({ ym:m.ym, label:m.label, alloc, isApplied: applied != null });
+        perGoalPerMonth[g.id].push({ ym:m.ym, label:m.label, alloc, isApplied: applied != null, isRecurring });
       });
       // 這個月沒輪到或已達標的目標，這個月份額補 0，讓每個目標的 perMonth 陣列長度對齊全部月份
       activeGoals.forEach(g => {
@@ -1915,7 +2026,7 @@ export default function App() {
       const monthsLeft = perMonth.length;
       return { id:g.id, name:g.name, emoji:g.emoji, target:g.target, cur:g.cur, totalNeeded, monthsLeft, perMonth, accIds:g.accIds, bucketIds:g.bucketIds };
     });
-  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget, incomeSchedule]);
+  }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget, incomeSchedule, goalRecurringAmount]);
 
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
   const yearlyForecastTable = useMemo(() => {
@@ -2027,6 +2138,7 @@ export default function App() {
     premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
+    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout,
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
     nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit, deleteTrade,
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
@@ -2037,7 +2149,7 @@ export default function App() {
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
-    goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation,
+    goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, pendingAutoInvest, confirmAutoInvest,
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
