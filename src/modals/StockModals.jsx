@@ -87,13 +87,14 @@ export default function StockModals({
           </div>
           <Sl label="市場" value={buyF.market} onChange={e => setBuyF(p => ({ ...p, market:e.target.value }))}><option value="TW">台股 TW</option><option value="US">美股 US</option></Sl>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Inp label="股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value, totalCost:p.avgCost?String(Math.round(+e.target.value*+p.avgCost)):p.totalCost }))} />
-            <Inp label="均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value, totalCost:p.shares?String(Math.round(+p.shares*+e.target.value)):p.totalCost }))} />
+            <Inp label="股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value, totalCost:p.avgCost?String(Math.round(+e.target.value*+p.avgCost+(+p.fee||0))):p.totalCost }))} />
+            <Inp label="均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value, totalCost:p.shares?String(Math.round(+p.shares*+e.target.value+(+p.fee||0))):p.totalCost }))} />
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <CalcInp label="投資總成本" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v, avgCost:p.shares&&+p.shares>0?String((+v/+p.shares).toFixed(2)):p.avgCost }))} />
-            <Inp label="手續費" type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value }))} />
+            <CalcInp label="投資總成本（自動算好，一樣可以改）" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v, avgCost:p.shares&&+p.shares>0?String(((+v-(+p.fee||0))/+p.shares).toFixed(2)):p.avgCost }))} />
+            <Inp label="手續費" type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value, totalCost:(p.shares&&p.avgCost)?String(Math.round(+p.shares*+p.avgCost+(+e.target.value||0))):p.totalCost }))} />
           </div>
+          <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>投資總成本會自動幫你算（股數×均成本＋手續費），你也可以直接改這個數字，均成本會反推更新。</div>
           <Sl label="從哪個帳戶扣款（選填）" value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— 不扣款 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
           <Fld label="這筆是什麼心態下買的？（選填，事後回顧用）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
@@ -255,6 +256,7 @@ export default function StockModals({
                 </div>
               </div>}
               {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>更新：{st.lastUpdated}</div>}
+              <a href={`https://news.google.com/search?q=${encodeURIComponent(st.ticker + " " + (st.name||""))}`} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, textDecoration:"none" }}>📰 查這支股票的新聞 →</a>
             </Card>
 
             {hasPrice && (extra.high || extra.low || extra.vol) && <Card style={{ padding:14, marginBottom:12 }}>

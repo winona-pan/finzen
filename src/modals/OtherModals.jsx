@@ -70,6 +70,12 @@ export default function OtherModals({
             <div style={{ flex:1 }}><Inp label="目標名稱" placeholder="買新電腦、旅遊基金、緊急預備金…" value={nG.name} onChange={e => setNG(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
           <CalcInp label="目標金額" value={nG.target} onChange={v => setNG(p => ({ ...p, target:v }))} />
+          <Fld label="分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）">
+            <input list="goalGroups" value={nG.group||""} onChange={e => setNG(p => ({ ...p, group:e.target.value }))} placeholder="例如：願望、旅費" style={iSt} />
+            <datalist id="goalGroups">
+              {[...new Set((goals||[]).map(g=>g.group).filter(Boolean))].map(gr => <option key={gr} value={gr} />)}
+            </datalist>
+          </Fld>
           <Fld label="目標性質">
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {[
@@ -99,6 +105,28 @@ export default function OtherModals({
                 onChange={e => { const raw = e.target.value; setNG(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
                 onBlur={() => setNG(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
                 style={iSt} />
+            </Fld>
+          )}
+          {nG.goalType === "sinking" && (
+            <Fld label="定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）">
+              <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+                <button onClick={() => setNG(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(nG.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(nG.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(nG.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
+                <button onClick={() => setNG(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:nG.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${nG.recurringMode==="shares"?C.accent:C.border}`, color:nG.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
+              </div>
+              {nG.recurringMode === "shares" ? (
+                <div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input type="number" min="0" value={nG.recurringShares||""} placeholder="每月約幾股" onChange={e => setNG(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                    <select value={nG.shareTicker||""} onChange={e => setNG(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
+                      <option value="">— 選股票 —</option>
+                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <input type="number" min="0" value={nG.sharePriceOverride||""} placeholder="自訂股價（選填，不填就用目前報價/買進均價）" onChange={e => setNG(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
+                </div>
+              ) : (
+                <input type="number" min="0" value={nG.recurringAmount||""} placeholder="例如：5000，留空＝用系統自動估算的節奏" onChange={e => setNG(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
+              )}
             </Fld>
           )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
@@ -152,6 +180,12 @@ export default function OtherModals({
             <div style={{ flex:1 }}><Inp label="目標名稱" value={editGoal.name||""} onChange={e => setEditGoal(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
           <CalcInp label="目標金額" value={String(editGoal.target||"")} onChange={v => setEditGoal(p => ({ ...p, target:+v }))} />
+          <Fld label="分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）">
+            <input list="goalGroupsEdit" value={editGoal.group||""} onChange={e => setEditGoal(p => ({ ...p, group:e.target.value }))} placeholder="例如：願望、旅費" style={iSt} />
+            <datalist id="goalGroupsEdit">
+              {[...new Set((goals||[]).map(g=>g.group).filter(Boolean))].map(gr => <option key={gr} value={gr} />)}
+            </datalist>
+          </Fld>
           <Fld label="目標性質">
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {[
@@ -181,6 +215,28 @@ export default function OtherModals({
                 onChange={e => { const raw = e.target.value; setEditGoal(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
                 onBlur={() => setEditGoal(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
                 style={iSt} />
+            </Fld>
+          )}
+          {editGoal.goalType === "sinking" && (
+            <Fld label="定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）">
+              <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
+                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
+              </div>
+              {editGoal.recurringMode === "shares" ? (
+                <div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input type="number" min="0" value={editGoal.recurringShares||""} placeholder="每月約幾股" onChange={e => setEditGoal(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                    <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
+                      <option value="">— 選股票 —</option>
+                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填，不填就用目前報價/買進均價）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
+                </div>
+              ) : (
+                <input type="number" min="0" value={editGoal.recurringAmount||""} placeholder="例如：5000，留空＝用系統自動估算的節奏" onChange={e => setEditGoal(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
+              )}
             </Fld>
           )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
@@ -213,6 +269,26 @@ export default function OtherModals({
                   <button key={String(o.v)} onClick={() => setEditGoal(p => ({ ...p, useMv:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:(editGoal.useMv??null)===o.v?`${C.accent}28`:C.card, color:(editGoal.useMv??null)===o.v?C.accentL:C.muted, border:`1px solid ${(editGoal.useMv??null)===o.v?C.accent:C.border}`, cursor:"pointer" }}>{o.l}</button>
                 ))}
               </div>
+            </Fld>
+          )}
+          {editGoal.goalType === "sinking" && editGoal.recurringMode === "shares" && editGoal.shareTicker && (editGoal.accIds||[]).length>0 && (
+            <Fld label="自動執行（選填）">
+              <button onClick={() => setEditGoal(p => ({ ...p, autoInvest:!p.autoInvest }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:editGoal.autoInvest ? `${C.teal}22` : C.card, color:editGoal.autoInvest ? C.teal : C.textSub, border:`1px solid ${editGoal.autoInvest ? C.teal : C.border}`, cursor:"pointer", marginBottom:8 }}>
+                <span>{editGoal.autoInvest ? "✅" : "⬜"}</span>
+                <span style={{ textAlign:"left" }}>每個月自動幫我算好要買幾股，我按確認就好（不會自己下單，還是要你點一下確認）</span>
+              </button>
+              {editGoal.autoInvest && (
+                <>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:6, lineHeight:1.6 }}>
+                    每月預算是固定金額（例如3000），系統會用目前股價（或你設定的自訂股價）算出「最多能買幾股、不會超過預算」，無條件捨去到整股。買進的股票會存進「{accs.find(a=>a.id===editGoal.accIds[0])?.name}」。
+                  </div>
+                  <input type="number" min="0" value={editGoal.recurringBudget||""} placeholder="每月預算，例如 3000" onChange={e => setEditGoal(p => ({ ...p, recurringBudget: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginBottom:8 }} />
+                  <Sl label="錢從哪個帳戶扣" value={editGoal.recurringFromAcc||""} onChange={e => setEditGoal(p => ({ ...p, recurringFromAcc:e.target.value }))}>
+                    <option value="">— 選帳戶 —</option>
+                    {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </Sl>
+                </>
+              )}
             </Fld>
           )}
           {((editGoal.accIds||[]).length>0 || (editGoal.bucketIds||[]).length>0) && (

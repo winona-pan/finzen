@@ -884,7 +884,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現。
     </div>
 
-    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字，其餘是系統估算，點格子可以直接改，applied 的可以點右上角✕移除）</div>
+    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字、🔁＝目標設定的定期定額，其餘是系統估算；點格子可以直接改，已套用的可以點右上角✕移除）</div>
     {yearlyGoalSchedule.length === 0 ? (
       <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
     ) : yearlyGoalSchedule.map(g => (
@@ -897,14 +897,15 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
           {g.perMonth.map(m => {
             const chipKey = `${g.id}_${m.ym}`;
             const isEditing = editingChip === chipKey;
+            const highlighted = m.isApplied || m.isRecurring;
             return (
-              <div key={m.ym} style={{ position:"relative", flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:"1px solid transparent" }}>
+              <div key={m.ym} style={{ position:"relative", flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:m.isRecurring?`${C.accentL}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:m.isRecurring?`1px solid ${C.accentL}44`:"1px solid transparent" }}>
                 {m.isApplied && !isEditing && (
                   <button onClick={(e) => { e.stopPropagation(); const accId = g.accIds?.[0] || null; const bucketId = !accId ? (g.bucketIds?.[0] || null) : null; removeSavingsTarget(m.ym, g.id); }}
                     style={{ position:"absolute", top:-6, right:-6, width:16, height:16, borderRadius:"50%", background:C.expense, color:"#fff", border:"none", fontSize:9, lineHeight:"16px", padding:0, cursor:"pointer" }}>✕</button>
                 )}
                 <div onClick={() => !isEditing && setEditingChip(chipKey)} style={{ cursor:"pointer" }}>
-                  <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":""}</div>
+                  <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":m.isRecurring?" 🔁":""}</div>
                   {isEditing ? (
                     <input
                       autoFocus type="number" defaultValue={m.alloc}
@@ -919,7 +920,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
                       style={{ ...iSt, width:48, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
                     />
                   ) : (
-                    <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:C.accentL }}>{fmt(m.alloc)}</div>
+                    <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:m.isRecurring?C.accentL:C.accentL }}>{fmt(m.alloc)}</div>
                   )}
                 </div>
               </div>
