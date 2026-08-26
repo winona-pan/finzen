@@ -1,13 +1,110 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
   setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal, setDepositGoal,
-  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, yearlyGoalSchedule,
+  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, yearlyGoalSchedule, goalRecurringAmount,
+  pendingAutoInvest, confirmAutoInvest,
   Card, Btn
 }) {
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  const GoalCard = ({ g, compact }) => {
+    const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
+    const current = goalCurrentAmount(g);
+    const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
+    const remaining = Math.max(0, g.target - current);
+    const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
+    const isExpired = g.deadline && daysLeft === 0;
+    const col = daysLeft !== null && daysLeft <= 30 ? C.warn : C.accent;
+    const typeLabel = { milestone:"🏔️ 里程碑", sinking:"🎯 專案存錢", wishlist:"🎁 願望池" }[g.goalType || "sinking"];
+    const pendingInvest = g.goalType === "sinking" ? pendingAutoInvest(g) : null;
+    const priceInputRef = useRef(null);
+    return (
+      <Card style={{ padding:compact?14:20, marginBottom:compact?8:12, border:`1px solid ${pct>=100?C.teal:C.border}` }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:compact?8:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:compact?18:24 }}>{g.emoji}</span>
+            <div>
+              <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <div style={{ fontWeight:900, fontSize:compact?13:14, color:C.text }}>{g.name}</div>
+                {!compact && <span style={{ fontSize:10, fontWeight:700, color:C.muted, background:`${C.muted}18`, padding:"1px 6px", borderRadius:6 }}>{typeLabel}</span>}
+                {g.goalType !== "milestone" && <span style={{ fontSize:10, fontWeight:700, color:g.priority<=3?C.expense:g.priority<=6?C.warn:C.muted, background:`${g.priority<=3?C.expense:g.priority<=6?C.warn:C.muted}18`, padding:"1px 6px", borderRadius:6 }}>P{g.priority??5}</span>}
+              </div>
+              {g.deadline && <div style={{ fontSize:11, color:isExpired?C.danger:daysLeft<=30?C.warn:C.muted, marginTop:2 }}>{isExpired ? "⚠️ 已到期" : `⏳ 還有 ${daysLeft} 天（${g.deadline}）`}</div>}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
+            <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
+            <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
+          </div>
+        </div>
+        <div style={{ height:compact?7:10, borderRadius:5, background:C.border, marginBottom:8 }}>
+          <div style={{ height:"100%", borderRadius:5, background:pct>=100?C.teal:col, width:`${pct}%`, transition:"width .5s" }} />
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:compact?11:12 }}>
+          <span style={{ color:C.textSub }}>目前 {fmt(current)}</span>
+          <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
+          <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
+        </div>
+        {!compact && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
+          {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
+        </div>}
+        {remaining > 0 && <div style={{ marginTop:6, fontSize:compact?11:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
+        {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
+        {(() => {
+          // 這個月「已套用」的提醒：如果有設定計畫起始月份、而且這個月還沒到規劃起點，就不顯示（避免已排除的月份還殘留舊資料的badge）
+          const monthStarted = !allocSettings.planStartYm || curYm >= allocSettings.planStartYm;
+          const applied = (monthStarted && g.goalType !== "milestone") ? getGoalSavingsTarget(curYm, g.id) : null;
+          if (applied != null) return (
+            <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, fontSize:11, color:C.teal, textAlign:"center" }}>🧠 這個月分流引擎已套用：存 {fmt(applied)}</div>
+          );
+          if (g.goalType === "sinking" && g.recurringMode === "shares" && g.recurringShares > 0 && g.shareTicker) return (
+            <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.accentL}12`, border:`1px solid ${C.accentL}33`, fontSize:11, color:C.accentL, textAlign:"center" }}>🔁 定期定額：每月約 {g.recurringShares} 股 {g.shareTicker}（≈{fmt(goalRecurringAmount(g))}{g.sharePriceOverride>0?`，用自訂股價 ${g.sharePriceOverride}`:""}）</div>
+          );
+          if (g.goalType === "sinking" && g.recurringAmount > 0) return (
+            <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.accentL}12`, border:`1px solid ${C.accentL}33`, fontSize:11, color:C.accentL, textAlign:"center" }}>🔁 定期定額：每月存 {fmt(g.recurringAmount)}</div>
+          );
+          return null;
+        })()}
+        {(() => {
+          // 照目前「已規劃」的節奏（年度預測裡各月的套用/估算值加總），到期時是否還會有缺口
+          if (g.goalType !== "sinking" || remaining <= 0) return null;
+          const sched = (yearlyGoalSchedule||[]).find(x => x.id === g.id);
+          if (!sched) return null;
+          const plannedTotal = sched.perMonth.reduce((s,m) => s + (m.alloc||0), 0);
+          const stillShort = Math.max(0, sched.totalNeeded - plannedTotal);
+          if (stillShort <= 0) return <div style={{ marginTop:4, fontSize:11, color:C.teal, textAlign:"center" }}>✅ 照目前規劃的節奏，到期前存得完</div>;
+          return <div style={{ marginTop:4, fontSize:11, color:C.warn, textAlign:"center" }}>⚠️ 照目前規劃的節奏，到期時預估還會差 {fmt(stillShort)}</div>;
+        })()}
+        {g.goalType === "sinking" && current > 0 && (
+          <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>💸 花這筆錢了，記一筆支出（不算進生活費）</button>
+        )}
+        {g.goalType !== "milestone" && ((g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0)) && (
+          <button onClick={() => { setDepositGoal(g); setModal("goalDeposit"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>💰 這個月多存的錢，存入這個目標</button>
+        )}
+        {pendingInvest && (
+          <div style={{ marginTop:8, padding:10, borderRadius:10, background:`${C.accent}15`, border:`1px solid ${C.accent}44` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.accentL, marginBottom:6 }}>🔁 這個月的定期定額還沒買，預算 {fmt(g.recurringBudget)}</div>
+            <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
+              <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>股價</span>
+              <input ref={priceInputRef} type="number" defaultValue={pendingInvest.price} style={{ flex:1, padding:"5px 8px", borderRadius:8, border:`1px solid ${C.border}`, background:C.card, color:C.text, fontSize:12 }} />
+              <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>≈{pendingInvest.shares} 股</span>
+            </div>
+            <Btn style={{ width:"100%" }} onClick={() => {
+              const price = +priceInputRef.current?.value || pendingInvest.price;
+              const shares = Math.floor((g.recurringBudget||0) / price);
+              if (shares <= 0) return;
+              confirm(`確定用股價 ${fmt(price)} 買進 ${shares} 股「${g.shareTicker}」，共 ${fmt(shares*price)}？`, () => confirmAutoInvest(g, { price, shares }), "確認買進");
+            }}>✅ 確認買進</Btn>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   return (
     <>
@@ -21,7 +118,7 @@ export default function GoalsPage({
             </div>
           </div>
           <div style={{ fontSize:12, color:C.muted, marginBottom:16, lineHeight:1.6 }}>
-            釘選（📌）的目標會顯示在總覽頁最上方，其他都在這裡管理。
+            釘選（📌）的目標會顯示在總覽頁最上方；設定同一個「分類」的目標會合併顯示在一個大框裡。
           </div>
 
 
@@ -30,75 +127,42 @@ export default function GoalsPage({
               <div style={{ color:C.muted, fontSize:13 }}>還沒有設定目標，點右上角新增！</div>
             </Card>
           )}
-          {(goals||[]).filter(g => !isGoalArchived(g)).map(g => {
-            const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-            const current = goalCurrentAmount(g);
-            const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
-            const remaining = Math.max(0, g.target - current);
-            const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
-            const isExpired = g.deadline && daysLeft === 0;
-            const col = daysLeft !== null && daysLeft <= 30 ? C.warn : C.accent;
-            const typeLabel = { milestone:"🏔️ 里程碑", sinking:"🎯 專案存錢", wishlist:"🎁 願望池" }[g.goalType || "sinking"];
+
+          {(() => {
+            const activeGoals = (goals||[]).filter(g => !isGoalArchived(g));
+            const groupNames = [...new Set(activeGoals.map(g => g.group).filter(Boolean))];
+            const ungrouped = activeGoals.filter(g => !g.group);
             return (
-              <Card key={g.id} style={{ padding:20, marginBottom:12, border:`1px solid ${pct>=100?C.teal:C.border}` }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:24 }}>{g.emoji}</span>
-                    <div>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                        <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{g.name}</div>
-                        <span style={{ fontSize:10, fontWeight:700, color:C.muted, background:`${C.muted}18`, padding:"1px 6px", borderRadius:6 }}>{typeLabel}</span>
-                        {g.goalType !== "milestone" && <span style={{ fontSize:10, fontWeight:700, color:g.priority<=3?C.expense:g.priority<=6?C.warn:C.muted, background:`${g.priority<=3?C.expense:g.priority<=6?C.warn:C.muted}18`, padding:"1px 6px", borderRadius:6 }}>優先級 {g.priority??5}</span>}
-                      </div>
-                      {g.deadline && <div style={{ fontSize:11, color:isExpired?C.danger:daysLeft<=30?C.warn:C.muted, marginTop:2 }}>{isExpired ? "⚠️ 已到期" : `⏳ 還有 ${daysLeft} 天（${g.deadline}）`}</div>}
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
-                    <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
-                    <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
-                  </div>
-                </div>
-                <div style={{ height:10, borderRadius:5, background:C.border, marginBottom:8 }}>
-                  <div style={{ height:"100%", borderRadius:5, background:pct>=100?C.teal:col, width:`${pct}%`, transition:"width .5s" }} />
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                  <span style={{ color:C.textSub }}>目前 {fmt(current)}</span>
-                  <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
-                  <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
-                </div>
-                <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-                  {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
-                </div>
-                {remaining > 0 && <div style={{ marginTop:6, fontSize:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
-                {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
-                {(() => {
-                  // 這個月「已套用」的提醒：如果有設定計畫起始月份、而且這個月還沒到規劃起點，就不顯示（避免已排除的月份還殘留舊資料的badge）
-                  const monthStarted = !allocSettings.planStartYm || curYm >= allocSettings.planStartYm;
-                  const applied = (monthStarted && g.goalType !== "milestone") ? getGoalSavingsTarget(curYm, g.id) : null;
-                  return applied == null ? null : (
-                    <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, fontSize:11, color:C.teal, textAlign:"center" }}>🧠 這個月分流引擎已套用：存 {fmt(applied)}</div>
+              <>
+                {groupNames.map(gname => {
+                  const members = activeGoals.filter(g => g.group === gname);
+                  const groupCurrent = members.reduce((s,g) => s + goalCurrentAmount(g), 0);
+                  const groupTarget = members.reduce((s,g) => s + (g.target||0), 0);
+                  const groupPct = groupTarget > 0 ? Math.min(100, groupCurrent/groupTarget*100) : 0;
+                  const isCollapsed = collapsedGroups[gname];
+                  return (
+                    <Card key={gname} style={{ padding:16, marginBottom:14, background:C.bg, border:`1px solid ${C.border}` }}>
+                      <button onClick={() => setCollapsedGroups(p => ({ ...p, [gname]: !p[gname] }))} style={{ width:"100%", background:"none", border:"none", cursor:"pointer", textAlign:"left", padding:0, marginBottom:isCollapsed?0:12 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span style={{ fontWeight:900, fontSize:15, color:C.text }}>📁 {gname}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>（{members.length} 個）</span></span>
+                          <span style={{ fontSize:12, color:C.muted }}>{isCollapsed?"▼":"▲"}</span>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:4 }}>
+                          <span>合計 {fmt(groupCurrent)} / {fmt(groupTarget)}</span>
+                          <span style={{ fontWeight:700, color:groupPct>=100?C.teal:C.accentL }}>{groupPct.toFixed(0)}%</span>
+                        </div>
+                        <div style={{ height:6, borderRadius:4, background:C.border, marginTop:6 }}>
+                          <div style={{ height:"100%", borderRadius:4, background:groupPct>=100?C.teal:C.accent, width:`${groupPct}%` }} />
+                        </div>
+                      </button>
+                      {!isCollapsed && members.map(g => <GoalCard key={g.id} g={g} compact />)}
+                    </Card>
                   );
-                })()}
-                {(() => {
-                  // 照目前「已規劃」的節奏（年度預測裡各月的套用/估算值加總），到期時是否還會有缺口
-                  if (g.goalType !== "sinking" || remaining <= 0) return null;
-                  const sched = (yearlyGoalSchedule||[]).find(x => x.id === g.id);
-                  if (!sched) return null;
-                  const plannedTotal = sched.perMonth.reduce((s,m) => s + (m.alloc||0), 0);
-                  const stillShort = Math.max(0, sched.totalNeeded - plannedTotal);
-                  if (stillShort <= 0) return <div style={{ marginTop:4, fontSize:11, color:C.teal, textAlign:"center" }}>✅ 照目前規劃的節奏，到期前存得完</div>;
-                  return <div style={{ marginTop:4, fontSize:11, color:C.warn, textAlign:"center" }}>⚠️ 照目前規劃的節奏，到期時預估還會差 {fmt(stillShort)}</div>;
-                })()}
-                {g.goalType === "sinking" && current > 0 && (
-                  <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>💸 花這筆錢了，記一筆支出（不算進生活費）</button>
-                )}
-                {g.goalType !== "milestone" && ((g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0)) && (
-                  <button onClick={() => { setDepositGoal(g); setModal("goalDeposit"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>💰 這個月多存的錢，存入這個目標</button>
-                )}
-              </Card>
+                })}
+                {ungrouped.map(g => <GoalCard key={g.id} g={g} compact={false} />)}
+              </>
             );
-          })}
+          })()}
 
           {(goals||[]).some(g => isGoalArchived(g)) && (
             <div style={{ marginTop:8 }}>
@@ -117,7 +181,7 @@ export default function GoalsPage({
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <span style={{ fontSize:18 }}>{g.emoji}</span>
                         <div>
-                          <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.name}</div>
+                          <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.name}{g.group ? <span style={{ fontSize:10, fontWeight:400, color:C.muted }}> ・{g.group}</span> : null}</div>
                           <div style={{ fontSize:10, color:g.wishPurchased?C.teal:C.muted }}>{g.wishPurchased ? "🎁 已實現願望" : pct>=100 ? "🎉 已達標" : "⚠️ 已過期"}</div>
                         </div>
                       </div>

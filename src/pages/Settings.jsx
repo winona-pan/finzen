@@ -8,6 +8,7 @@ export default function SettingsPage({
   collapsed, toggleSection, APP_VER, changeTheme, THEMES, theme,
   customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
   allocSettings, setAllocSettings,
+  firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout,
   // 接收全域共用 UI 元件
   Card, SH, Btn, Sl
 }) {
@@ -53,6 +54,39 @@ export default function SettingsPage({
                   </button>
                 ))}
               </div>
+            </Card>
+
+            {/* 雲端同步（Firebase） */}
+            <Card style={{ padding:20, marginBottom:16 }}>
+              <SH title="☁️ 雲端同步" />
+              {!firebaseEnabled ? (
+                <div style={{ fontSize:12, color:C.muted, lineHeight:1.6 }}>
+                  還沒設定雲端同步。目前資料只存在這台裝置上。
+                </div>
+              ) : authLoading ? (
+                <div style={{ fontSize:12, color:C.muted }}>檢查登入狀態中…</div>
+              ) : cloudUser ? (
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                    {cloudUser.photoURL && <img src={cloudUser.photoURL} alt="" style={{ width:36, height:36, borderRadius:"50%" }} />}
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{cloudUser.displayName || cloudUser.email}</div>
+                      <div style={{ fontSize:11, color:C.muted }}>{cloudUser.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:11, color:syncStatus==="error"?C.expense:C.teal, marginBottom:12 }}>
+                    {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : "✅ 已同步到雲端"}
+                  </div>
+                  <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm("確定登出嗎？這台裝置的資料還是會留著，只是不再同步。", doCloudLogout)}>登出</Btn>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
+                    登入後可以在多個裝置之間同步資料。第一次登入會把這台裝置目前的資料上傳成雲端的起始版本；之後每台登入同一個帳號的裝置都會用雲端最新的資料。
+                  </div>
+                  <Btn style={{ width:"100%" }} onClick={doCloudLogin}>使用 Google 帳號登入</Btn>
+                </div>
+              )}
             </Card>
 
             {/* 智慧分流：預設參數設定 */}
