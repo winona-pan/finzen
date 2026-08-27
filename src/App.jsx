@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, loadCloudData, saveCloudData } from "./firebase";
+import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor } from "./firebase";
+import { LANGUAGES, makeT } from "./i18n";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
 import OverviewPage  from "./pages/Overview";
@@ -16,6 +17,7 @@ import WalletModals  from "./modals/WalletModals";
 import StockModals   from "./modals/StockModals";
 import DebtModals    from "./modals/DebtModals";
 import OtherModals   from "./modals/OtherModals";
+import AdvisorModal  from "./modals/AdvisorModal";
 
 /* ── Tokens ── */
 const THEMES = {
@@ -79,6 +81,8 @@ function getC(theme) { return THEMES[theme] || THEMES.dark; }
 const PIE = ["#f43f5e","#7c7cf8","#4ade80","#fb923c","#06b6d4","#ec4899","#a78bfa","#34d399"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TODAY = new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/* 用本地時區組出 YYYY-MM-DD，不要用 toISOString()（那個會轉成 UTC，正時區會把日期往前推一天） */
+function toYmd(dt) { return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; }
 /* 生活費預算：2026年先固定用預設值（比較準），從2027年開始才改用近3個月自動學習平均 */
 const USE_ADAPTIVE_LIVING_FROM = "2027-01-01";
 const useAdaptiveLiving = TODAY >= USE_ADAPTIVE_LIVING_FROM;
@@ -266,10 +270,9 @@ function DatePicker({ value, onChange, onClose }) {
   const [s, setS] = useState(value?.s || TODAY);
   const [e, setE] = useState(value?.e || TODAY);
   const quick = (months) => {
-    const end = new Date(TODAY), start = new Date(end);
+    const end = new Date(TODAY + "T00:00:00"), start = new Date(end);
     start.setMonth(start.getMonth() - months + 1); start.setDate(1);
-    const fmt2 = dt => dt.toISOString().slice(0,10);
-    const ns = fmt2(start), ne = fmt2(end);
+    const ns = toYmd(start), ne = toYmd(end);
     setS(ns); setE(ne);
     onChange({ s:ns, e:ne });
     onClose();
@@ -481,6 +484,8 @@ export default function App() {
     }, 1500);
   }, []);
   useEffect(() => {
+    // 從 Google 登入頁導回來時，先把導回結果撈一次（主要是為了在失敗時能看到錯誤訊息）
+    checkRedirectResult();
     const unsub = watchAuth(async (u) => {
       if (u) {
         uidRef.current = u.uid;
@@ -504,6 +509,21 @@ export default function App() {
   }, []);
   const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
   const doCloudLogout = useCallback(() => logoutFirebase(), []);
+  const doUpdateNickname = useCallback(async (name) => {
+    await updateCloudProfile({ displayName: name });
+    setCloudUser(u => u ? { ...u, displayName: name } : u);
+  }, []);
+  const doDeleteCloudData = useCallback(async () => {
+    if (!uidRef.current) return;
+    await deleteCloudData(uidRef.current);
+    await saveCloudData(uidRef.current, dRef.current); // 刪除後立刻用本機現況重新當作雲端起始版本，避免下次登入變成空的
+  }, []);
+
+  /* ── 隱私：隱藏金額（總覽/錢包的敏感數字先模糊起來，點一下才顯示，適合在別人看得到螢幕的地方用）── */
+  const [hideAmounts, setHideAmounts] = useState(() => localStorage.getItem("finzen_hideAmounts") === "true");
+  const toggleHideAmounts = useCallback(() => {
+    setHideAmounts(v => { const nv = !v; localStorage.setItem("finzen_hideAmounts", String(nv)); return nv; });
+  }, []);
 
   const upd = useCallback((key, fn) => {
     setD(prev => {
@@ -660,6 +680,10 @@ export default function App() {
   themeMode = theme;
   iSt = getISt();
   const changeTheme = (t) => { localStorage.setItem("finzen_theme", t); setTheme(t); };
+  /* ── 語言：目前涵蓋底部導覽/常用按鈕/設定頁主要標題，還沒涵蓋每一頁的細節文字，沒翻到的地方會自動顯示繁體中文 ── */
+  const [lang, setLang] = useState(() => localStorage.getItem("finzen_lang") || "zh");
+  const changeLang = (l) => { localStorage.setItem("finzen_lang", l); setLang(l); };
+  const tr = makeT(lang);
   const [modal, setModal] = useState(null);
   const [confirmDlg, setConfirmDlg] = useState(null);
   const confirm = (msg, onOk, okLabel, skipUndo) => setConfirmDlg({ msg, onOk, okLabel, skipUndo });
@@ -1130,25 +1154,25 @@ export default function App() {
     if (!d || !d.subs) return;
     const getDueDates = (item, lastDate) => {
       const dates = [];
-      const today = new Date(TODAY);
-      const start = lastDate ? new Date(lastDate) : new Date(item.date || TODAY);
+      const today = new Date(TODAY + "T00:00:00");
+      const start = lastDate ? new Date(lastDate + "T00:00:00") : new Date((item.date || TODAY) + "T00:00:00");
       if (item.freq === "week") {
         const wd = +(item.weekday || 1);
         let cur = new Date(start); cur.setDate(cur.getDate() + 1);
         while (cur.getDay() !== wd) cur.setDate(cur.getDate() + 1);
-        while (cur <= today) { dates.push(cur.toISOString().slice(0, 10)); cur = new Date(cur); cur.setDate(cur.getDate() + 7); }
+        while (cur <= today) { dates.push(toYmd(cur)); cur = new Date(cur); cur.setDate(cur.getDate() + 7); }
       } else if (item.freq === "year") {
         const mo = +(item.yearMonth || 1) - 1; const dy = +(item.day || 1);
         let cur = new Date(start); cur.setDate(cur.getDate() + 1);
         let yr = cur.getFullYear(); let candidate = new Date(yr, mo, dy);
         if (candidate <= cur) candidate = new Date(yr + 1, mo, dy);
-        while (candidate <= today) { dates.push(candidate.toISOString().slice(0, 10)); candidate = new Date(candidate.getFullYear() + 1, mo, dy); }
+        while (candidate <= today) { dates.push(toYmd(candidate)); candidate = new Date(candidate.getFullYear() + 1, mo, dy); }
       } else {
         const dy = +(item.day || 1);
         let cur = new Date(start); cur.setDate(cur.getDate() + 1);
         let yr = cur.getFullYear(), mo = cur.getMonth(); let candidate = new Date(yr, mo, dy);
         if (candidate <= cur) { mo++; if (mo > 11) { mo = 0; yr++; } candidate = new Date(yr, mo, dy); }
-        while (candidate <= today) { dates.push(candidate.toISOString().slice(0, 10)); mo++; if (mo > 11) { mo = 0; yr++; } candidate = new Date(yr, mo, dy); }
+        while (candidate <= today) { dates.push(toYmd(candidate)); mo++; if (mo > 11) { mo = 0; yr++; } candidate = new Date(yr, mo, dy); }
       }
       return dates;
     };
@@ -1191,7 +1215,7 @@ export default function App() {
 
     /* ── 每月自動認列費用分攤池（年繳訂閱分12個月認列）── */
     const allPools = [...(d.expensePools || []), ...newPools];
-    const today = new Date(TODAY);
+    const today = new Date(TODAY + "T00:00:00");
     const existingTxns = d.txns || [];
     const recogTxns = [];
     const poolUpdates = [];
@@ -1203,7 +1227,7 @@ export default function App() {
       for (let m = 0; m < (pool.installments || 12); m++) {
         const cur = new Date(start.getFullYear(), start.getMonth() + m, start.getDate());
         if (cur > today) break;
-        const ym = cur.toISOString().slice(0, 7);
+        const ym = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;
         const amt = Math.min(pool.monthlyAmt, pool.totalAmt - recognized);
         if (skipped.includes(ym)) continue; // 使用者手動刪過這個月的認列，不要自動補回來
         const already = existingTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym) || recogTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym);
@@ -1303,7 +1327,7 @@ export default function App() {
   const getGoalSavingsTarget = useCallback((ym, goalId) => savingsTargets.find(x => x.ym===ym && x.slotKey===goalId)?.amount ?? null, [savingsTargets]);
 
   const curYm = TODAY.slice(0,7);
-  const nextYm = (() => { const d2 = new Date(TODAY); d2.setMonth(d2.getMonth()+1); return d2.toISOString().slice(0,7); })();
+  const nextYm = (() => { const d2 = new Date(TODAY + "T00:00:00"); d2.setMonth(d2.getMonth()+1); return toYmd(d2).slice(0,7); })();
   /* ── 掃入紀錄：記錄「非勞務收入」「月底剩餘」已經掃過多少，避免同一筆錢被重複掃兩次 ── */
   const sweptAmounts = d.sweptAmounts || {};
   const getSweptAmount = useCallback((ym, kind) => (sweptAmounts[ym]?.[kind]) || 0, [sweptAmounts]);
@@ -1385,6 +1409,9 @@ export default function App() {
     return Object.values(map);
   }, [stSum]);
 
+  /* ── 累積投入成本走勢（不是市值！市值需要每天的真實股價，這裡只有買進當下的成本，
+     用「今天的市值/成本比」套用回過去每一天算出來的市值曲線只是把成本曲線等比例縮放，會很誤導人，
+     真的要看市值走勢請用下面的 dailyGrowth／「每日收盤走勢」，那個才是抓真實歷史股價算的 ── */
   const invGrowth = useMemo(() => {
     const dayMap = {};
     stocks.forEach(st => {
@@ -1399,16 +1426,16 @@ export default function App() {
     });
     const days = Object.keys(dayMap).sort();
     if (!days.length) return [];
-    const start = new Date(days[0]), end = new Date(TODAY);
-    let cumCost = 0; const mvRatio = stTotCost > 0 ? stTotMv / stTotCost : 1;
+    const start = new Date(days[0] + "T00:00:00"), end = new Date(TODAY + "T00:00:00");
+    let cumCost = 0;
     const result = [];
     for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate()+1)) {
-      const dateStr = cur.toISOString().slice(0,10);
+      const dateStr = toYmd(cur);
       cumCost += (dayMap[dateStr] || 0);
-      result.push({ m:`${cur.getMonth()+1}/${cur.getDate()}`, cost:Math.round(cumCost), mv:Math.round(stTotMv > 0 ? cumCost * mvRatio : 0) });
+      result.push({ m:`${cur.getMonth()+1}/${cur.getDate()}`, cost:Math.round(cumCost) });
     }
     return result;
-  }, [stocks, stTotMv, stTotCost]);
+  }, [stocks]);
 
   const [dailyGrowth, setDailyGrowth] = useState([]);
   const [loadingDaily, setLoadingDaily] = useState(false);
@@ -1768,15 +1795,30 @@ export default function App() {
     const cost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0),0);
     return sh > 0 ? cost / sh : 0;
   }, [stocks]);
-  /* 目標的「定期定額」換算成金額：如果選的是「股數模式」，優先用你自己設定的股價（沒設定才用目前股價/均價，股價會變，所以每次都重新算）；不然就用固定金額模式 */
-  const goalRecurringAmount = useCallback((g) => {
+  /* 目標的「定期定額」可以排一個時間表：例如8月開始存5000，之後從1月起改成8000。
+     沒有排時間表的話，就退回舊的單一數字（相容舊資料）。給一個月份，找出「那個月生效」的最新一筆設定值。 */
+  const scheduledRecurringValue = useCallback((g, ym) => {
+    const sched = g.recurringSchedule && g.recurringSchedule.length > 0
+      ? g.recurringSchedule
+      : ((g.recurringMode === "shares" ? g.recurringShares > 0 : g.recurringAmount > 0)
+          ? [{ id:"legacy", fromYm:"0000-01", value: g.recurringMode === "shares" ? g.recurringShares : g.recurringAmount }]
+          : []);
+    const applicable = sched.filter(s => s.fromYm <= ym).sort((a,b) => b.fromYm.localeCompare(a.fromYm));
+    return applicable[0]?.value ?? null;
+  }, []);
+  /* 目標的「定期定額」換算成金額：如果選的是「股數模式」，優先用你自己設定的股價（沒設定才用目前股價/均價，股價會變，所以每次都重新算）；不然就用固定金額模式。
+     可以指定要看哪個月份的設定（配合上面的時間表），不給就看這個月。 */
+  const goalRecurringAmount = useCallback((g, ym) => {
+    const targetYm = ym || TODAY.slice(0,7);
+    const val = scheduledRecurringValue(g, targetYm);
+    if (!(val > 0)) return 0;
     if (g.recurringMode === "shares") {
-      if (!(g.recurringShares > 0 && g.shareTicker)) return 0;
+      if (!g.shareTicker) return 0;
       const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
-      return Math.round(g.recurringShares * price);
+      return Math.round(val * price);
     }
-    return +g.recurringAmount || 0;
-  }, [priceForTicker]);
+    return Math.round(val);
+  }, [priceForTicker, scheduledRecurringValue]);
 
   /* ── 定期定額自動買進（股數模式＋開了自動執行）：算出「這個月還沒買」的目標，給一個可以直接按確認的建議（金額不會超過預算，股數無條件捨去），
      這裡故意不做成完全靜默自動下單——先讓你確認一次金額/股價再送出，確認後才是真的一筆交易，之後也能照平常方式編輯/刪除 ── */
@@ -1814,9 +1856,9 @@ export default function App() {
   }, [accs, updMulti, upd]);
 
   /* ── 固定投資設定（智慧分流用）── */
-  const ALLOC_DEFAULT = { investAmt:6000, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"",
-    defaultIncome:23000, defaultLivingCap:11000, defaultInvestAmt:6000, defaultInvestAccId:"", planStartYm:"",
-    defaultIncomeItems:[{ id:"inc_default", label:"零用錢", amt:23000, accId:"" }] };
+  const ALLOC_DEFAULT = { investAmt:0, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"",
+    defaultIncome:0, defaultLivingCap:0, defaultInvestAmt:0, defaultInvestAccId:"", planStartYm:"",
+    defaultIncomeItems:[] };
   const allocSettings = d.allocSettings ? { ...ALLOC_DEFAULT, ...d.allocSettings } : ALLOC_DEFAULT;
   const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...ALLOC_DEFAULT, ...(p||{}), ...patch })), [upd]);
   /* 這個月（或指定月份）預估收入細項：有存過就用存的，沒有就用預設收入項目樣板 */
@@ -1824,7 +1866,7 @@ export default function App() {
     const stored = (d.incomeSchedule||{})[ym]?.items;
     if (stored && stored.length > 0) return stored;
     if (allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0) return allocSettings.defaultIncomeItems;
-    return [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome||23000, accId:"" }];
+    return allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : [];
   }, [d.incomeSchedule, allocSettings]);
   const setIncomeItems = useCallback((ym, items) => {
     const total = (items||[]).reduce((s, it) => s + (+it.amt || 0), 0);
@@ -1848,7 +1890,7 @@ export default function App() {
       return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
-    const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 11000);
+    const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 0);
     const livingAmt = overrides.livingAmt != null ? overrides.livingAmt : adaptiveLiving;
 
     // Step 3【專案存錢目標】：goalType==="sinking"，排除里程碑與已封存，依優先級（數字越小越優先）與剩餘月數排序
@@ -1901,7 +1943,7 @@ export default function App() {
       return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
-    const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : (allocSettings.defaultLivingCap || 11000);
+    const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : (allocSettings.defaultLivingCap || 0);
     const suggested = Math.max(0, Math.round(moInc - avgVariable));
     return { income: moInc, avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
   }, [moInc, allocSettings, txns]);
@@ -1916,6 +1958,35 @@ export default function App() {
     const hasAllocated = savingsTargets.some(x => x.ym === curYm);
     return { livingBudget: Math.round(livingBudget), spentSoFar: Math.round(spentSoFar), remaining, hasAllocated };
   }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount]);
+
+  /* ── 理財策略：可以自己選要不要啟用某個理財框架（緊急預備金／50-30-20／多桶理財／零基預算），存在 allocSettings 裡 ── */
+  const NEED_CATS_DEFAULT = ["食物","交通","家居","教育","醫療","保費","訂閱"];
+  const WANT_CATS_DEFAULT = ["娛樂","美容","其他"];
+  /* 50/30/20：這個月的需要／想要／儲蓄佔收入的比例，分類預設用常見類別猜，可以在設定裡調整 */
+  const budget502030 = useMemo(() => {
+    const needCats = allocSettings.needCats && allocSettings.needCats.length ? allocSettings.needCats : NEED_CATS_DEFAULT;
+    const wantCats = allocSettings.wantCats && allocSettings.wantCats.length ? allocSettings.wantCats : WANT_CATS_DEFAULT;
+    const expenseTxns = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現");
+    const sumBy = (cats) => expenseTxns.filter(t => cats.includes(t.cat)).reduce((s,t) => s + (t.proxyAmt ? t.amt-t.proxyAmt : t.amt), 0);
+    const needs = sumBy(needCats);
+    const wants = sumBy(wantCats);
+    const otherExp = expenseTxns.reduce((s,t) => s + (t.proxyAmt ? t.amt-t.proxyAmt : t.amt), 0) - needs - wants;
+    const income = moInc;
+    const savings = Math.max(0, income - needs - wants - otherExp);
+    const pct = (v) => income > 0 ? Math.round(v/income*100) : 0;
+    return { income, needs, wants, otherExp, savings, needPct:pct(needs), wantPct:pct(wants+otherExp), savePct:pct(savings) };
+  }, [moTxns, moInc, allocSettings]);
+
+  /* 一鍵建立緊急預備金目標：抓生活費預算 × 你選的月數（3或6個月），自動設成最高優先級的專案存錢目標 */
+  const createEmergencyFund = useCallback((months) => {
+    const monthlyLiving = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 0;
+    const target = Math.round(monthlyLiving * months);
+    if (target <= 0) { alert("先去設定頁填一下「預設生活費上限」，才能算出建議金額"); return; }
+    upd("goals", p => [...(p||[]), {
+      id:"g"+Date.now(), name:"緊急預備金", emoji:"🚨", target, deadline:"", accIds:[], bucketIds:[],
+      useMv:null, includeDebts:false, priority:1, goalType:"sinking", isEmergencyFund:true, group:"", priorityMigrated:true,
+    }]);
+  }, [allocSettings, guiltFreeGauge, upd]);
 
   /* ── 年度現金流預測與動態排程 ── */
   const incomeSchedule = d.incomeSchedule || {};
@@ -1940,7 +2011,7 @@ export default function App() {
     const months = [];
     const defaultIncomeItemsList = allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0
       ? allocSettings.defaultIncomeItems
-      : [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome||23000, accId:"" }];
+      : (allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : []);
     const defaultProjected = defaultIncomeItemsList.reduce((s, it) => s + (+it.amt || 0), 0);
     // 如果有設定「計畫起始月份」且晚於這個月，年度規劃就從那個月開始算，之前的月份（例如還沒開始規劃的當月）不列入
     const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
@@ -1974,7 +2045,7 @@ export default function App() {
   // 如果那個月、那個目標已經透過分流引擎「套用」過實際存錢目標，優先採用那個實際數字。
   const yearlyGoalSchedule = useMemo(() => {
     // 生活費（allocSettings.defaultLivingCap）已經包含訂閱／基本開銷了，剛性扣除不再另外加 subsMo/billsMo，避免重複扣
-    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
+    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 0;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
@@ -1983,7 +2054,7 @@ export default function App() {
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
-        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7), accIds:g.accIds||[], bucketIds:g.bucketIds||[], recurringAmount:goalRecurringAmount(g) }))
+        cur: goalCurrentAmount(g), deadlineYm: g.deadline.slice(0,7), accIds:g.accIds||[], bucketIds:g.bucketIds||[], _raw:g }))
       .sort((a,b) => a.priority - b.priority);
 
     // 剩餘需求會隨著每個月被分掉的金額累減，模擬「這個月存了，下個月要存的就變少」
@@ -1999,12 +2070,13 @@ export default function App() {
       activeThisMonth.forEach(g => {
         const applied = getGoalSavingsTarget(m.ym, g.id);
         const suggested = Math.round(remainingNeed[g.id] / monthsLeftFor(g));
+        const recurringThisMonth = goalRecurringAmount(g._raw, m.ym);
         let alloc, isRecurring = false;
         if (applied != null) {
           alloc = applied;
-        } else if (g.recurringAmount > 0) {
-          // 定期定額：設定過的固定月存金額，優先於系統估算的節奏，但還是不會超過這個月的剩餘資金或這個目標還需要的錢
-          alloc = Math.min(g.recurringAmount, monthSurplus, remainingNeed[g.id]);
+        } else if (recurringThisMonth > 0) {
+          // 定期定額：那個月生效的固定月存金額（可能是排程表裡某個時間點開始的新金額），優先於系統估算的節奏，但還是不會超過這個月的剩餘資金或這個目標還需要的錢
+          alloc = Math.min(recurringThisMonth, monthSurplus, remainingNeed[g.id]);
           isRecurring = true;
         } else {
           alloc = Math.min(suggested, monthSurplus, remainingNeed[g.id]);
@@ -2028,10 +2100,107 @@ export default function App() {
     });
   }, [goals, goalCurrentAmount, isGoalArchived, yearlySchedule, guiltFreeGauge, allocSettings, getGoalSavingsTarget, incomeSchedule, goalRecurringAmount]);
 
+  /* ── AI 理財顧問（Firebase AI Logic / Gemini）：把目前的財務快照整理成一段文字，讓 AI 回答問題時有你的實際數字可以參考 ── */
+  const advisorContext = useMemo(() => {
+    const goalLines = (goals||[]).filter(g => !isGoalArchived(g)).map(g => {
+      const cur = goalCurrentAmount(g);
+      const sched = (yearlyGoalSchedule||[]).find(x => x.id === g.id);
+      let onTrack = "";
+      if (sched) {
+        const plannedTotal = sched.perMonth.reduce((s,m) => s + (m.alloc||0), 0);
+        onTrack = plannedTotal >= sched.totalNeeded ? "（照目前排程存得完）" : `（照目前排程到期時估計還會差 ${fmt(Math.max(0,sched.totalNeeded-plannedTotal))}）`;
+      }
+      const deadlineTxt = g.deadline ? `，期限 ${g.deadline}` : "";
+      const recurTxt = g.goalType==="sinking" ? (() => {
+        const amt = goalRecurringAmount(g, curYm);
+        return amt > 0 ? `，定期定額每月約 ${fmt(amt)}` : "";
+      })() : "";
+      return `- ${g.name}（${g.goalType==="wishlist"?"願望池":g.goalType==="milestone"?"里程碑":"專案存錢"}，優先級${g.priority??5}）：目標 ${fmt(g.target)}，目前 ${fmt(cur)}，還差 ${fmt(Math.max(0,g.target-cur))}${deadlineTxt}${recurTxt}${onTrack}`;
+    }).join("\n");
+
+    // 這個月支出前5大類別
+    const catTotals = {};
+    moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現").forEach(t => {
+      const amt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
+      catTotals[t.cat] = (catTotals[t.cat]||0) + amt;
+    });
+    const topCats = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,v]) => `${c} ${fmt(v)}`).join("、");
+
+    // 訂閱與帳單
+    const activeSubs = (subs||[]).filter(s=>s.active).map(s => `${s.name} ${fmt(monthlyEquiv(s))}/月`).join("、");
+    const activeBills = (bills||[]).filter(b=>b.active).map(b => `${b.name} ${fmt(monthlyEquiv(b))}/月`).join("、");
+
+    // 投資組合
+    const stockLines = (stSum||[]).filter(s=>s.totalSh>0).map(s =>
+      `- ${s.ticker}${s.name&&s.name!==s.ticker?`(${s.name})`:""}：${s.totalSh}股，成本 ${fmt(s.totalCost)}，市值 ${fmt(s.mv)}，${s.upnl>=0?"未實現獲利":"未實現虧損"} ${fmt(Math.abs(s.upnl))}`
+    ).join("\n");
+
+    // 往來帳（應收應付）
+    const recLines = (debts||[]).filter(x=>x.type==="receivable"&&!x.settled).map(x=>`${x.person||x.desc||"某人"} 欠 ${fmt(x.amt-(x.installPaidAmt||0))}`).join("、");
+    const payLines = (debts||[]).filter(x=>x.type==="payable"&&!x.settled).map(x=>`欠 ${x.person||x.desc||"某人"} ${fmt(x.amt-(x.installPaidAmt||0))}`).join("、");
+
+    return [
+      "你是使用者的個人理財顧問，以下是他目前在記帳 App「FinZen」裡的真實財務資料快照，回答問題時請盡量根據這些數字給具體建議，語氣親切、簡潔、講重點，避免空泛的教科書式建議。可以主動指出資料裡看到的問題或機會（例如某項開銷佔比異常高、某個目標進度落後、閒置現金太多之類的），不用等使用者問到才說。",
+      "如果使用者問的是「某支股票今天為什麼漲/跌」或需要即時新聞，而你沒有查到即時資訊，要誠實說你不確定或建議他自己查證，不要瞎編數字或新聞內容。",
+      "",
+      "【總資產】",
+      `總資產淨值：${fmt(netWorth)}（資產 ${fmt(totAssets)} − 信用卡未繳 ${fmt(totDebt)} − 代墊應付 ${fmt(totPay)} + 應收 ${fmt(totRec)}）`,
+      `現金＋活存：${fmt(cashBal)}`,
+      stTotMv > 0 ? `投資市值：${fmt(stTotMv)}（成本 ${fmt(stTotCost)}，未實現損益 ${fmt(stTotMv-stTotCost)}）` : "目前沒有股票投資部位。",
+      "",
+      "【這個月收支】",
+      `收入：${fmt(moInc)}，支出：${fmt(moExp)}，結餘：${fmt(moInc-moExp)}`,
+      topCats ? `支出前5大類別：${topCats}` : "這個月還沒有支出紀錄。",
+      `生活費預算：${fmt(guiltFreeGauge.livingBudget)}，目前已花：${fmt(guiltFreeGauge.spentSoFar)}，${guiltFreeGauge.remaining>=0?`還可以花 ${fmt(guiltFreeGauge.remaining)}`:`已經超支 ${fmt(-guiltFreeGauge.remaining)}`}${financialSuggestion.historyMonths>0?`（生活費預算是近${financialSuggestion.historyMonths}個月平均自動算的）`:"（目前用的是設定頁的固定預設值，還沒開始用歷史平均自動學習）"}`,
+      `50/30/20 比例：需要 ${budget502030.needPct}%、想要 ${budget502030.wantPct}%、儲蓄 ${budget502030.savePct}%`,
+      "",
+      "【固定支出】",
+      `訂閱＋基本開銷合計每月：${fmt(subsMo+billsMo)}`,
+      activeSubs ? `訂閱：${activeSubs}` : "沒有進行中的訂閱。",
+      activeBills ? `基本開銷：${activeBills}` : "沒有進行中的基本開銷帳單。",
+      "",
+      "【投資部位】",
+      stockLines || "目前沒有股票持股。",
+      "",
+      "【目標】",
+      goalLines || "目前沒有設定任何目標。",
+      curSavingsTarget ? `這個月手動設定的存錢目標：${fmt(curSavingsTarget.amount)}` : "這個月沒有另外手動設定存錢目標。",
+      "",
+      "【分流引擎設定】",
+      `預設生活費上限：${allocSettings.defaultLivingCap>0?fmt(allocSettings.defaultLivingCap):"未設定"}，預設投資額：${allocSettings.defaultInvestAmt>0?fmt(allocSettings.defaultInvestAmt):"未設定"}`,
+      "",
+      "【往來帳】",
+      recLines ? `別人欠使用者：${recLines}` : "沒有應收帳款。",
+      payLines ? `使用者欠別人：${payLines}` : "沒有應付帳款。",
+    ].join("\n");
+  }, [goals, isGoalArchived, goalCurrentAmount, fmt, moInc, moExp, guiltFreeGauge, budget502030, curSavingsTarget,
+      moTxns, subs, bills, monthlyEquiv, subsMo, billsMo, stSum, debts, netWorth, totAssets, totDebt, totPay, totRec,
+      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion]);
+
+  const [advisorHistory, setAdvisorHistory] = useState([]); // [{role:"user"|"model", text, sources?}]
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorError, setAdvisorError] = useState(null);
+  const sendAdvisorMessage = useCallback(async (text, grounded) => {
+    const userMsg = { role:"user", text };
+    const nextHistory = [...advisorHistory, userMsg];
+    setAdvisorHistory(nextHistory);
+    setAdvisorLoading(true);
+    setAdvisorError(null);
+    try {
+      const { text: reply, sources } = await askAdvisor(nextHistory, advisorContext, grounded);
+      setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
+    } catch (e) {
+      setAdvisorError(e.message || "問不到，稍後再試");
+    } finally {
+      setAdvisorLoading(false);
+    }
+  }, [advisorHistory, advisorContext]);
+  const clearAdvisorHistory = useCallback(() => { setAdvisorHistory([]); setAdvisorError(null); }, []);
+
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
   const yearlyForecastTable = useMemo(() => {
     // 生活費已經包含訂閱／基本開銷了，不再另外加 subsMo/billsMo
-    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 11000;
+    const livingAmt = allocSettings.defaultLivingCap || guiltFreeGauge.livingBudget || 0;
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
@@ -2068,11 +2237,11 @@ export default function App() {
   const hTxns = useMemo(() => txns.filter(t => t.date >= healthRange.s && t.date <= healthRange.e), [txns, healthRange]);
   const hInc = useMemo(() => hTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [hTxns]);
   const hExp = useMemo(() => hTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0), [hTxns]);
-  const isSingleMo = useMemo(() => { const s = new Date(chartRange.s), e = new Date(chartRange.e); return s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth(); }, [chartRange]);
+  const isSingleMo = useMemo(() => { const s = new Date(chartRange.s+"T00:00:00"), e = new Date(chartRange.e+"T00:00:00"); return s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth(); }, [chartRange]);
   
   const chartData = useMemo(() => {
     if (!txns.length || !chartRange.s || !chartRange.e) return [];
-    const s = new Date(chartRange.s), e = new Date(chartRange.e);
+    const s = new Date(chartRange.s+"T00:00:00"), e = new Date(chartRange.e+"T00:00:00");
     if (e < s) return [];
     const afterNet = txns.filter(t => t.date > chartRange.e).reduce((acc, t) => t.type === "income" && t.cat !== "帳戶調整" ? acc + t.amt : t.type === "expense" && t.cat !== "帳戶調整" ? acc - t.amt : acc, 0);
     const endAssets = totAssets - afterNet;
@@ -2084,9 +2253,9 @@ export default function App() {
     });
     const result = [];
     let running = endAssets;
-    let cur = new Date(e);
+    let cur = new Date(e.getTime());
     while (cur >= s) {
-      const dateStr = cur.toISOString().slice(0, 10);
+      const dateStr = toYmd(cur);
       result.unshift({
         d: isSingleMo ? `${cur.getDate()}日` : `${cur.getMonth() + 1}/${cur.getDate()}`,
         m: `${cur.getFullYear()}/${cur.getMonth() + 1}月`,
@@ -2138,7 +2307,9 @@ export default function App() {
     premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
-    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout,
+    lang, changeLang, tr, LANGUAGES,
+    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData,
+    hideAmounts, toggleHideAmounts,
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
     nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit, deleteTrade,
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
@@ -2146,6 +2317,8 @@ export default function App() {
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
+    budget502030, createEmergencyFund,
+    aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -2159,7 +2332,12 @@ export default function App() {
 
   return (
     <>
-      <div style={{ maxWidth:480, margin:"0 auto", minHeight:"100dvh", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        .fz-shell { max-width: 480px; }
+        @media (min-width: 700px) { .fz-shell { max-width: 640px; } }
+        @media (min-width: 1024px) { .fz-shell { max-width: 780px; } }
+      `}</style>
+      <div className="fz-shell" style={{ position:"relative", margin:"0 auto", minHeight:"100dvh", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
         
         {/* 頁面切換控制 */}
         <div style={{ flex:1, overflowY:"auto", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>
@@ -2173,16 +2351,16 @@ export default function App() {
           {tab === "settings" && <SettingsPage {...p} />}
         </div>
 
-        {/* 記帳快速懸浮鈕 */}
+        {/* 記帳快速懸浮鈕：用 absolute 相對於上面這個已經置中、有最大寬度的外框定位，寬螢幕（平板/電腦）才不會飄到瀏覽器最右邊 */}
         {tab === "overview" && (
-          <button onClick={() => { setNT({ ...T0, acc:accs.filter(a => a.type !== "credit")[0]?.name || "" }); setModal("addTxn"); }} style={{ position:"fixed", bottom:"calc(76px + env(safe-area-inset-bottom,0px))", right:18, width:54, height:54, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.accentD})`, border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 6px 24px ${C.accent}55`, zIndex:25, fontSize:22 }}>✏️</button>
+          <button onClick={() => { setNT({ ...T0, acc:accs.filter(a => a.type !== "credit")[0]?.name || "" }); setModal("addTxn"); }} style={{ position:"absolute", bottom:"calc(76px + env(safe-area-inset-bottom,0px))", right:18, width:54, height:54, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.accentD})`, border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 6px 24px ${C.accent}55`, zIndex:25, fontSize:22 }}>✏️</button>
         )}
 
         {/* 底部導覽列 */}
-        <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
+        <div style={{ position:"absolute", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
           <div style={{ display:"flex", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
-            {[{ k:"overview", i:"📊", l:"總覽" }, { k:"wallet", i:"👛", l:"錢包" }, { k:"charts", i:"📉", l:"圖表" }, { k:"goals", i:"🎯", l:"目標" }, { k:"subsbills", i:"🔁", l:"訂閱" }, { k:"notes", i:"👥", l:"往來帳" }, { k:"invest", i:"📈", l:"投資" }, { k:"settings", i:"⚙️", l:"設定" }].map(t => {
-              const active = tab === t.k;
+            {[{ k:"overview", i:"📊", l:tr("nav_overview") }, { k:"wallet", i:"👛", l:tr("nav_wallet") }, { k:"charts", i:"📉", l:tr("nav_charts") }, { k:"notes", i:"👥", l:tr("nav_notes") }, { k:"invest", i:"📈", l:tr("nav_invest") }, { k:"settings", i:"☰", l:tr("nav_more") }].map(t => {
+              const active = tab === t.k || (t.k === "settings" && (tab === "goals" || tab === "subsbills"));
               return (
                 <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"0 0 auto", minWidth:64, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
                   <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
@@ -2200,6 +2378,7 @@ export default function App() {
         <StockModals {...p} />
         <DebtModals {...p} />
         <OtherModals {...p} />
+        <AdvisorModal {...p} />
 
         {/* 確認刪除彈窗 */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {
@@ -2216,7 +2395,7 @@ export default function App() {
           undoTimerRef.current = setTimeout(() => setUndoInfo(null), 6000);
         }} onCancel={closeConfirm} />}
         {undoInfo && (
-          <div style={{ position:"fixed", bottom:"calc(70px + env(safe-area-inset-bottom,0px))", left:"50%", transform:"translateX(-50%)", width:"calc(100% - 32px)", maxWidth:440, zIndex:250, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderRadius:14, background:C.surface, border:`1px solid ${C.borderL}`, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+          <div style={{ position:"absolute", bottom:"calc(70px + env(safe-area-inset-bottom,0px))", left:16, right:16, zIndex:250, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"12px 16px", borderRadius:14, background:C.surface, border:`1px solid ${C.borderL}`, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
             <span style={{ fontSize:13, color:C.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{(undoInfo.okLabel || "確認刪除").replace("確認", "已")}</span>
             <button onClick={undoDelete} style={{ flexShrink:0, padding:"7px 16px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:900, fontSize:13, cursor:"pointer" }}>↩️ 復原</button>
           </div>
