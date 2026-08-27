@@ -35,7 +35,7 @@ export default function OverviewPage({
     <>
       {tab === "overview" && (
         <div>
-          <div style={{ position:"sticky", top:0, zIndex:20, background:`${C.bg}f2`, backdropFilter:"blur(16px)", padding:"12px 16px 8px" }}>
+          <div style={{ background:C.bg, padding:"12px 16px 8px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <button onClick={prevMo} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:22 }}>‹</button>
