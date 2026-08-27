@@ -180,12 +180,13 @@ export default function SettingsPage({
                   }} style={{ display:"none" }} />
                 </label>
                 <Btn onClick={() => {
-                  const step3 = () => confirm("最後一次確認：這個動作無法復原，所有記帳、投資、往來帳資料都會永久消失。真的要清空嗎？", () => {
+                  const step3 = () => confirm("最後一次確認：這個動作無法復原，所有記帳、投資、往來帳資料都會永久消失。真的要清空嗎？", async () => {
+                    if (cloudUser) await doDeleteCloudData(); // 有登入雲端同步的話，雲端備份也要一起清掉，不然重整頁面會被雲端資料蓋回來
                     localStorage.removeItem("finzen_v3");
                     alert("資料已完全清除");
                     window.location.reload();
                   }, "確認清空");
-                  const step2 = () => confirm("再次確認：所有帳戶、交易、投資、往來帳資料都會消失，建議先匯出備份。要繼續嗎？", step3, "繼續", true);
+                  const step2 = () => confirm(cloudUser ? "再次確認：所有帳戶、交易、投資、往來帳資料都會消失（連同雲端備份），建議先匯出備份。要繼續嗎？" : "再次確認：所有帳戶、交易、投資、往來帳資料都會消失，建議先匯出備份。要繼續嗎？", step3, "繼續", true);
                   confirm("確定要清空所有資料嗎？這無法復原！", step2, "繼續", true);
                 }} v="danger" sz="sm">🗑 清空</Btn>
               </div>
