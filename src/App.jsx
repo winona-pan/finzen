@@ -20,6 +20,8 @@ import OtherModals   from "./modals/OtherModals";
 import AdvisorModal  from "./modals/AdvisorModal";
 import UserGuideModal from "./modals/UserGuideModal";
 import AccountModal  from "./modals/AccountModal";
+import LanguageModal from "./modals/LanguageModal";
+import ThemeModal    from "./modals/ThemeModal";
 
 /* ── Tokens ── */
 const THEMES = {
@@ -1049,7 +1051,7 @@ export default function App() {
     if (!buyF.ticker || !buyF.shares || !buyF.acc) return;
     const shares = +buyF.shares, totalCost = +buyF.totalCost || (shares * (+buyF.avgCost||0)) + (+buyF.fee||0);
     const linkedTxnId = buyF.fromAcc ? Date.now() : null;
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"", linkedTxnId, linkedAcc: buyF.fromAcc||null };
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"", linkedTxnId, linkedAcc: buyF.fromAcc||null, goalId: buyF.goalId||null };
     upd("stocks", p => {
       const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
       if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
@@ -1770,6 +1772,39 @@ export default function App() {
   const moInc = useMemo(() => moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [moTxns]);
   const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0), [moTxns]);
 
+  /* 某檔股票目前的參考價格：有抓到報價就用報價，沒有就退回買進均價，抓不到就是0 */
+  const priceForTicker = useCallback((ticker) => {
+    const matches = stocks.filter(s => s.ticker === ticker);
+    if (matches.length === 0) return 0;
+    const withPrice = matches.find(s => s.curPrice > 0);
+    if (withPrice) return withPrice.curPrice;
+    const buys = matches.flatMap(s => (s.trades||[]).filter(t=>t.type==="buy"));
+    const sh = buys.reduce((s,t)=>s+t.shares,0);
+    const cost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0),0);
+    return sh > 0 ? cost / sh : 0;
+  }, [stocks]);
+
+  /* 這個目標（定期定額股數模式）自己「累積買了多少股」，只算標記這個目標id的交易，不是整個帳戶/整支股票的持股——
+     這樣同一個證券戶、甚至同一支股票，可以分別給不同目標各自追蹤各自買的份 */
+  const goalStockShares = useCallback((g) => {
+    let shares = 0, cost = 0;
+    stocks.forEach(st => {
+      if (st.ticker !== g.shareTicker) return;
+      (st.trades||[]).forEach(t => {
+        if (t.goalId !== g.id) return;
+        if (t.type === "buy") {
+          shares += t.shares;
+          cost += (t.totalCost != null ? t.totalCost : t.shares*t.price+(t.fee||0));
+        } else if (t.type === "sell") {
+          const avgCost = shares > 0 ? cost / shares : 0;
+          shares = Math.max(0, shares - t.shares);
+          cost = Math.max(0, cost - avgCost * t.shares);
+        }
+      });
+    });
+    return { shares, cost };
+  }, [stocks]);
+
   /* ── 目標目前進度金額（共用邏輯，Overview/Charts/分流引擎都用這個）── */
   const goalCurrentAmount = useCallback((g) => {
     const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
@@ -1792,6 +1827,14 @@ export default function App() {
     }
     return accs.filter(a=>(g.accIds||[]).includes(a.id)).reduce((s,a)=>{
       if (a.type==="investment") {
+        // 如果這個目標有指定「定期定額」的股票代號，只算「標記給這個目標」買的股數，不是帳戶裡這支股票的全部持股——
+        // 這樣同一支股票也能分給不同目標，各自只認自己那份
+        if (g.recurringMode === "shares" && g.shareTicker) {
+          const gs = goalStockShares(g);
+          const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
+          const mv = gs.shares * price;
+          return s + (goalUseMv ? (mv > 0 ? mv : gs.cost) : gs.cost);
+        }
         const stForAcc = stSum.filter(st=>st.acc===a.name);
         const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
         const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
@@ -1802,27 +1845,22 @@ export default function App() {
       const acc = accs.find(a=>a.id===b.accId);
       return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
     },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0);
-  }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA]);
+  }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA, goalStockShares, priceForTicker]);
 
   /* ── 目標是否已封存：達標，或（有截止日的類型）已過期 ── */
-  const isGoalArchived = useCallback((g) => {
+  /* 目標是否「達標/過期」——只是拿來判斷要不要顯示「要不要封存」的提示，不會自動把目標搬到已封存 */
+  const isGoalComplete = useCallback((g) => {
     const cur = goalCurrentAmount(g);
     if (g.target > 0 && cur >= g.target) return true;
     if (g.goalType === "sinking" && g.deadline && new Date(g.deadline) < new Date(TODAY)) return true;
     return false;
   }, [goalCurrentAmount]);
+  /* 目標是否封存：完全由你自己決定（點「封存」才會封存，點「恢復」可以移回進行中），達標或過期不會自動幫你封存 */
+  const isGoalArchived = useCallback((g) => !!g.archived, []);
+  const setGoalArchived = useCallback((goalId, archived) => {
+    upd("goals", p => p.map(g => g.id===goalId ? { ...g, archived } : g));
+  }, [upd]);
 
-  /* 某檔股票目前的參考價格：有抓到報價就用報價，沒有就退回買進均價，抓不到就是0 */
-  const priceForTicker = useCallback((ticker) => {
-    const matches = stocks.filter(s => s.ticker === ticker);
-    if (matches.length === 0) return 0;
-    const withPrice = matches.find(s => s.curPrice > 0);
-    if (withPrice) return withPrice.curPrice;
-    const buys = matches.flatMap(s => (s.trades||[]).filter(t=>t.type==="buy"));
-    const sh = buys.reduce((s,t)=>s+t.shares,0);
-    const cost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0),0);
-    return sh > 0 ? cost / sh : 0;
-  }, [stocks]);
   /* 目標的「定期定額」可以排一個時間表：例如8月開始存5000，之後從1月起改成8000。
      沒有排時間表的話，就退回舊的單一數字（相容舊資料）。給一個月份，找出「那個月生效」的最新一筆設定值。 */
   const scheduledRecurringValue = useCallback((g, ym) => {
@@ -1834,6 +1872,23 @@ export default function App() {
     const applicable = sched.filter(s => s.fromYm <= ym).sort((a,b) => b.fromYm.localeCompare(a.fromYm));
     return applicable[0]?.value ?? null;
   }, []);
+  /* 從年度預測那邊直接改「定期定額」排程：等同於在目標編輯頁排時間表，只是從這裡改比較順手，
+     兩個地方改的是同一份資料，不會各管各的。如果那個月本來就已經有一筆從那個月開始生效的設定，直接覆蓋；沒有的話新增一筆。 */
+  const updateGoalRecurringSchedule = useCallback((goalId, fromYm, value) => {
+    upd("goals", p => p.map(g => {
+      if (g.id !== goalId) return g;
+      const existing = g.recurringSchedule && g.recurringSchedule.length > 0
+        ? g.recurringSchedule
+        : ((g.recurringMode === "shares" ? g.recurringShares > 0 : g.recurringAmount > 0)
+            ? [{ id:"legacy", fromYm:"0000-01", value: g.recurringMode === "shares" ? g.recurringShares : g.recurringAmount }]
+            : []);
+      const hasExact = existing.some(s => s.fromYm === fromYm);
+      const nextSchedule = hasExact
+        ? existing.map(s => s.fromYm === fromYm ? { ...s, value } : s)
+        : [...existing, { id:"r"+Date.now(), fromYm, value }];
+      return { ...g, recurringSchedule: nextSchedule };
+    }));
+  }, [upd]);
   /* 目標的「定期定額」換算成金額：如果選的是「股數模式」，優先用你自己設定的股價（沒設定才用目前股價/均價，股價會變，所以每次都重新算）；不然就用固定金額模式。
      可以指定要看哪個月份的設定（配合上面的時間表），不給就看這個月。 */
   const goalRecurringAmount = useCallback((g, ym) => {
@@ -1848,20 +1903,21 @@ export default function App() {
     return Math.round(val);
   }, [priceForTicker, scheduledRecurringValue]);
 
-  /* ── 定期定額自動買進（股數模式＋開了自動執行）：算出「這個月還沒買」的目標，給一個可以直接按確認的建議（金額不會超過預算，股數無條件捨去），
-     這裡故意不做成完全靜默自動下單——先讓你確認一次金額/股價再送出，確認後才是真的一筆交易，之後也能照平常方式編輯/刪除 ── */
+  /* ── 定期定額自動買進（股數模式＋開了自動執行）：直接用「定期定額」排程裡設定的股數，不需要另外再設一個「預算」——
+     不然會變成兩個地方各設一個數字、又要求對得起來，這就是搞混的根源。
+     算出「這個月還沒買」的目標，給一個可以直接按確認的建議，這裡故意不做成完全靜默自動下單——先讓你確認一次金額/股價再送出 ── */
   const goalAutoInvested = d.goalAutoInvested || {};
   const pendingAutoInvest = useCallback((g) => {
-    if (g.goalType !== "sinking" || !g.autoInvest || !(g.recurringBudget > 0) || !g.shareTicker || !g.recurringFromAcc || !(g.accIds||[]).length) return null;
+    if (g.goalType !== "sinking" || !g.autoInvest || g.recurringMode !== "shares" || !g.shareTicker || !g.recurringFromAcc || !(g.accIds||[]).length) return null;
     if (isGoalArchived(g)) return null;
     const thisYm = TODAY.slice(0,7);
     if (goalAutoInvested[g.id]?.[thisYm]) return null;
+    const shares = scheduledRecurringValue(g, thisYm); // 這個月「定期定額」排程裡設定的股數，跟畫面上顯示的是同一個數字
+    if (!(shares > 0)) return null;
     const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
     if (price <= 0) return null;
-    const shares = Math.floor(g.recurringBudget / price);
-    if (shares <= 0) return null;
     return { price, shares, cost: shares * price, ym: thisYm };
-  }, [goalAutoInvested, priceForTicker, isGoalArchived]);
+  }, [goalAutoInvested, priceForTicker, isGoalArchived, scheduledRecurringValue]);
 
   const confirmAutoInvest = useCallback((g, { price, shares }) => {
     const cost = Math.round(price * shares);
@@ -1870,7 +1926,7 @@ export default function App() {
     if (!toAcc || !fromAcc || shares <= 0) return;
     const thisYm = TODAY.slice(0,7);
     const linkedTxnId = Date.now();
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price, fee:0, totalCost:cost, date:TODAY, emotion:"", linkedTxnId, linkedAcc:fromAcc.name, autoInvested:true };
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price, fee:0, totalCost:cost, date:TODAY, emotion:"", linkedTxnId, linkedAcc:fromAcc.name, autoInvested:true, goalId:g.id };
     updMulti({
       stocks: p => {
         const ex = p.find(s => s.ticker === g.shareTicker && s.acc === toAcc.name);
@@ -2205,7 +2261,17 @@ export default function App() {
       moTxns, subs, bills, monthlyEquiv, subsMo, billsMo, stSum, debts, netWorth, totAssets, totDebt, totPay, totRec,
       cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion]);
 
-  const [advisorHistory, setAdvisorHistory] = useState([]); // [{role:"user"|"model", text, sources?}]
+  /* AI 顧問對話：存在 localStorage，關掉 app 再打開還在，不會因為關掉聊天視窗或重新整理就消失 */
+  const [advisorHistory, setAdvisorHistoryRaw] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("finzen_advisorHistory") || "[]"); } catch { return []; }
+  });
+  const setAdvisorHistory = useCallback((updater) => {
+    setAdvisorHistoryRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("finzen_advisorHistory", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
   const [advisorLoading, setAdvisorLoading] = useState(false);
   const [advisorError, setAdvisorError] = useState(null);
   const sendAdvisorMessage = useCallback(async (text, grounded) => {
@@ -2360,7 +2426,7 @@ export default function App() {
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
-    goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, pendingAutoInvest, confirmAutoInvest,
+    goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, scheduledRecurringValue, pendingAutoInvest, confirmAutoInvest, updateGoalRecurringSchedule, goalStockShares,
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
@@ -2419,6 +2485,8 @@ export default function App() {
         <AdvisorModal {...p} />
         <UserGuideModal {...p} />
         <AccountModal {...p} />
+        <LanguageModal {...p} />
+        <ThemeModal {...p} />
 
         {/* 確認刪除彈窗 */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {
