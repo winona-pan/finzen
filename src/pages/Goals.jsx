@@ -4,7 +4,7 @@ export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
   setEditGoal, goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, setOffsetGoal, setDepositGoal,
-  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount, goalStockShares, priceForTicker,
+  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount, goalStockShares, priceForTicker, goalDisplayAmount,
   pendingAutoInvest, confirmAutoInvest, iSt, createEmergencyFund,
   Card, Btn, SH, Sl
 }) {
@@ -16,7 +16,7 @@ export default function GoalsPage({
 
   const GoalCard = ({ g, compact }) => {
     const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
-    const current = goalCurrentAmount(g);
+    const current = goalDisplayAmount[g.id] ?? goalCurrentAmount(g);
     const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
     const remaining = Math.max(0, g.target - current);
     const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
@@ -242,7 +242,10 @@ export default function GoalsPage({
               <>
                 {groupNames.map(gname => {
                   const members = activeGoals.filter(g => g.group === gname);
-                  const groupCurrent = members.reduce((s,g) => s + goalCurrentAmount(g), 0);
+                  const scopeSig = (g) => JSON.stringify([...(g.accIds||[])].sort()) + "|" + JSON.stringify([...(g.bucketIds||[])].sort());
+                  const scoped = members.filter(g => (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0));
+                  const isWaterfall = members.length > 1 && scoped.length === members.length && members.every(g => scopeSig(g) === scopeSig(members[0]));
+                  const groupCurrent = members.reduce((s,g) => s + (goalDisplayAmount[g.id] ?? goalCurrentAmount(g)), 0);
                   const groupTarget = members.reduce((s,g) => s + (g.target||0), 0);
                   const groupPct = groupTarget > 0 ? Math.min(100, groupCurrent/groupTarget*100) : 0;
                   const isCollapsed = collapsedGroups[gname];
@@ -260,6 +263,7 @@ export default function GoalsPage({
                         <div style={{ height:6, borderRadius:4, background:C.border, marginTop:6 }}>
                           <div style={{ height:"100%", borderRadius:4, background:groupPct>=100?C.teal:C.accent, width:`${groupPct}%` }} />
                         </div>
+                        {isWaterfall && <div style={{ fontSize:10, color:C.accentL, marginTop:6 }}>💧 這幾個目標連結同一個帳戶，錢會依優先級排序先填滿優先的，不會重複計算</div>}
                       </button>
                       {!isCollapsed && members.map(g => <GoalCard key={g.id} g={g} compact />)}
                     </Card>
@@ -277,7 +281,7 @@ export default function GoalsPage({
                 <span style={{ fontSize:12, color:C.muted }}>{showArchivedGoals?"▲":"▼"}</span>
               </button>
               {showArchivedGoals && (goals||[]).filter(g=>isGoalArchived(g)).map(g => {
-                const current = goalCurrentAmount(g);
+                const current = goalDisplayAmount[g.id] ?? goalCurrentAmount(g);
                 const pct = Math.min(100, current > 0 ? (current / g.target * 100) : 0);
                 const isWishlist = g.goalType === "wishlist";
                 const canOffset = isWishlist ? (pct >= 100 && !g.wishPurchased) : current > 0;

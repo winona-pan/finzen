@@ -42,22 +42,22 @@ export default function SettingsPage({
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{tr("more_subs_card")}</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{(subs||[]).filter(s=>s.active).length + (bills||[]).filter(b=>b.active).length} 個進行中</div>
               </button>
-              <button onClick={() => setModal("account")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+              <button onClick={() => setTab("account")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
                 <div style={{ fontSize:26, marginBottom:6 }}>👤</div>
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>帳戶</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{cloudUser ? "已同步" : "登入 / 資料管理"}</div>
               </button>
-              <button onClick={() => setModal("userGuide")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+              <button onClick={() => setTab("userGuide")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
                 <div style={{ fontSize:26, marginBottom:6 }}>📖</div>
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>使用手冊</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>怎麼用每一頁功能</div>
               </button>
-              <button onClick={() => setModal("theme")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+              <button onClick={() => setTab("theme")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
                 <div style={{ fontSize:26, marginBottom:6 }}>🎨</div>
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>外觀主題</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{THEMES[theme]?.name || "深色"}</div>
               </button>
-              <button onClick={() => setModal("language")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+              <button onClick={() => setTab("language")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
                 <div style={{ fontSize:26, marginBottom:6 }}>🌐</div>
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>語言</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{LANGUAGES[lang]?.name || "繁體中文"}</div>
@@ -67,7 +67,7 @@ export default function SettingsPage({
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>類別管理</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{[...cats.expense, ...cats.income].length} 個類別</div>
               </button>
-              <button onClick={() => setModal("advisor")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", gridColumn:"1 / -1" }}>
+              <button onClick={() => setTab("advisor")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", gridColumn:"1 / -1" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                   <div style={{ fontSize:26 }}>🤖</div>
                   <div>
