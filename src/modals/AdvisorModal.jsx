@@ -32,7 +32,7 @@ export default function AdvisorModal({
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"18px 20px 12px", borderBottom:`1px solid ${C.border}` }}>
           <div>
             <h3 style={{ fontWeight:900, fontSize:16, color:C.text, margin:0 }}>🤖 AI 理財顧問</h3>
-            <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>會參考你完整的資產、收支、投資、目標資料回答</div>
+            <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>會參考你完整的資產、收支、投資、目標資料回答；免費額度大約一天20次左右，用完要等隔天</div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
             {advisorHistory.length > 0 && <button onClick={clearAdvisorHistory} style={{ fontSize:11, color:C.muted, background:"none", border:"none", cursor:"pointer" }}>清空對話</button>}
