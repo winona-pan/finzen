@@ -39,11 +39,11 @@ if (isConfigured) {
   }
   try {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    // 模型名稱會隨時間更新／退役，如果顧問突然報錯，先去 https://firebase.google.com/docs/ai-logic/models 確認目前可用的模型名稱
-    aiModel = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+    // 模型名稱會隨時間更新／退役：2.5-flash 已經被 Google 停用，改用 3.6-flash（如果顧問又報錯，錯誤訊息通常會直接告訴你該換成哪個新模型名稱）
+    aiModel = getGenerativeModel(ai, { model: "gemini-3.6-flash" });
     // 帶「Google 搜尋」工具的版本：問新聞、股價漲跌這種即時性問題時才用這個，一般聊天用上面那個就好，
     // 這個 Gemini 2.5 系列模型每天有 1500 次免費額度，超過才會開始收費，個人使用量不太可能碰到上限
-    aiModelGrounded = getGenerativeModel(ai, { model: "gemini-2.5-flash", tools: [{ googleSearch: {} }] });
+    aiModelGrounded = getGenerativeModel(ai, { model: "gemini-3.6-flash", tools: [{ googleSearch: {} }] });
   } catch (e) {
     console.error("Firebase AI Logic 初始化失敗（要先在 Firebase 主控台開通 AI Logic）", e);
   }

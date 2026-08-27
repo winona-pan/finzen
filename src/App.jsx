@@ -2340,7 +2340,7 @@ export default function App() {
       <div className="fz-shell" style={{ position:"relative", margin:"0 auto", minHeight:"100dvh", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
         
         {/* 頁面切換控制 */}
-        <div style={{ flex:1, overflowY:"auto", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>
+        <div style={{ flex:1, minHeight:0, overflowY:"auto", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>
           {tab === "overview" && <OverviewPage {...p} />}
           {tab === "wallet"   && <WalletPage {...p} />}
           {tab === "charts"   && <ChartsPage {...p} />}
