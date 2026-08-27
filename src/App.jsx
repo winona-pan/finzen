@@ -17,11 +17,11 @@ import WalletModals  from "./modals/WalletModals";
 import StockModals   from "./modals/StockModals";
 import DebtModals    from "./modals/DebtModals";
 import OtherModals   from "./modals/OtherModals";
-import AdvisorModal  from "./modals/AdvisorModal";
-import UserGuideModal from "./modals/UserGuideModal";
-import AccountModal  from "./modals/AccountModal";
-import LanguageModal from "./modals/LanguageModal";
-import ThemeModal    from "./modals/ThemeModal";
+import AdvisorPage   from "./pages/AdvisorPage";
+import UserGuidePage from "./pages/UserGuidePage";
+import AccountPage   from "./pages/AccountPage";
+import LanguagePage  from "./pages/LanguagePage";
+import ThemePage     from "./pages/ThemePage";
 
 /* ── Tokens ── */
 const THEMES = {
@@ -1847,6 +1847,37 @@ export default function App() {
     },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0);
   }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA, goalStockShares, priceForTicker]);
 
+  /* ── 同一個分類（資料夾）裡，如果好幾個目標連結到「完全一樣的帳戶/子帳戶」，代表他們共用同一筆錢，
+     不該每個目標都各自顯示帳戶全額（那樣會重複算）。改成瀑布式分配：依優先級（數字小的先）依序把帳戶裡的錢
+     填滿每個目標的目標金額，填滿了才輪到下一個，剩下多少就是下一個目標的進度。
+     只有「分類相同 + 連結帳戶完全相同」的目標才會套用這個瀑布式邏輯，其他目標維持原本各自獨立計算。 */
+  const goalDisplayAmount = useMemo(() => {
+    const result = {};
+    const scopeSig = (g) => JSON.stringify([...(g.accIds||[])].sort()) + "|" + JSON.stringify([...(g.bucketIds||[])].sort());
+    const groups = {};
+    (goals||[]).forEach(g => {
+      const key = g.group ? `grp:${g.group}` : `solo:${g.id}`;
+      (groups[key] = groups[key] || []).push(g);
+    });
+    Object.values(groups).forEach(members => {
+      const scoped = members.filter(g => (g.accIds&&g.accIds.length>0) || (g.bucketIds&&g.bucketIds.length>0));
+      const shareSameAccount = members.length > 1 && scoped.length === members.length && members.every(g => scopeSig(g) === scopeSig(members[0]));
+      if (!shareSameAccount) {
+        members.forEach(g => { result[g.id] = goalCurrentAmount(g); });
+        return;
+      }
+      // 帳戶完全一樣，任一個成員算出來的原始值就是這組共用帳戶的總額
+      let pool = goalCurrentAmount(members[0]);
+      const sorted = [...members].sort((a,b) => (a.priority??5) - (b.priority??5));
+      sorted.forEach(g => {
+        const alloc = Math.max(0, Math.min(pool, g.target||0));
+        result[g.id] = alloc;
+        pool = Math.max(0, pool - alloc);
+      });
+    });
+    return result;
+  }, [goals, goalCurrentAmount]);
+
   /* ── 目標是否已封存：達標，或（有截止日的類型）已過期 ── */
   /* 目標是否「達標/過期」——只是拿來判斷要不要顯示「要不要封存」的提示，不會自動把目標搬到已封存 */
   const isGoalComplete = useCallback((g) => {
@@ -2426,7 +2457,7 @@ export default function App() {
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
-    goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, scheduledRecurringValue, pendingAutoInvest, confirmAutoInvest, updateGoalRecurringSchedule, goalStockShares,
+    goalCurrentAmount, goalDisplayAmount, isGoalArchived, isGoalComplete, setGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, scheduledRecurringValue, pendingAutoInvest, confirmAutoInvest, updateGoalRecurringSchedule, goalStockShares,
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
@@ -2453,6 +2484,11 @@ export default function App() {
           {tab === "goals"    && <GoalsPage {...p} />}
           {tab === "subsbills" && <SubsBillsPage {...p} />}
           {tab === "settings" && <SettingsPage {...p} />}
+          {tab === "advisor" && <AdvisorPage {...p} />}
+          {tab === "userGuide" && <UserGuidePage {...p} />}
+          {tab === "account" && <AccountPage {...p} />}
+          {tab === "language" && <LanguagePage {...p} />}
+          {tab === "theme" && <ThemePage {...p} />}
         </div>
 
         {/* 記帳快速懸浮鈕：用 absolute 相對於上面這個已經置中、有最大寬度的外框定位，寬螢幕（平板/電腦）才不會飄到瀏覽器最右邊 */}
@@ -2464,7 +2500,7 @@ export default function App() {
         <div style={{ position:"absolute", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
           <div style={{ display:"flex", justifyContent:"space-around", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
             {[{ k:"overview", i:"📊", l:tr("nav_overview") }, { k:"wallet", i:"👛", l:tr("nav_wallet") }, { k:"charts", i:"📉", l:tr("nav_charts") }, { k:"notes", i:"👥", l:tr("nav_notes") }, { k:"invest", i:"📈", l:tr("nav_invest") }, { k:"settings", i:"☰", l:tr("nav_more") }].map(t => {
-              const active = tab === t.k || (t.k === "settings" && (tab === "goals" || tab === "subsbills"));
+              const active = tab === t.k || (t.k === "settings" && ["goals","subsbills","advisor","userGuide","account","language","theme"].includes(tab));
               return (
                 <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"0 0 auto", minWidth:64, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
                   <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
@@ -2482,11 +2518,6 @@ export default function App() {
         <StockModals {...p} />
         <DebtModals {...p} />
         <OtherModals {...p} />
-        <AdvisorModal {...p} />
-        <UserGuideModal {...p} />
-        <AccountModal {...p} />
-        <LanguageModal {...p} />
-        <ThemeModal {...p} />
 
         {/* 確認刪除彈窗 */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {
