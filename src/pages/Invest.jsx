@@ -130,8 +130,8 @@ export default function InvestPage({
                   ? (
                     <div>
                       <div style={{ display:"flex", gap:6, marginBottom:12 }}>
-                        <button onClick={() => setGrowthMode("monthly")} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="monthly"?`${C.accent}28`:C.card, color:growthMode==="monthly"?C.accentL:C.muted, border:`1px solid ${growthMode==="monthly"?C.accent:C.border}`, cursor:"pointer" }}>成本/市值估算</button>
-                        <button onClick={() => { setGrowthMode("daily"); if (!dailyGrowth.length && !loadingDaily) fetchDailyGrowth(); }} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="daily"?`${C.accent}28`:C.card, color:growthMode==="daily"?C.accentL:C.muted, border:`1px solid ${growthMode==="daily"?C.accent:C.border}`, cursor:"pointer" }}>每日收盤走勢</button>
+                        <button onClick={() => setGrowthMode("monthly")} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="monthly"?`${C.accent}28`:C.card, color:growthMode==="monthly"?C.accentL:C.muted, border:`1px solid ${growthMode==="monthly"?C.accent:C.border}`, cursor:"pointer" }}>累積投入成本</button>
+                        <button onClick={() => { setGrowthMode("daily"); if (!dailyGrowth.length && !loadingDaily) fetchDailyGrowth(); }} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:11, fontWeight:700, background:growthMode==="daily"?`${C.accent}28`:C.card, color:growthMode==="daily"?C.accentL:C.muted, border:`1px solid ${growthMode==="daily"?C.accent:C.border}`, cursor:"pointer" }}>每日收盤走勢（真實市值）</button>
                       </div>
                       {growthMode === "monthly" ? (
                         invGrowth.length > 1 ? (
@@ -141,16 +141,14 @@ export default function InvestPage({
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                                 <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(invGrowth.length / 6) - 1)} />
                                 <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
-                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n) => [fmt(v), n==="cost"?"投入成本":"當前市值"]} />
+                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v) => [fmt(v), "投入成本"]} />
                                 <Line type="monotone" dataKey="cost" stroke={theme==="dark"?"#eee":"#222"} strokeWidth={2} dot={false} name="cost" />
-                                {stTotMv > 0 && <Line type="monotone" dataKey="mv" stroke={C.income} strokeWidth={2.5} dot={false} name="mv" />}
                               </LineChart>
                             </ResponsiveContainer>
                             <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
                               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:theme==="dark"?"#eee":"#222" }} />投入成本</div>
-                              {stTotMv > 0 && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSub }}><div style={{ width:16, height:2, background:C.income }} />市值</div>}
                             </div>
-                            {stTotMv === 0 && <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>市價載入後顯示市值曲線</div>}
+                            <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:6 }}>這裡只算累積投入的成本，不是市值——想看真實市值走勢，切換到上面的「每日收盤走勢」</div>
                           </div>
                         ) : <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>需要至少兩筆買入記錄才能顯示成長圖</div>
                       ) : (
@@ -322,8 +320,8 @@ export default function InvestPage({
                   <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(15, 1fr)", gap:3 }}>
                     {Array.from({ length:90 }).map((_, i) => {
-                      const d = new Date(); d.setDate(d.getDate() - (89 - i));
-                      const key = d.toISOString().slice(0,10);
+                      const d = new Date(TODAY+"T00:00:00"); d.setDate(d.getDate() - (89 - i));
+                      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
                       const val = dailyPnlHeatmap[key] || 0;
                       const intensity = Math.min(Math.abs(val) / 2000, 1);
                       const bg = val > 0 ? `rgba(74,222,128,${0.15+intensity*0.7})` : val < 0 ? `rgba(244,63,94,${0.15+intensity*0.7})` : C.border;

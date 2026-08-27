@@ -1,14 +1,17 @@
 import { useState } from "react";
 
 export default function SettingsPage({ 
-  C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+  C, tab, setTab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, moTxns, moInc, moExp, hTxns, hInc, hExp, subsMo, billsMo,
   collapsed, toggleSection, APP_VER, changeTheme, THEMES, theme,
   customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
   allocSettings, setAllocSettings,
-  firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout,
+  firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData,
+  hideAmounts, toggleHideAmounts,
+  lang, changeLang, tr, LANGUAGES,
+  aiEnabled,
   // 接收全域共用 UI 元件
   Card, SH, Btn, Sl
 }) {
@@ -26,12 +29,35 @@ export default function SettingsPage({
         <div>
           <div style={{ position:"sticky", top:0, zIndex:20, background:`${C.bg}f2`, backdropFilter:"blur(16px)", padding:"12px 16px 10px" }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:18 }}>⚙️</span>
-              <span style={{ fontWeight:900, fontSize:16, color:C.text }}>設定</span>
+              <span style={{ fontSize:18 }}>☰</span>
+              <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("more_title")}</span>
             </div>
           </div>
           
           <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
+
+            {/* 快速導覽：搬出底部導覽列的功能 */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+              <button onClick={() => setTab("goals")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+                <div style={{ fontSize:26, marginBottom:6 }}>🎯</div>
+                <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{tr("more_goals_card")}</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{(goals||[]).length} 個目標</div>
+              </button>
+              <button onClick={() => setTab("subsbills")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+                <div style={{ fontSize:26, marginBottom:6 }}>🔁</div>
+                <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{tr("more_subs_card")}</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{(subs||[]).filter(s=>s.active).length + (bills||[]).filter(b=>b.active).length} 個進行中</div>
+              </button>
+              <button onClick={() => setModal("advisor")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", gridColumn:"1 / -1" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ fontSize:26 }}>🤖</div>
+                  <div>
+                    <div style={{ fontWeight:900, fontSize:14, color:C.text }}>AI 理財顧問</div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{aiEnabled ? "問問題，會參考你的財務資料回答" : "還沒設定，點進去看怎麼開通"}</div>
+                  </div>
+                </div>
+              </button>
+            </div>
 
             {/* Theme */}
             <Card style={{ padding:14, marginBottom:12 }}>
@@ -56,9 +82,28 @@ export default function SettingsPage({
               </div>
             </Card>
 
-            {/* 雲端同步（Firebase） */}
+            {/* Language */}
+            <Card style={{ padding:14, marginBottom:12 }}>
+              <SH title={`🌐 ${tr("settings_language")}`} />
+              <div style={{ fontSize:11, color:C.muted, marginBottom:10, lineHeight:1.6 }}>
+                目前涵蓋底部導覽、常用按鈕、設定頁主要標題；其他頁面的詳細文字還在陸續翻譯中，沒翻到的地方會顯示繁體中文。
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                {Object.entries(LANGUAGES).map(([k, l]) => (
+                  <button key={k} onClick={() => changeLang(k)}
+                    style={{ padding:"10px 12px", borderRadius:12, border:`2px solid ${lang===k ? C.accent : C.border}`,
+                      background: lang===k ? `${C.accent}20` : C.card, cursor:"pointer",
+                      display:"flex", alignItems:"center", gap:8, textAlign:"left" }}>
+                    <span style={{ fontSize:18 }}>{l.flag}</span>
+                    <span style={{ fontWeight:700, fontSize:13, color: lang===k ? C.accentL : C.text }}>{l.name}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+            {/* 帳戶（雲端同步 + 個人資料 + 隱私） */}
             <Card style={{ padding:20, marginBottom:16 }}>
-              <SH title="☁️ 雲端同步" />
+              <SH title={`👤 ${tr("settings_account")}`} />
               {!firebaseEnabled ? (
                 <div style={{ fontSize:12, color:C.muted, lineHeight:1.6 }}>
                   還沒設定雲端同步。目前資料只存在這台裝置上。
@@ -66,19 +111,7 @@ export default function SettingsPage({
               ) : authLoading ? (
                 <div style={{ fontSize:12, color:C.muted }}>檢查登入狀態中…</div>
               ) : cloudUser ? (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                    {cloudUser.photoURL && <img src={cloudUser.photoURL} alt="" style={{ width:36, height:36, borderRadius:"50%" }} />}
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{cloudUser.displayName || cloudUser.email}</div>
-                      <div style={{ fontSize:11, color:C.muted }}>{cloudUser.email}</div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize:11, color:syncStatus==="error"?C.expense:C.teal, marginBottom:12 }}>
-                    {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : "✅ 已同步到雲端"}
-                  </div>
-                  <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm("確定登出嗎？這台裝置的資料還是會留著，只是不再同步。", doCloudLogout)}>登出</Btn>
-                </div>
+                <AccountPanel cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} />
               ) : (
                 <div>
                   <div style={{ fontSize:12, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
@@ -87,36 +120,12 @@ export default function SettingsPage({
                   <Btn style={{ width:"100%" }} onClick={doCloudLogin}>使用 Google 帳號登入</Btn>
                 </div>
               )}
-            </Card>
-
-            {/* 智慧分流：預設參數設定 */}
-            <Card style={{ padding:20, marginBottom:16 }}>
-              <SH title="🧠 智慧分流：預設參數" />
-              <div style={{ fontSize:11, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
-                分流引擎和年度現金流預測排程，沒有特別設定時都會用這裡的預設值。
-              </div>
-              <div style={{ marginBottom:10 }}>
-                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設每月收入</label>
-                <input type="number" defaultValue={allocSettings.defaultIncome} onBlur={e => setAllocSettings({ defaultIncome:+e.target.value||0 })} style={iSt} />
-              </div>
-              <div style={{ marginBottom:10 }}>
-                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設生活費上限</label>
-                <input type="number" defaultValue={allocSettings.defaultLivingCap} onBlur={e => setAllocSettings({ defaultLivingCap:+e.target.value||0 })} style={iSt} />
-              </div>
-              <div style={{ marginBottom:10 }}>
-                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設投資額</label>
-                <input type="number" defaultValue={allocSettings.defaultInvestAmt} onBlur={e => setAllocSettings({ defaultInvestAmt:+e.target.value||0 })} style={iSt} />
-              </div>
-              <Sl label="預設證券帳戶" value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })}>
-                <option value="">— 不指定 —</option>
-                {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </Sl>
-              <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${C.border}` }}>
-                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>計畫起始月份（選填）</label>
-                <div style={{ fontSize:10, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
-                  年度現金流預測、各專案的每月排程，都會從這個月開始算，比這個月更早的月份不會出現、也不會被算進「已存了多少」。留空＝從這個月開始。
-                </div>
-                <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={iSt} />
+              <div style={{ marginTop:16, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>隱私</div>
+                <button onClick={toggleHideAmounts} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:hideAmounts?`${C.teal}18`:C.card, border:`1px solid ${hideAmounts?C.teal:C.border}`, cursor:"pointer" }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:hideAmounts?C.teal:C.text }}>👁️ 隱藏金額（總覽/錢包的數字先模糊，點一下才顯示）</span>
+                  <span style={{ fontSize:12, color:hideAmounts?C.teal:C.muted }}>{hideAmounts?"開":"關"}</span>
+                </button>
               </div>
             </Card>
 
@@ -313,13 +322,30 @@ export default function SettingsPage({
               ))}
             </Card>
 
+            {/* 分享 */}
+            <Card style={{ padding:20, marginBottom:16 }}>
+              <SH title="分享給親友" />
+              <div style={{ fontSize:12, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
+                覺得好用的話，把這個 app 分享給朋友或家人吧！
+              </div>
+              <Btn style={{ width:"100%" }} onClick={async () => {
+                const shareUrl = "https://winona-pan.github.io/finzen";
+                const shareData = { title: "FinZen 財務管理", text: "我在用這個記帳/理財規劃 app，你也可以試試看！", url: shareUrl };
+                if (navigator.share) {
+                  try { await navigator.share(shareData); } catch (e) { /* 使用者取消分享，不用特別處理 */ }
+                } else {
+                  try { await navigator.clipboard.writeText(shareUrl); alert("連結已複製，貼給朋友吧！"); } catch (e) { alert(shareUrl); }
+                }
+              }}>📤 分享 FinZen</Btn>
+            </Card>
+
             {/* App info */}
             <Card style={{ padding:20, marginBottom:16 }}>
-              <SH title="關於" />
+              <SH title={tr("settings_about")} />
               <div style={{ fontSize:13, color:C.textSub, lineHeight:1.8 }}>
-                <div>FinZen 財務管理</div>
+                <div>{tr("app_name")}</div>
                 <div style={{ color:C.muted }}>版本 {APP_VER}</div>
-                <div style={{ marginTop:8, color:C.muted, fontSize:12 }}>資料僅存在你的裝置，不會上傳到任何伺服器。</div>
+                <div style={{ marginTop:8, color:C.muted, fontSize:12 }}>資料預設只存在這台裝置；如果你有登入雲端同步，也會備份到你自己的 Firebase 帳號，不會有其他人看得到。</div>
               </div>
             </Card>
 
@@ -327,5 +353,40 @@ export default function SettingsPage({
         </div>
       )}
     </>
+  );
+}
+
+/* ── 帳戶面板：已登入時顯示大頭貼／暱稱（可編輯）／同步狀態／登出／清除雲端資料 ── */
+function AccountPanel({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn }) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(cloudUser.displayName || "");
+  const [saving, setSaving] = useState(false);
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+        {cloudUser.photoURL && <img src={cloudUser.photoURL} alt="" style={{ width:40, height:40, borderRadius:"50%" }} />}
+        <div style={{ flex:1 }}>
+          {editingName ? (
+            <div style={{ display:"flex", gap:6 }}>
+              <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)} style={{ ...iSt, padding:"5px 8px", fontSize:13 }} />
+              <button disabled={saving} onClick={async () => { setSaving(true); await doUpdateNickname(nameDraft.trim() || cloudUser.email); setSaving(false); setEditingName(false); }} style={{ padding:"5px 10px", borderRadius:8, background:C.accent, border:"none", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>{saving?"…":"儲存"}</button>
+            </div>
+          ) : (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{cloudUser.displayName || cloudUser.email}</div>
+              <button onClick={() => { setNameDraft(cloudUser.displayName || ""); setEditingName(true); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:12 }}>✏️</button>
+            </div>
+          )}
+          <div style={{ fontSize:11, color:C.muted }}>{cloudUser.email}</div>
+        </div>
+      </div>
+      <div style={{ fontSize:11, color:syncStatus==="error"?C.expense:C.teal, marginBottom:12 }}>
+        {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : "✅ 已同步到雲端"}
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        <Btn v="danger" style={{ flex:1 }} onClick={() => confirm("確定登出嗎？這台裝置的資料還是會留著，只是不再同步。", doCloudLogout)}>登出</Btn>
+      </div>
+      <button onClick={() => confirm("確定清除雲端備份的資料嗎？這台裝置上的資料不會被刪除，但其他有登入這個帳號的裝置會失去雲端備份可以還原的版本。", async () => { await doDeleteCloudData(); })} style={{ width:"100%", marginTop:10, padding:8, background:"none", border:"none", color:C.muted, fontSize:11, cursor:"pointer", textDecoration:"underline" }}>清除雲端備份的資料</button>
+    </div>
   );
 }

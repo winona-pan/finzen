@@ -8,9 +8,15 @@ export default function OverviewPage({
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, guiltFreeGauge, allocSettings,
+  hideAmounts,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
+
+  /* ── 隱藏金額模式：預設模糊，點一下暫時看 3 秒 ── */
+  const [peek, setPeek] = useState(false);
+  const doPeek = () => { setPeek(true); setTimeout(() => setPeek(false), 3000); };
+  const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
 
   /* ── 搜尋框局部狀態 ── */
   const [showSq, setShowSq] = useState(false);
@@ -39,14 +45,15 @@ export default function OverviewPage({
               <button onClick={() => setShowSq(p => !p)} style={{ width:36, height:36, borderRadius:10, background:showSq ? `${C.accent}30` : C.card, border:`1px solid ${C.border}`, cursor:"pointer", color:C.textSub, fontSize:15, display:"flex", alignItems:"center", justifyContent:"center" }}>🔍</button>
             </div>
             {showSq && <input value={sq} onChange={e => setSq(e.target.value)} placeholder="搜尋…" style={{ ...iSt, marginBottom:8 }} />}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:4 }}>
+            <div onClick={() => hideAmounts && doPeek()} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:4, cursor:hideAmounts?"pointer":"default" }}>
               {[{ l:"收入", v:moInc, c:C.income }, { l:"支出", v:moExp, c:C.expense }, { l:"結餘", v:moInc - moExp, c:moInc >= moExp ? C.income : C.expense }].map(k => (
                 <div key={k.l} style={{ padding:"10px 12px", borderRadius:14, background:C.surface }}>
                   <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{k.l}</div>
-                  <div style={{ fontWeight:900, fontSize:13, color:k.c }}>{fmt(k.v)}</div>
+                  <div style={{ fontWeight:900, fontSize:13, color:k.c, ...maskStyle }}>{fmt(k.v)}</div>
                 </div>
               ))}
             </div>
+            {hideAmounts && !peek && <div style={{ fontSize:10, color:C.muted, textAlign:"center", marginTop:-2, marginBottom:4 }}>👁️ 點數字看 3 秒</div>}
           </div>
 
           {(() => {

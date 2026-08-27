@@ -9,9 +9,14 @@ export default function WalletPage({
   collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket, moveBucket, growthBucket, setGrowthBucket,
   selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy, toggleSub, toggleBill,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
+  hideAmounts,
   // 共用 UI atoms
   InfoBtn, SH, Card, SwipeRow, Bdg, Btn, EmojiPicker
 }) {
+  /* ── 隱藏金額模式：預設模糊，點一下暫時看 3 秒 ── */
+  const [peek, setPeek] = useState(false);
+  const doPeek = () => { setPeek(true); setTimeout(() => setPeek(false), 3000); };
+  const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
 
   /* ── 局部狀態 ── */
   const [wMode, setWMode] = useState("normal");
@@ -67,11 +72,12 @@ export default function WalletPage({
             </div>}
             <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:3 }}>總資產淨值</div>
             <div style={{ fontWeight:900, fontSize:34, color:C.text, letterSpacing:"-1.5px", marginBottom:18 }}>{fmt(netWorth)}</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, textAlign:"center" }}>
+            <div onClick={() => hideAmounts && doPeek()} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, textAlign:"center", cursor:hideAmounts?"pointer":"default" }}>
               {[{ l:"資產", v:totAssets, c:C.income }, { l:"負債", v:totDebt, c:C.expense }, { l:"應收", v:totRec, c:C.teal }, { l:"應付", v:totPay, c:C.warn }].map(k => (
-                <div key={k.l}><div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{k.l}</div><div style={{ fontWeight:900, fontSize:13, color:k.c }}>{fmt(k.v)}</div></div>
+                <div key={k.l}><div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{k.l}</div><div style={{ fontWeight:900, fontSize:13, color:k.c, ...maskStyle }}>{fmt(k.v)}</div></div>
               ))}
             </div>
+            {hideAmounts && !peek && <div style={{ fontSize:10, color:C.muted, textAlign:"center", marginTop:4 }}>👁️ 點數字看 3 秒</div>}
           </div>
           <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
             {/* Quick actions */}
@@ -138,10 +144,10 @@ export default function WalletPage({
                           </div>
                           <div style={{ fontSize:12, color:C.muted }}>{a.cur}</div>
                         </div>
-                        <div style={{ textAlign:"right" }}>
-                          <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmt(accDisplayVal(a), a.cur)}</div>
+                        <div style={{ textAlign:"right" }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
+                          <div style={{ fontWeight:900, fontSize:14, color:C.text, ...maskStyle }}>{fmt(accDisplayVal(a), a.cur)}</div>
                           {a.type==="investment" && <div style={{ fontSize:10, color:C.muted }}>持股成本</div>}
-                          {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted }}>≈{fmt(toTWD(accDisplayVal(a), a.cur, rates))}</div>}
+                          {a.cur !== "TWD" && <div style={{ fontSize:11, color:C.muted, ...maskStyle }}>≈{fmt(toTWD(accDisplayVal(a), a.cur, rates))}</div>}
                         </div>
                         {wMode !== "sort" && <span style={{ color:C.muted, fontSize:13, marginLeft:4 }}>✏️</span>}
                       </div>

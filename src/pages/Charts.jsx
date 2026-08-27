@@ -17,6 +17,7 @@ export default function ChartsPage({
   nG, setNG, editGoal, setEditGoal, nPL, setNPL, setSelPolicy: _sp, goalCurrentAmount, isGoalArchived, setOffsetGoal,
   moDate, setMoDate, searchQ, setSearchQ, APP_VER, changeTheme, THEMES,
   showHDP, setShowHDP, nS, setNS, nB, setNB, sortMode, setSortMode, visMode, setVisMode, nD, setND,
+  budget502030,
   // 接收全域 UI Atoms 元件
   Card, SH, Bdg, Btn, DatePicker
 }) {
@@ -26,6 +27,7 @@ export default function ChartsPage({
   const [expandedCat, setExpandedCat] = useState(null);
   const [catRange, setCatRange] = useState(null);
   const [showCatDP, setShowCatDP] = useState(false);
+  const [show502030, setShow502030] = useState(false);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 }; });
   
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 });
@@ -79,6 +81,37 @@ export default function ChartsPage({
             </div>
           </div>
           {showCatDP && <DatePicker value={catRange || { s:`${month.y}-${String(month.m).padStart(2,"0")}-01`, e:TODAY }} onChange={setCatRange} onClose={() => setShowCatDP(false)} />}
+
+          <Card style={{ padding:14, marginBottom:16 }}>
+            <button onClick={() => setShow502030(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              <span style={{ fontWeight:900, fontSize:13, color:C.text }}>📊 50/30/20 這個月的比例</span>
+              <span style={{ fontSize:12, color:C.muted }}>{show502030?"▲":"▼"}</span>
+            </button>
+            {show502030 && (
+              <div style={{ marginTop:12 }}>
+                <div style={{ fontSize:10, color:C.muted, marginBottom:10, lineHeight:1.6 }}>
+                  需要類別預設抓「食物/交通/家居/教育/醫療/保費/訂閱」，想要類別抓「娛樂/美容/其他」，其餘（含未分類支出）算在想要裡；剩下沒花掉的算儲蓄。這是抓「本月」（不是你現在瀏覽的月份）的即時數字。
+                </div>
+                {[
+                  { l:"需要 Needs", target:50, pct:budget502030.needPct, v:budget502030.needs, c:C.accent },
+                  { l:"想要 Wants", target:30, pct:budget502030.wantPct, v:budget502030.wants+budget502030.otherExp, c:C.warn },
+                  { l:"儲蓄 Savings", target:20, pct:budget502030.savePct, v:budget502030.savings, c:C.teal },
+                ].map(row => (
+                  <div key={row.l} style={{ marginBottom:10 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.textSub, marginBottom:4 }}>
+                      <span>{row.l}（目標 {row.target}%）</span>
+                      <span style={{ fontWeight:700, color:row.pct>row.target?C.warn:C.text }}>{row.pct}% · {fmt(row.v)}</span>
+                    </div>
+                    <div style={{ height:8, borderRadius:4, background:C.border, position:"relative" }}>
+                      <div style={{ height:"100%", borderRadius:4, width:`${Math.min(100,row.pct)}%`, background:row.c }} />
+                      <div style={{ position:"absolute", top:0, bottom:0, left:`${row.target}%`, width:1, background:C.text, opacity:0.4 }} />
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize:10, color:C.muted }}>灰線是 50/30/20 的建議比例，條狀是你這個月實際的比例。</div>
+              </div>
+            )}
+          </Card>
           
           <div style={{ display:"flex", gap:8, marginBottom:20 }}>
             {[{ v:"expense", l:"🛒 支出", c:C.expense }, { v:"income", l:"💰 收入", c:C.income }].map(o => <button key={o.v} onClick={() => setChartView(o.v)} style={{ flex:1, padding:"10px 4px", borderRadius:12, fontSize:14, fontWeight:700, background:chartView === o.v ? `${o.c}28` : C.card, color:chartView === o.v ? o.c : C.muted, border:`1px solid ${chartView === o.v ? o.c : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
