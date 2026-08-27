@@ -3,8 +3,8 @@ import { useState, useRef } from "react";
 export default function GoalsPage({
   C, tab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
-  setEditGoal, goalCurrentAmount, isGoalArchived, setOffsetGoal, setDepositGoal,
-  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount,
+  setEditGoal, goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, setOffsetGoal, setDepositGoal,
+  curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount, goalStockShares, priceForTicker,
   pendingAutoInvest, confirmAutoInvest, iSt, createEmergencyFund,
   Card, Btn, SH, Sl
 }) {
@@ -41,6 +41,7 @@ export default function GoalsPage({
           </div>
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
+            <button onClick={() => confirm(`把「${g.name}」移到已封存？可以隨時從已封存清單恢復。`, () => setGoalArchived(g.id, true))} title="封存" style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>📦</button>
             <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
             <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
           </div>
@@ -54,10 +55,22 @@ export default function GoalsPage({
           <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
         </div>
         {!compact && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
-          {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
+          {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}${g.recurringMode==="shares"&&g.shareTicker?`，只算標記給這個目標的 ${g.shareTicker} 股數`:"，帳戶內所有持股"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}
         </div>}
+        {!compact && g.recurringMode === "shares" && g.shareTicker && (() => {
+          const gs = goalStockShares(g);
+          if (!(gs.shares > 0)) return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>還沒有透過這個目標買進任何 {g.shareTicker}，進度會在確認買進後開始累加</div>;
+          const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
+          return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>算法：{gs.shares} 股 × {goalUseMv ? `目前股價 ${fmt(price)}` : `平均成本 ${fmt(gs.shares>0?gs.cost/gs.shares:0)}`} = {fmt(current)}</div>;
+        })()}
         {remaining > 0 && <div style={{ marginTop:6, fontSize:compact?11:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
-        {pct >= 100 && <div style={{ marginTop:6, fontSize:13, fontWeight:700, color:C.teal, textAlign:"center" }}>🎉 已達成目標！</div>}
+        {pct >= 100 && (
+          <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, textAlign:"center" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.teal, marginBottom:6 }}>🎉 已達成目標！</div>
+            <button onClick={() => setGoalArchived(g.id, true)} style={{ padding:"6px 14px", borderRadius:8, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>📦 封存這個目標</button>
+            <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>不封存也沒關係，會繼續留在這裡</div>
+          </div>
+        )}
         {(() => {
           // 這個月「已套用」的提醒：如果有設定計畫起始月份、而且這個月還沒到規劃起點，就不顯示（避免已排除的月份還殘留舊資料的badge）
           const monthStarted = !allocSettings.planStartYm || curYm >= allocSettings.planStartYm;
@@ -96,16 +109,15 @@ export default function GoalsPage({
         )}
         {pendingInvest && (
           <div style={{ marginTop:8, padding:10, borderRadius:10, background:`${C.accent}15`, border:`1px solid ${C.accent}44` }}>
-            <div style={{ fontSize:11, fontWeight:700, color:C.accentL, marginBottom:6 }}>🔁 這個月的定期定額還沒買，預算 {fmt(g.recurringBudget)}</div>
+            <div style={{ fontSize:11, fontWeight:700, color:C.accentL, marginBottom:6 }}>🔁 這個月的定期定額還沒買，計畫買 {pendingInvest.shares} 股</div>
             <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
               <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>股價</span>
               <input ref={priceInputRef} type="number" defaultValue={pendingInvest.price} style={{ flex:1, padding:"5px 8px", borderRadius:8, border:`1px solid ${C.border}`, background:C.card, color:C.text, fontSize:12 }} />
-              <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>≈{pendingInvest.shares} 股</span>
+              <span style={{ fontSize:11, color:C.muted, flexShrink:0 }}>≈{fmt(pendingInvest.shares * pendingInvest.price)}</span>
             </div>
             <Btn style={{ width:"100%" }} onClick={() => {
               const price = +priceInputRef.current?.value || pendingInvest.price;
-              const shares = Math.floor((g.recurringBudget||0) / price);
-              if (shares <= 0) return;
+              const shares = pendingInvest.shares; // 股數是「定期定額」排程裡設定的，改股價不會連動改股數
               confirm(`確定用股價 ${fmt(price)} 買進 ${shares} 股「${g.shareTicker}」，共 ${fmt(shares*price)}？`, () => confirmAutoInvest(g, { price, shares }), "確認買進");
             }}>✅ 確認買進</Btn>
           </div>
@@ -276,11 +288,12 @@ export default function GoalsPage({
                         <span style={{ fontSize:18 }}>{g.emoji}</span>
                         <div>
                           <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.name}{g.group ? <span style={{ fontSize:10, fontWeight:400, color:C.muted }}> ・{g.group}</span> : null}</div>
-                          <div style={{ fontSize:10, color:g.wishPurchased?C.teal:C.muted }}>{g.wishPurchased ? "🎁 已實現願望" : pct>=100 ? "🎉 已達標" : "⚠️ 已過期"}</div>
+                          <div style={{ fontSize:10, color:g.wishPurchased?C.teal:C.muted }}>{g.wishPurchased ? "🎁 已實現願望" : pct>=100 ? "🎉 已達標" : isGoalComplete(g) ? "⚠️ 已過期" : "📦 已封存"}</div>
                         </div>
                       </div>
                       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                         <span style={{ fontSize:13, fontWeight:900, color:C.text }}>{fmt(current)}</span>
+                        <button onClick={() => setGoalArchived(g.id, false)} title="恢復到進行中" style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>↩️</button>
                         <button onClick={() => confirm(`確定刪除已封存目標「${g.name}」？`, () => upd("goals", p => p.filter(x=>x.id!==g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>✕</button>
                       </div>
                     </div>
