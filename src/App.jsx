@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor } from "./firebase";
+import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
@@ -509,6 +509,19 @@ export default function App() {
   }, []);
   const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
   const doCloudLogout = useCallback(() => logoutFirebase(), []);
+  /* Email／密碼登入：回傳 {ok, error} 而不是直接 alert，讓畫面上可以顯示訊息 */
+  const doEmailRegister = useCallback(async (email, password) => {
+    try { await registerWithEmail(email, password); return { ok:true }; }
+    catch (e) { return { ok:false, error:e.message }; }
+  }, []);
+  const doEmailLogin = useCallback(async (email, password) => {
+    try { await loginWithEmail(email, password); return { ok:true }; }
+    catch (e) { return { ok:false, error:e.message }; }
+  }, []);
+  const doPasswordReset = useCallback(async (email) => {
+    try { await resetPassword(email); return { ok:true }; }
+    catch (e) { return { ok:false, error:e.message }; }
+  }, []);
   const doUpdateNickname = useCallback(async (name) => {
     await updateCloudProfile({ displayName: name });
     setCloudUser(u => u ? { ...u, displayName: name } : u);
@@ -517,6 +530,13 @@ export default function App() {
     if (!uidRef.current) return;
     await deleteCloudData(uidRef.current);
     await saveCloudData(uidRef.current, dRef.current); // 刪除後立刻用本機現況重新當作雲端起始版本，避免下次登入變成空的
+  }, []);
+  /* 「清空所有資料」專用：只砍掉雲端那份，不要像上面那個一樣又把（還沒清空的）本機資料重新傳回去，不然清空等於沒清 */
+  const wipeAllData = useCallback(async () => {
+    if (uidRef.current) await deleteCloudData(uidRef.current);
+    localStorage.removeItem(DATA_KEY);
+    alert("資料已完全清除");
+    window.location.reload();
   }, []);
 
   /* ── 隱私：隱藏金額（總覽/錢包的敏感數字先模糊起來，點一下才顯示，適合在別人看得到螢幕的地方用）── */
@@ -2190,7 +2210,16 @@ export default function App() {
       const { text: reply, sources } = await askAdvisor(nextHistory, advisorContext, grounded);
       setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
     } catch (e) {
-      setAdvisorError(e.message || "問不到，稍後再試");
+      const raw = e.message || "";
+      let friendly;
+      if (/429|quota|exceed/i.test(raw)) {
+        friendly = "今天（或這分鐘）問太多次了，碰到免費額度上限。免費方案大概一天只有20次左右，過一段時間再試，或明天再問；如果常常碰到，可以考慮在 Firebase 開通付費方案（Blaze），費用是照實際用量算，個人使用通常很便宜。";
+      } else if (/404|not found|no longer available/i.test(raw)) {
+        friendly = "AI 模型設定可能過期了（Google 常常會更新/淘汰模型名稱），先跟開發者反應一下，需要更新程式裡的模型名稱。";
+      } else {
+        friendly = raw || "問不到，稍後再試";
+      }
+      setAdvisorError(friendly);
     } finally {
       setAdvisorLoading(false);
     }
@@ -2308,7 +2337,8 @@ export default function App() {
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
     lang, changeLang, tr, LANGUAGES,
-    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData,
+    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
+    doEmailRegister, doEmailLogin, doPasswordReset,
     hideAmounts, toggleHideAmounts,
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
     nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit, deleteTrade,
@@ -2337,7 +2367,7 @@ export default function App() {
         @media (min-width: 700px) { .fz-shell { max-width: 640px; } }
         @media (min-width: 1024px) { .fz-shell { max-width: 780px; } }
       `}</style>
-      <div className="fz-shell" style={{ position:"relative", margin:"0 auto", minHeight:"100dvh", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
+      <div className="fz-shell" style={{ position:"relative", margin:"0 auto", height:"100dvh", overflow:"hidden", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
         
         {/* 頁面切換控制 */}
         <div style={{ flex:1, minHeight:0, overflowY:"auto", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>

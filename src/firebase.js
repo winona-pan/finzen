@@ -2,14 +2,14 @@
    Firebase 設定：雲端同步用 + AI 理財顧問（Firebase AI Logic / Gemini）
    ══════════════════════════════════════════════════════
    1. 去 https://console.firebase.google.com 建立專案
-   2. 打開 Authentication → Google 登入
+   2. 打開 Authentication → 啟用「Google」登入，也可以順便啟用「Email/Password」（信箱/密碼）當備用登入方式
    3. 打開 Firestore Database（正式環境模式）
    4. 專案設定 → 你的應用程式 → 新增網頁應用程式，把 config 貼在下面
    5. 左側選單「AI Services → AI Logic」→「開始使用」→ 選「Gemini Developer API」
       （免費、不用連信用卡，專案會留在 Spark 方案）→ 照精靈跑完
    ══════════════════════════════════════════════════════ */
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
@@ -41,8 +41,7 @@ if (isConfigured) {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
     // 模型名稱會隨時間更新／退役：2.5-flash 已經被 Google 停用，改用 3.6-flash（如果顧問又報錯，錯誤訊息通常會直接告訴你該換成哪個新模型名稱）
     aiModel = getGenerativeModel(ai, { model: "gemini-3.6-flash" });
-    // 帶「Google 搜尋」工具的版本：問新聞、股價漲跌這種即時性問題時才用這個，一般聊天用上面那個就好，
-    // 這個 Gemini 2.5 系列模型每天有 1500 次免費額度，超過才會開始收費，個人使用量不太可能碰到上限
+    // 帶「Google 搜尋」工具的版本：問新聞、股價漲跌這種即時性問題時才用這個，一般聊天用上面那個就好
     aiModelGrounded = getGenerativeModel(ai, { model: "gemini-3.6-flash", tools: [{ googleSearch: {} }] });
   } catch (e) {
     console.error("Firebase AI Logic 初始化失敗（要先在 Firebase 主控台開通 AI Logic）", e);
@@ -65,6 +64,20 @@ export function loginWithGoogle() {
 export function checkRedirectResult() {
   if (!auth) return Promise.resolve(null);
   return getRedirectResult(auth).catch(e => { console.error("登入導回失敗", e); return null; });
+}
+
+/* Email／密碼登入：Google 登入不方便時的替代方案（例如某些瀏覽器環境擋掉導轉） */
+export function registerWithEmail(email, password) {
+  if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
+  return createUserWithEmailAndPassword(auth, email, password);
+}
+export function loginWithEmail(email, password) {
+  if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
+  return signInWithEmailAndPassword(auth, email, password);
+}
+export function resetPassword(email) {
+  if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
+  return sendPasswordResetEmail(auth, email);
 }
 
 export function logoutFirebase() {
