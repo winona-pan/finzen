@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { firebaseEnabled, loginWithGoogle, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
+import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
@@ -18,6 +18,8 @@ import StockModals   from "./modals/StockModals";
 import DebtModals    from "./modals/DebtModals";
 import OtherModals   from "./modals/OtherModals";
 import AdvisorModal  from "./modals/AdvisorModal";
+import UserGuideModal from "./modals/UserGuideModal";
+import AccountModal  from "./modals/AccountModal";
 
 /* ── Tokens ── */
 const THEMES = {
@@ -508,6 +510,8 @@ export default function App() {
     return unsub;
   }, []);
   const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
+  const doAppleLogin = useCallback(() => loginWithApple().catch(e => alert("登入失敗：" + e.message)), []);
+  const doAnonLogin = useCallback(() => loginAnonymously().catch(e => alert("登入失敗：" + e.message)), []);
   const doCloudLogout = useCallback(() => logoutFirebase(), []);
   /* Email／密碼登入：回傳 {ok, error} 而不是直接 alert，讓畫面上可以顯示訊息 */
   const doEmailRegister = useCallback(async (email, password) => {
@@ -1163,8 +1167,12 @@ export default function App() {
       }
     } catch {}
     for (const st of list) {
-      const res = await fetchPrice(st.ticker, st.market);
-      if (res?.price) upd("stocks", p => p.map(s => s.id===st.id ? {...s, curPrice:res.price, name:res.name||s.name, lastUpdated:new Date().toLocaleTimeString("zh-TW")} : s));
+      try {
+        const res = await fetchPrice(st.ticker, st.market);
+        if (res?.price) upd("stocks", p => p.map(s => s.id===st.id ? {...s, curPrice:res.price, name:res.name||s.name, lastUpdated:new Date().toLocaleTimeString("zh-TW")} : s));
+      } catch (e) {
+        console.error(`抓 ${st.ticker} 報價失敗`, e); // 單一檔股票抓失敗不該讓後面的股票都抓不到，所以這裡接住錯誤繼續跑下一檔
+      }
       await new Promise(r => setTimeout(r, 200));
     }
   }, [stocks, fetchPrice, upd]);
@@ -2337,7 +2345,7 @@ export default function App() {
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
     lang, changeLang, tr, LANGUAGES,
-    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
+    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
     doEmailRegister, doEmailLogin, doPasswordReset,
     hideAmounts, toggleHideAmounts,
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
@@ -2388,7 +2396,7 @@ export default function App() {
 
         {/* 底部導覽列 */}
         <div style={{ position:"absolute", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
-          <div style={{ display:"flex", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
+          <div style={{ display:"flex", justifyContent:"space-around", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
             {[{ k:"overview", i:"📊", l:tr("nav_overview") }, { k:"wallet", i:"👛", l:tr("nav_wallet") }, { k:"charts", i:"📉", l:tr("nav_charts") }, { k:"notes", i:"👥", l:tr("nav_notes") }, { k:"invest", i:"📈", l:tr("nav_invest") }, { k:"settings", i:"☰", l:tr("nav_more") }].map(t => {
               const active = tab === t.k || (t.k === "settings" && (tab === "goals" || tab === "subsbills"));
               return (
@@ -2409,6 +2417,8 @@ export default function App() {
         <DebtModals {...p} />
         <OtherModals {...p} />
         <AdvisorModal {...p} />
+        <UserGuideModal {...p} />
+        <AccountModal {...p} />
 
         {/* 確認刪除彈窗 */}
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} okLabel={confirmDlg.okLabel} onOk={() => {

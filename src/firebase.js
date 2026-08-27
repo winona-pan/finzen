@@ -2,14 +2,14 @@
    Firebase 設定：雲端同步用 + AI 理財顧問（Firebase AI Logic / Gemini）
    ══════════════════════════════════════════════════════
    1. 去 https://console.firebase.google.com 建立專案
-   2. 打開 Authentication → 啟用「Google」登入，也可以順便啟用「Email/Password」（信箱/密碼）當備用登入方式
+   2. 打開 Authentication → 啟用「Google」登入，也可以順便啟用「Email/Password」（信箱/密碼）、「匿名」、「Apple」當備用登入方式（Apple 需要額外的 Apple Developer 設定，比較麻煩，可以先跳過）
    3. 打開 Firestore Database（正式環境模式）
    4. 專案設定 → 你的應用程式 → 新增網頁應用程式，把 config 貼在下面
    5. 左側選單「AI Services → AI Logic」→「開始使用」→ 選「Gemini Developer API」
       （免費、不用連信用卡，專案會留在 Spark 方案）→ 照精靈跑完
    ══════════════════════════════════════════════════════ */
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
@@ -27,13 +27,14 @@ const firebaseConfig = {
 // 如果還沒填真的 config，就不要讓整個 App 掛掉——雲端同步功能會自動停用，本機 localStorage 照常運作
 const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
 
-let app = null, auth = null, db = null, googleProvider = null, aiModel = null, aiModelGrounded = null;
+let app = null, auth = null, db = null, googleProvider = null, appleProvider = null, aiModel = null, aiModelGrounded = null;
 if (isConfigured) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();
+    appleProvider = new OAuthProvider("apple.com");
   } catch (e) {
     console.error("Firebase 初始化失敗", e);
   }
@@ -57,6 +58,19 @@ export const aiGroundedEnabled = !!aiModelGrounded;
 export function loginWithGoogle() {
   if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
   return signInWithRedirect(auth, googleProvider);
+}
+
+/* Apple 登入：跟 Google 一樣用整頁導轉的方式。要先在 Firebase 主控台 Authentication 開啟「Apple」提供者，
+   而且要有 Apple Developer 帳號設定 Service ID，比 Google 麻煩一些，沒設定的話按下去會直接報錯 */
+export function loginWithApple() {
+  if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
+  return signInWithRedirect(auth, appleProvider);
+}
+
+/* 匿名登入：不用任何帳號就能用雲端同步，缺點是換瀏覽器/清資料就找不回來了，沒有辦法「登入」回同一個匿名帳號 */
+export function loginAnonymously() {
+  if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
+  return signInAnonymously(auth);
 }
 
 /* 從 Google 登入頁導回來後，要呼叫這個把登入結果撈出來（主要是為了抓錯誤訊息；
