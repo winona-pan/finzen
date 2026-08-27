@@ -8,7 +8,8 @@ export default function SettingsPage({
   collapsed, toggleSection, APP_VER, changeTheme, THEMES, theme,
   customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
   allocSettings, setAllocSettings,
-  firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData,
+  firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
+  doEmailRegister, doEmailLogin, doPasswordReset,
   hideAmounts, toggleHideAmounts,
   lang, changeLang, tr, LANGUAGES,
   aiEnabled,
@@ -118,6 +119,7 @@ export default function SettingsPage({
                     登入後可以在多個裝置之間同步資料。第一次登入會把這台裝置目前的資料上傳成雲端的起始版本；之後每台登入同一個帳號的裝置都會用雲端最新的資料。
                   </div>
                   <Btn style={{ width:"100%" }} onClick={doCloudLogin}>使用 Google 帳號登入</Btn>
+                  <EmailLoginPanel doEmailRegister={doEmailRegister} doEmailLogin={doEmailLogin} doPasswordReset={doPasswordReset} C={C} iSt={iSt} Btn={Btn} />
                 </div>
               )}
               <div style={{ marginTop:16, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
@@ -180,11 +182,8 @@ export default function SettingsPage({
                   }} style={{ display:"none" }} />
                 </label>
                 <Btn onClick={() => {
-                  const step3 = () => confirm("最後一次確認：這個動作無法復原，所有記帳、投資、往來帳資料都會永久消失。真的要清空嗎？", async () => {
-                    if (cloudUser) await doDeleteCloudData(); // 有登入雲端同步的話，雲端備份也要一起清掉，不然重整頁面會被雲端資料蓋回來
-                    localStorage.removeItem("finzen_v3");
-                    alert("資料已完全清除");
-                    window.location.reload();
+                  const step3 = () => confirm("最後一次確認：這個動作無法復原，所有記帳、投資、往來帳資料都會永久消失。真的要清空嗎？", () => {
+                    wipeAllData();
                   }, "確認清空");
                   const step2 = () => confirm(cloudUser ? "再次確認：所有帳戶、交易、投資、往來帳資料都會消失（連同雲端備份），建議先匯出備份。要繼續嗎？" : "再次確認：所有帳戶、交易、投資、往來帳資料都會消失，建議先匯出備份。要繼續嗎？", step3, "繼續", true);
                   confirm("確定要清空所有資料嗎？這無法復原！", step2, "繼續", true);
@@ -358,6 +357,55 @@ export default function SettingsPage({
 }
 
 /* ── 帳戶面板：已登入時顯示大頭貼／暱稱（可編輯）／同步狀態／登出／清除雲端資料 ── */
+/* ── Email／密碼登入面板：Google 登入的備用方案，收合起來預設不打開，不想用信箱登入的人不會被打擾 ── */
+function EmailLoginPanel({ doEmailRegister, doEmailLogin, doPasswordReset, C, iSt, Btn }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("login"); // login | register
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState(null); // { ok, text }
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!email || !password) { setMsg({ ok:false, text:"信箱跟密碼都要填" }); return; }
+    setBusy(true); setMsg(null);
+    const fn = mode === "login" ? doEmailLogin : doEmailRegister;
+    const res = await fn(email, password);
+    setBusy(false);
+    if (!res.ok) setMsg({ ok:false, text: res.error });
+    // 成功的話畫面會因為登入狀態改變自動切換，不用特別處理
+  };
+
+  const forgot = async () => {
+    if (!email) { setMsg({ ok:false, text:"先在上面填信箱，才能寄重設密碼信" }); return; }
+    setBusy(true);
+    const res = await doPasswordReset(email);
+    setBusy(false);
+    setMsg(res.ok ? { ok:true, text:"重設密碼信已寄出，去信箱收信吧" } : { ok:false, text:res.error });
+  };
+
+  return (
+    <div style={{ marginTop:10 }}>
+      <button onClick={() => setOpen(p=>!p)} style={{ width:"100%", textAlign:"center", padding:8, background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer" }}>
+        {open ? "▲ 收起" : "或用信箱＋密碼登入 ▼"}
+      </button>
+      {open && (
+        <div style={{ padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+          <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+            <button onClick={() => { setMode("login"); setMsg(null); }} style={{ flex:1, padding:6, borderRadius:8, background:mode==="login"?`${C.accent}20`:C.bg, border:`1px solid ${mode==="login"?C.accent:C.border}`, color:mode==="login"?C.accentL:C.muted, fontSize:12, fontWeight:700, cursor:"pointer" }}>登入</button>
+            <button onClick={() => { setMode("register"); setMsg(null); }} style={{ flex:1, padding:6, borderRadius:8, background:mode==="register"?`${C.accent}20`:C.bg, border:`1px solid ${mode==="register"?C.accent:C.border}`, color:mode==="register"?C.accentL:C.muted, fontSize:12, fontWeight:700, cursor:"pointer" }}>註冊新帳號</button>
+          </div>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="信箱" style={{ ...iSt, marginBottom:8 }} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="密碼（至少6碼）" style={{ ...iSt, marginBottom:8 }} />
+          {msg && <div style={{ fontSize:11, color:msg.ok?C.teal:C.danger, marginBottom:8 }}>{msg.text}</div>}
+          <Btn style={{ width:"100%" }} disabled={busy} onClick={submit}>{busy ? "處理中…" : mode==="login" ? "登入" : "註冊並登入"}</Btn>
+          {mode === "login" && <button onClick={forgot} disabled={busy} style={{ width:"100%", marginTop:8, background:"none", border:"none", color:C.accentL, fontSize:11, cursor:"pointer" }}>忘記密碼？</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountPanel({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(cloudUser.displayName || "");
