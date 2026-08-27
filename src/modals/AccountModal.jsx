@@ -2,13 +2,21 @@ import { useState } from "react";
 
 /* ── 帳戶：獨立一頁，跟 AI 顧問、使用手冊一樣點進去是整頁 ── */
 export default function AccountModal({
-  modal, close, C, iSt, Btn, confirm, setModal,
+  modal, close, C, iSt, Btn, confirm, setModal, upd, TODAY,
   firebaseEnabled, cloudUser, authLoading, syncStatus,
-  doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData,
+  doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
   hideAmounts, toggleHideAmounts,
   doEmailRegister, doEmailLogin, doPasswordReset,
+  accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
+  customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
 }) {
   if (modal !== "account") return null;
+
+  const exportData = () => {
+    const b = new Blob([JSON.stringify({ accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets }, null, 2)], { type:"application/json" });
+    const u = URL.createObjectURL(b), a = document.createElement("a");
+    a.href = u; a.download = `finzen_${TODAY}.json`; a.click(); URL.revokeObjectURL(u);
+  };
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:220, display:"flex", alignItems:"flex-end", justifyContent:"center", background:"rgba(0,0,0,0.75)" }} onClick={e => { if (e.target === e.currentTarget) close(); }}>
@@ -23,7 +31,7 @@ export default function AccountModal({
           ) : authLoading ? (
             <div style={{ fontSize:12, color:C.muted }}>檢查登入狀態中…</div>
           ) : cloudUser ? (
-            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} setModal={setModal} close={close} C={C} iSt={iSt} Btn={Btn} />
+            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} />
           ) : (
             <LoggedOutView doCloudLogin={doCloudLogin} doAppleLogin={doAppleLogin} doAnonLogin={doAnonLogin} doEmailRegister={doEmailRegister} doEmailLogin={doEmailLogin} doPasswordReset={doPasswordReset} confirm={confirm} C={C} iSt={iSt} Btn={Btn} />
           )}
@@ -34,6 +42,49 @@ export default function AccountModal({
               <span style={{ fontSize:13, fontWeight:700, color:hideAmounts?C.teal:C.text }}>👁️ 隱藏金額（總覽/錢包的數字先模糊，點一下才顯示）</span>
               <span style={{ fontSize:12, color:hideAmounts?C.teal:C.muted }}>{hideAmounts?"開":"關"}</span>
             </button>
+          </div>
+
+          <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:8 }}>資料管理</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+              <Btn onClick={exportData} v="secondary" sz="sm">📤 匯出備份</Btn>
+              <label style={{ padding:"6px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}`, color:C.text, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                📥 匯入備份
+                <input type="file" accept=".json" onChange={e => {
+                  const f = e.target.files[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = ev => {
+                    try {
+                      const nd = JSON.parse(ev.target.result);
+                      upd("accs", () => nd.accs || []);
+                      upd("txns", () => nd.txns || []);
+                      upd("debts", () => nd.debts || []);
+                      upd("subs", () => nd.subs || []);
+                      upd("bills", () => nd.bills || []);
+                      upd("stocks", () => nd.stocks || []);
+                      upd("pools", () => nd.pools || []);
+                      upd("cats", () => nd.cats || cats);
+                      upd("rates", () => nd.rates || rates);
+                      upd("goals", () => nd.goals || []);
+                      upd("policies", () => nd.policies || []);
+                      upd("customCE", () => nd.customCE || {});
+                      upd("buckets", () => nd.buckets || []);
+                      upd("expensePools", () => nd.expensePools || []);
+                      upd("watchStocks", () => nd.watchStocks || []);
+                      upd("watchlist", () => nd.watchlist || []);
+                      upd("savingsTargets", () => nd.savingsTargets || []);
+                      alert("✅ 匯入成功！頁面即將重新整理");
+                      window.location.reload();
+                    } catch { alert("❌ 備份檔案格式毀損或錯誤"); }
+                  };
+                  r.readAsText(f);
+                }} style={{ display:"none" }} />
+              </label>
+              <Btn onClick={() => {
+                confirm(cloudUser ? "確定要清空所有資料嗎？本機跟雲端備份都會一起清空，無法復原，建議先匯出備份。" : "確定要清空所有資料嗎？無法復原，建議先匯出備份。", () => wipeAllData(), "確認清空");
+              }} v="danger" sz="sm">🗑 清空</Btn>
+            </div>
+            <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
           </div>
         </div>
       </div>
@@ -109,7 +160,7 @@ function EmailLoginPanel({ doEmailRegister, doEmailLogin, doPasswordReset, C, iS
 }
 
 /* ── 已登入畫面：個人資料、同步狀態、登出、清除雲端備份——三個動作分開放，標示清楚各自的影響範圍 ── */
-function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, setModal, close, C, iSt, Btn }) {
+function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(cloudUser.displayName || "");
   const [saving, setSaving] = useState(false);
@@ -149,12 +200,6 @@ function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, 
           <div style={{ fontSize:12, fontWeight:700, color:C.warn, marginBottom:6 }}>清除雲端備份的資料</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>只刪雲端那份備份，這台裝置本機的資料完全不會動；刪除後系統會馬上用這台裝置目前的資料重新備份一份上去。</div>
           <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定清除雲端備份的資料嗎？", () => doDeleteCloudData())}>清除雲端備份</Btn>
-        </div>
-
-        <div style={{ padding:12, borderRadius:12, background:`${C.danger}10`, border:`1px solid ${C.danger}33` }}>
-          <div style={{ fontSize:12, fontWeight:700, color:C.danger, marginBottom:6 }}>清空所有資料（本機＋雲端）</div>
-          <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>這個影響範圍最大——本機跟雲端會一起清空，沒有任何備份留著，動作無法復原。在「更多」頁最下面的「資料管理」卡片裡。</div>
-          <button onClick={() => { close(); setModal("settings"); }} style={{ width:"100%", padding:"8px 12px", borderRadius:8, background:"none", border:`1px solid ${C.danger}44`, color:C.danger, fontWeight:700, fontSize:12, cursor:"pointer" }}>去資料管理 →</button>
         </div>
       </div>
     </div>

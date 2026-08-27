@@ -4,6 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
+  updateGoalRecurringSchedule,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -347,7 +348,7 @@ export default function TxnModals({
         {modal === "yearlyForecast" && (
           <YearlyForecastSheet
             yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} yearlyForecastTable={yearlyForecastTable}
-            setIncomeSchedule={setIncomeSchedule} setRigidOverride={setRigidOverride} startNextMonthPlan={startNextMonthPlan} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
+            setIncomeSchedule={setIncomeSchedule} setRigidOverride={setRigidOverride} startNextMonthPlan={startNextMonthPlan} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget} updateGoalRecurringSchedule={updateGoalRecurringSchedule}
             allocSettings={allocSettings} setAllocSettings={setAllocSettings} curYm={curYm} nextYm={nextYm}
             close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
           />
@@ -773,7 +774,7 @@ function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount,
 }
 
 /* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
-function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, setRigidOverride, startNextMonthPlan, getIncomeItems, setIncomeItems, accs, setSavingsTarget, removeSavingsTarget, allocSettings, setAllocSettings, curYm, nextYm, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, setRigidOverride, startNextMonthPlan, getIncomeItems, setIncomeItems, accs, setSavingsTarget, removeSavingsTarget, updateGoalRecurringSchedule, allocSettings, setAllocSettings, curYm, nextYm, close, setModal, C, iSt, fmt, Btn, Sheet }) {
   const [expandedYm, setExpandedYm] = useState(null);
   const [draftItems, setDraftItems] = useState([]);
   const [editingChip, setEditingChip] = useState(null); // `${goalId}_${ym}`
@@ -884,7 +885,7 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
       ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現。
     </div>
 
-    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝分流引擎已套用的實際數字、🔁＝目標設定的定期定額，其餘是系統估算；點格子可以直接改，已套用的可以點右上角✕移除）</div>
+    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝手動套用的單月數字、🔁＝定期定額算出來的；點 🔁 格子直接改，等於改「從這個月起」的定期定額排程，跟目標編輯頁排的時間表是同一份，改哪邊都會同步；點 🧠 格子改的只是那一個月的例外；已套用的可以點右上角✕移除）</div>
     {yearlyGoalSchedule.length === 0 ? (
       <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
     ) : yearlyGoalSchedule.map(g => (
@@ -911,9 +912,15 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
                       autoFocus type="number" defaultValue={m.alloc}
                       onBlur={e => {
                         const val = +e.target.value || 0;
-                        const accId = g.accIds?.[0] || null;
-                        const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-                        setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
+                        if (m.isRecurring && !m.isApplied && g.recurringMode !== "shares") {
+                          // 這個月的數字是「定期定額」算出來的（不是股數模式，股數模式要換算股價比較複雜，改回目標設定頁排時間表比較準）：
+                          // 直接改這裡等於改排程「從這個月起」的金額，跟目標編輯頁排的時間表是同一份資料
+                          updateGoalRecurringSchedule(g.id, m.ym, val);
+                        } else {
+                          const accId = g.accIds?.[0] || null;
+                          const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+                          setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
+                        }
                         setEditingChip(null);
                       }}
                       onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}

@@ -23,6 +23,7 @@ export default function OtherModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
+  goalRecurringAmount, scheduledRecurringValue,
   // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji
 }) {
@@ -226,13 +227,24 @@ export default function OtherModals({
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
               </div>
+              {(() => {
+                const amt = goalRecurringAmount(editGoal);
+                if (!(amt > 0)) return <div style={{ fontSize:11, color:C.muted, marginBottom:8, padding:"6px 10px", borderRadius:8, background:C.card }}>目前沒有生效中的定期定額（還沒設定，或排程還沒到起始月份）</div>;
+                const shares = editGoal.recurringMode==="shares" ? scheduledRecurringValue(editGoal, TODAY.slice(0,7)) : null;
+                return <div style={{ fontSize:12, fontWeight:700, color:C.accentL, marginBottom:8, padding:"8px 10px", borderRadius:8, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>📌 這個月生效中：{editGoal.recurringMode==="shares" ? `約 ${shares ?? "—"} 股（≈${fmt(amt)}）` : fmt(amt)}／月</div>;
+              })()}
               {editGoal.recurringMode === "shares" ? (
-                <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-                  <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                    <option value="">— 選股票 —</option>
-                    {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                <div>
+                  <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+                    <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
+                      <option value="">— 選股票 —</option>
+                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                  </div>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:6, lineHeight:1.6 }}>
+                    選了股票代號的話，下面「計算哪些帳戶」就算選了整個證券戶，這個目標的進度只會算「透過這個目標買的股數」（自動執行確認買進、或手動買進時有標記這個目標的），不會把帳戶裡其他股票、或同一支股票但沒標記這個目標的持股算進來——同一個證券戶、甚至同一支股票，都可以分給好幾個目標各自追蹤各自的份。
+                  </div>
                 </div>
               ) : null}
               <RecurringScheduleEditor editGoal={editGoal} setEditGoal={setEditGoal} C={C} iSt={iSt} />
@@ -279,9 +291,8 @@ export default function OtherModals({
               {editGoal.autoInvest && (
                 <>
                   <div style={{ fontSize:10, color:C.muted, marginBottom:6, lineHeight:1.6 }}>
-                    每月預算是固定金額（例如3000），系統會用目前股價（或你設定的自訂股價）算出「最多能買幾股、不會超過預算」，無條件捨去到整股。買進的股票會存進「{accs.find(a=>a.id===editGoal.accIds[0])?.name}」。
+                    股數就是用上面「定期定額」設定的那個數字（不用再另外設一次），系統會用目前股價（或你設定的自訂股價）算出大概金額，買進的股票會存進「{accs.find(a=>a.id===editGoal.accIds[0])?.name}」。
                   </div>
-                  <input type="number" min="0" value={editGoal.recurringBudget||""} placeholder="每月預算，例如 3000" onChange={e => setEditGoal(p => ({ ...p, recurringBudget: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginBottom:8 }} />
                   <Sl label="錢從哪個帳戶扣" value={editGoal.recurringFromAcc||""} onChange={e => setEditGoal(p => ({ ...p, recurringFromAcc:e.target.value }))}>
                     <option value="">— 選帳戶 —</option>
                     {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}

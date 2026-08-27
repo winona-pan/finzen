@@ -96,6 +96,12 @@ export default function StockModals({
           </div>
           <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>投資總成本會自動幫你算（股數×均成本＋手續費），你也可以直接改這個數字，均成本會反推更新。</div>
           <Sl label="從哪個帳戶扣款（選填）" value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— 不扣款 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
+          {goals.some(g => g.recurringMode==="shares" && g.shareTicker===buyF.ticker) && (
+            <Sl label="這筆算入哪個目標的定期定額？（選填）" value={buyF.goalId||""} onChange={e => setBuyF(p => ({ ...p, goalId:e.target.value }))}>
+              <option value="">— 不算入任何目標 —</option>
+              {goals.filter(g => g.recurringMode==="shares" && g.shareTicker===buyF.ticker).map(g => <option key={g.id} value={g.id}>{g.emoji} {g.name}</option>)}
+            </Sl>
+          )}
           <Fld label="這筆是什麼心態下買的？（選填，事後回顧用）">
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {EMOTIONS.map(em => <button key={em.key} onClick={() => setBuyF(p => ({ ...p, emotion:p.emotion===em.key?"":em.key }))} style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:buyF.emotion===em.key?`${em.color}28`:C.card, color:buyF.emotion===em.key?em.color:C.muted, border:`1px solid ${buyF.emotion===em.key?em.color:C.border}`, cursor:"pointer" }}>{em.icon} {em.label}</button>)}
