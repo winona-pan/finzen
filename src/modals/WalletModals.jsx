@@ -497,10 +497,10 @@ export default function WalletModals({
           const hist = [...(b.history||[])].sort((a,bb) => a.date.localeCompare(bb.date));
           const data = [];
           if (hist.length) {
-            const start = new Date(hist[0].date), end = new Date(TODAY);
+            const start = new Date(hist[0].date+"T00:00:00"), end = new Date(TODAY+"T00:00:00");
             let hi = 0, curVal = hist[0].allocated;
             for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate()+1)) {
-              const dateStr = cur.toISOString().slice(0,10);
+              const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
               while (hi < hist.length && hist[hi].date <= dateStr) { curVal = hist[hi].allocated; hi++; }
               data.push({ m: `${cur.getMonth()+1}/${cur.getDate()}`, v: curVal });
             }

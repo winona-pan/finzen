@@ -218,25 +218,24 @@ export default function OtherModals({
             </Fld>
           )}
           {editGoal.goalType === "sinking" && (
-            <Fld label="定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）">
+            <Fld label="🔁 定期定額（選填）">
+              <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
+                設定後，每個月會固定幫你排這筆金額去存這個目標，不用每次都跑去「智慧分流」手動套用。可以是固定金額，也可以是「每月買幾股某支股票」讓系統照股價換算。什麼都不填的話，系統會自己抓「還差多少÷剩幾個月」估一個節奏。
+              </div>
               <div style={{ display:"flex", gap:6, marginBottom:6 }}>
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
               </div>
               {editGoal.recurringMode === "shares" ? (
-                <div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <input type="number" min="0" value={editGoal.recurringShares||""} placeholder="每月約幾股" onChange={e => setEditGoal(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
-                    <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                      <option value="">— 選股票 —</option>
-                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填，不填就用目前報價/買進均價）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
+                <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+                  <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
+                    <option value="">— 選股票 —</option>
+                    {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
                 </div>
-              ) : (
-                <input type="number" min="0" value={editGoal.recurringAmount||""} placeholder="例如：5000，留空＝用系統自動估算的節奏" onChange={e => setEditGoal(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
-              )}
+              ) : null}
+              <RecurringScheduleEditor editGoal={editGoal} setEditGoal={setEditGoal} C={C} iSt={iSt} />
             </Fld>
           )}
           <Fld label="計算哪些帳戶（不選則用總資產）">
@@ -491,5 +490,49 @@ export default function OtherModals({
             <Btn v="secondary" style={{ width:"100%", marginTop:8 }} onClick={close}>關閉</Btn>
           </Sheet>}
     </>
+  );
+}
+
+/* ── 定期定額時間表：可以排「從某個月開始改成多少」，不只是單一固定數字 ── */
+function RecurringScheduleEditor({ editGoal, setEditGoal, C, iSt }) {
+  const isShares = editGoal.recurringMode === "shares";
+  const rows = (editGoal.recurringSchedule && editGoal.recurringSchedule.length > 0)
+    ? editGoal.recurringSchedule
+    : ((isShares ? editGoal.recurringShares > 0 : editGoal.recurringAmount > 0)
+        ? [{ id:"legacy", fromYm:"", value: isShares ? editGoal.recurringShares : editGoal.recurringAmount }]
+        : []);
+
+  const commit = (next) => setEditGoal(p => ({ ...p, recurringSchedule: next }));
+  const patchRow = (id, patch) => commit(rows.map(r => r.id === id ? { ...r, ...patch } : r));
+  const addRow = () => {
+    const today = new Date();
+    const nextYm = `${today.getFullYear()}-${String(today.getMonth()+2).padStart(2,"0")}`; // 預設抓下個月當起始點
+    commit([...rows.map(r => r.id==="legacy" ? { ...r, id:"r"+Date.now(), fromYm: r.fromYm || "0000-01" } : r), { id:"r"+(Date.now()+1), fromYm:nextYm, value:0 }]);
+  };
+  const removeRow = (id) => commit(rows.filter(r => r.id !== id));
+
+  return (
+    <div>
+      {rows.length === 0 && (
+        <button onClick={() => commit([{ id:"r"+Date.now(), fromYm:"0000-01", value:0 }])} style={{ width:"100%", padding:8, borderRadius:8, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 設定定期定額</button>
+      )}
+      {rows.map((r, i) => (
+        <div key={r.id} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+          {r.fromYm === "" || r.fromYm === "0000-01" ? (
+            <span style={{ fontSize:11, color:C.muted, width:100, flexShrink:0 }}>{i===0 ? "從現在開始" : "從一開始"}</span>
+          ) : (
+            <input type="month" value={r.fromYm} onChange={e => patchRow(r.id, { fromYm:e.target.value })} style={{ ...iSt, width:130, flexShrink:0, padding:"6px 8px", fontSize:12 }} />
+          )}
+          <input type="number" min="0" value={r.value||""} placeholder={isShares?"股數":"金額"} onChange={e => patchRow(r.id, { value: e.target.value===""?0:+e.target.value })} style={{ ...iSt, flex:1, padding:"6px 8px" }} />
+          <button onClick={() => removeRow(r.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>✕</button>
+        </div>
+      ))}
+      {rows.length > 0 && (
+        <button onClick={addRow} style={{ width:"100%", padding:8, borderRadius:8, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 排一個之後的調整（例如從幾月開始改成多少）</button>
+      )}
+      <div style={{ fontSize:10, color:C.muted, marginTop:6, lineHeight:1.6 }}>
+        可以排好幾筆，例如「從現在開始 5000」、「從明年1月開始 8000」，到了那個月會自動換成新的金額，不用自己手動改。
+      </div>
+    </div>
   );
 }
