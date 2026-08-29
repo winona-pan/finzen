@@ -67,14 +67,10 @@ export default function SettingsPage({
                 <div style={{ fontWeight:900, fontSize:14, color:C.text }}>類別管理</div>
                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{[...cats.expense, ...cats.income].length} 個類別</div>
               </button>
-              <button onClick={() => setTab("advisor")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", gridColumn:"1 / -1" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ fontSize:26 }}>🤖</div>
-                  <div>
-                    <div style={{ fontWeight:900, fontSize:14, color:C.text }}>AI 理財顧問</div>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{aiEnabled ? "問問題，會參考你的財務資料回答" : "還沒設定，點進去看怎麼開通"}</div>
-                  </div>
-                </div>
+              <button onClick={() => setTab("advisor")} style={{ padding:"18px 14px", borderRadius:16, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+                <div style={{ fontSize:26, marginBottom:6 }}>🤖</div>
+                <div style={{ fontWeight:900, fontSize:14, color:C.text }}>AI 理財顧問</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{aiEnabled ? "問問題，會參考你的財務資料回答" : "還沒設定，點進去看怎麼開通"}</div>
               </button>
             </div>
 

@@ -1,12 +1,12 @@
 import { useState, useRef } from "react";
 
 export default function GoalsPage({
-  C, tab, fmt, upd, setModal, confirm, TODAY,
+  C, tab, setTab, fmt, upd, setModal, confirm, TODAY,
   accs, buckets, goals, useMvForAssets, stTotMv,
   setEditGoal, goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, setOffsetGoal, setDepositGoal,
   curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount, goalStockShares, priceForTicker, goalDisplayAmount,
   pendingAutoInvest, confirmAutoInvest, iSt, createEmergencyFund,
-  Card, Btn, SH, Sl
+  Card, Btn, SH, Sl, tr
 }) {
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -41,9 +41,9 @@ export default function GoalsPage({
           </div>
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
-            <button onClick={() => confirm(`把「${g.name}」移到已封存？可以隨時從已封存清單恢復。`, () => setGoalArchived(g.id, true))} title="封存" style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>📦</button>
+            <button onClick={() => confirm(`${tr("把")}「${g.name}」${tr("移到已封存？可以隨時從已封存清單恢復。")}`, () => setGoalArchived(g.id, true))} title={tr("封存")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>📦</button>
             <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
-            <button onClick={() => confirm(`刪除目標「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
+            <button onClick={() => confirm(`${tr("刪除目標")}「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
           </div>
         </div>
         <div style={{ height:compact?7:10, borderRadius:5, background:C.border, marginBottom:8 }}>
@@ -118,7 +118,7 @@ export default function GoalsPage({
             <Btn style={{ width:"100%" }} onClick={() => {
               const price = +priceInputRef.current?.value || pendingInvest.price;
               const shares = pendingInvest.shares; // 股數是「定期定額」排程裡設定的，改股價不會連動改股數
-              confirm(`確定用股價 ${fmt(price)} 買進 ${shares} 股「${g.shareTicker}」，共 ${fmt(shares*price)}？`, () => confirmAutoInvest(g, { price, shares }), "確認買進");
+              confirm(`${tr("確定用股價")} ${fmt(price)} ${tr("買進")} ${shares} ${tr("股")}「${g.shareTicker}」，${tr("共")} ${fmt(shares*price)}？`, () => confirmAutoInvest(g, { price, shares }), tr("確認買進"));
             }}>✅ 確認買進</Btn>
           </div>
         )}
@@ -131,7 +131,10 @@ export default function GoalsPage({
       {tab === "goals" && (
         <div style={{ padding:"12px 16px" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <span style={{ fontWeight:900, fontSize:18, color:C.text }}>🎯 我的目標</span>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <button onClick={() => setTab("settings")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:18, padding:0 }}>←</button>
+              <span style={{ fontWeight:900, fontSize:18, color:C.text }}>🎯 {tr("我的目標")}</span>
+            </div>
             <div style={{ display:"flex", gap:8 }}>
               <button onClick={() => setModal("allocEngine")} style={{ padding:"8px 12px", borderRadius:10, background:"none", border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:13, cursor:"pointer" }}>🧠 智慧分流</button>
               <Btn sz="sm" onClick={() => setModal("addGoal")}>＋ 新增目標</Btn>
@@ -194,8 +197,8 @@ export default function GoalsPage({
                     <div style={{ fontSize:11, color:C.teal }}>✅ 已經有這個目標了，在下面的清單可以看到</div>
                   ) : (
                     <div style={{ display:"flex", gap:8 }}>
-                      <button onClick={() => confirm("用「生活費預算 × 3個月」建立一個優先級最高的緊急預備金目標？", () => createEmergencyFund(3))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>建立 3 個月份</button>
-                      <button onClick={() => confirm("用「生活費預算 × 6個月」建立一個優先級最高的緊急預備金目標？", () => createEmergencyFund(6))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>建立 6 個月份</button>
+                      <button onClick={() => confirm(tr("用「生活費預算 × 3個月」建立一個優先級最高的緊急預備金目標？"), () => createEmergencyFund(3))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("建立 3 個月份")}</button>
+                      <button onClick={() => confirm(tr("用「生活費預算 × 6個月」建立一個優先級最高的緊急預備金目標？"), () => createEmergencyFund(6))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("建立 6 個月份")}</button>
                     </div>
                   )}
                 </div>
@@ -298,7 +301,7 @@ export default function GoalsPage({
                       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                         <span style={{ fontSize:13, fontWeight:900, color:C.text }}>{fmt(current)}</span>
                         <button onClick={() => setGoalArchived(g.id, false)} title="恢復到進行中" style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14 }}>↩️</button>
-                        <button onClick={() => confirm(`確定刪除已封存目標「${g.name}」？`, () => upd("goals", p => p.filter(x=>x.id!==g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>✕</button>
+                        <button onClick={() => confirm(`${tr("確定刪除已封存目標")}「${g.name}」？`, () => upd("goals", p => p.filter(x=>x.id!==g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:14 }}>✕</button>
                       </div>
                     </div>
                     {canOffset && (

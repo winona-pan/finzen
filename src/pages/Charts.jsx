@@ -19,7 +19,7 @@ export default function ChartsPage({
   showHDP, setShowHDP, nS, setNS, nB, setNB, sortMode, setSortMode, visMode, setVisMode, nD, setND,
   budget502030,
   // 接收全域 UI Atoms 元件
-  Card, SH, Bdg, Btn, DatePicker
+  Card, SH, Bdg, Btn, DatePicker, tr
 }) {
 
   /* ── 局部狀態與月份切換 ── */

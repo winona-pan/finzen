@@ -5,7 +5,7 @@ export default function AccountPage({
   tab, setTab, C, iSt, Btn, confirm, upd, TODAY,
   firebaseEnabled, cloudUser, authLoading, syncStatus,
   doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
-  hideAmounts, toggleHideAmounts,
+  hideAmounts, toggleHideAmounts, tr,
   doEmailRegister, doEmailLogin, doPasswordReset,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
   customCE, buckets, expensePools, watchStocks, watchlist, savingsTargets,
@@ -33,9 +33,9 @@ export default function AccountPage({
           ) : authLoading ? (
             <div style={{ fontSize:12, color:C.muted }}>檢查登入狀態中…</div>
           ) : cloudUser ? (
-            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} />
+            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} tr={tr} />
           ) : (
-            <LoggedOutView doCloudLogin={doCloudLogin} doAppleLogin={doAppleLogin} doAnonLogin={doAnonLogin} doEmailRegister={doEmailRegister} doEmailLogin={doEmailLogin} doPasswordReset={doPasswordReset} confirm={confirm} C={C} iSt={iSt} Btn={Btn} />
+            <LoggedOutView doCloudLogin={doCloudLogin} doAppleLogin={doAppleLogin} doAnonLogin={doAnonLogin} doEmailRegister={doEmailRegister} doEmailLogin={doEmailLogin} doPasswordReset={doPasswordReset} confirm={confirm} C={C} iSt={iSt} Btn={Btn} tr={tr} />
           )}
 
           <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
@@ -93,7 +93,7 @@ export default function AccountPage({
   );
 }
 
-function LoggedOutView({ doCloudLogin, doAppleLogin, doAnonLogin, doEmailRegister, doEmailLogin, doPasswordReset, confirm, C, iSt, Btn }) {
+function LoggedOutView({ doCloudLogin, doAppleLogin, doAnonLogin, doEmailRegister, doEmailLogin, doPasswordReset, confirm, C, iSt, Btn, tr }) {
   return (
     <div>
       <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
@@ -102,7 +102,7 @@ function LoggedOutView({ doCloudLogin, doAppleLogin, doAnonLogin, doEmailRegiste
       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
         <Btn onClick={doCloudLogin}>使用 Google 帳號登入</Btn>
         <Btn v="secondary" onClick={doAppleLogin}>使用 Apple 登入</Btn>
-        <button onClick={() => confirm("匿名登入沒有帳號/密碼，換瀏覽器或清除瀏覽器資料後就沒辦法登入回這個帳號，資料等於救不回來。真的要用匿名登入嗎？", doAnonLogin)}
+        <button onClick={() => confirm(tr("匿名登入沒有帳號/密碼，換瀏覽器或清除瀏覽器資料後就沒辦法登入回這個帳號，資料等於救不回來。真的要用匿名登入嗎？"), doAnonLogin)}
           style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
           先不綁帳號，用匿名登入試試看
         </button>
@@ -161,7 +161,7 @@ function EmailLoginPanel({ doEmailRegister, doEmailLogin, doPasswordReset, C, iS
 }
 
 /* ── 已登入畫面：個人資料、同步狀態、登出、清除雲端備份——三個動作分開放，標示清楚各自的影響範圍 ── */
-function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn }) {
+function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn, tr }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(cloudUser.displayName || "");
   const [saving, setSaving] = useState(false);
@@ -194,13 +194,13 @@ function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, 
         <div style={{ padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
           <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:6 }}>登出</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>這台裝置的資料還是會留著，只是不再同步。</div>
-          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定登出嗎？", doCloudLogout)}>登出</Btn>
+          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm(tr("確定登出嗎？"), doCloudLogout)}>{tr("登出")}</Btn>
         </div>
 
         <div style={{ padding:12, borderRadius:12, background:`${C.warn}10`, border:`1px solid ${C.warn}33` }}>
           <div style={{ fontSize:12, fontWeight:700, color:C.warn, marginBottom:6 }}>清除雲端備份的資料</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>只刪雲端那份備份，這台裝置本機的資料完全不會動；刪除後系統會馬上用這台裝置目前的資料重新備份一份上去。</div>
-          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定清除雲端備份的資料嗎？", () => doDeleteCloudData())}>清除雲端備份</Btn>
+          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm(tr("確定清除雲端備份的資料嗎？"), () => doDeleteCloudData())}>{tr("清除雲端備份")}</Btn>
         </div>
       </div>
     </div>

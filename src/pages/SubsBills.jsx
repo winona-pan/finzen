@@ -1,21 +1,24 @@
 export default function SubsBillsPage({
-  C, tab, fmt, upd, setModal, confirm,
+  C, tab, setTab, fmt, upd, setModal, confirm,
   subs, bills, subsMo, billsMo, monthlyEquiv,
   setSelSub, setSelBill, toggleSub, toggleBill, deleteSub, deleteBill,
   collapsed, toggleSection,
-  Card, Btn, SwipeRow, InfoBtn
+  Card, Btn, SwipeRow, InfoBtn, tr, accFieldLabel
 }) {
   return (
     <>
       {tab === "subsbills" && (
         <div style={{ padding:"12px 16px" }}>
-          <div style={{ fontWeight:900, fontSize:18, color:C.text, marginBottom:16 }}>🔁 訂閱與基本開銷</div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+            <button onClick={() => setTab("settings")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:18, padding:0 }}>←</button>
+            <span style={{ fontWeight:900, fontSize:18, color:C.text }}>🔁 {tr("訂閱與基本開銷")}</span>
+          </div>
 
           {/* Subscriptions */}
           <button onClick={() => toggleSection("subs")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["subs"]?4:8 }}>
-            <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>訂閱管理</span>
+            <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>{tr("訂閱管理")}</span>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:11, color:C.textSub }}>月費約 {fmt(subsMo)}</span>
+              <span style={{ fontSize:11, color:C.textSub }}>{tr("月費約")} {fmt(subsMo)}</span>
               <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["subs"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
             </div>
           </button>
@@ -24,11 +27,11 @@ export default function SubsBillsPage({
               {[...subs].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(s => (
                 <div key={s.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <SwipeRow onDelete={() => confirm(`確定刪除訂閱「${s.name}」？連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）`, () => deleteSub(s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
+                    <SwipeRow onDelete={() => confirm(`${tr("確定刪除訂閱")}「${s.name}」？${tr("連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）")}`, () => deleteSub(s.id))} onEdit={() => { setSelSub({ ...s }); setModal("editSub"); }} onClick={() => { setSelSub({ ...s }); setModal("editSub"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:s.active ? 1 : .5, cursor:"pointer" }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📱</div>
                         <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{s.name}</div><div style={{ fontSize:12, color:C.muted }}>
-                          {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {s.acc}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
+                          {s.freq==="week" ? `每週${"日一二三四五六"[(+s.weekday)||1]}` : s.freq==="year" ? `每年${s.yearMonth||1}月${s.day}日` : `每月${s.day}日`} · {accFieldLabel(s.acc)}{s.active && <span style={{ color:C.teal }}> · 啟用</span>}
                         </div></div>
                         <div style={{ textAlign:"right" }}>
                           <div style={{ fontWeight:900, fontSize:14, color:C.expense }}>{fmt(s.amt)}{s.freq==="year"?"/年":s.freq==="week"?"/週":"/月"}</div>
@@ -62,7 +65,7 @@ export default function SubsBillsPage({
               {[...(bills || [])].sort((a,b) => (b.active?1:0)-(a.active?1:0)).map(b => (
                 <div key={b.id} style={{ display:"flex", gap:8, alignItems:"stretch" }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <SwipeRow onDelete={() => confirm(`確定刪除「${b.name}」？`, () => deleteBill(b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
+                    <SwipeRow onDelete={() => confirm(`${tr("確定刪除")}「${b.name}」？`, () => deleteBill(b.id))} onEdit={() => { setSelBill({ ...b }); setModal("editBill"); }} onClick={() => { setSelBill({ ...b }); setModal("editBill"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, borderRadius:14, border:`1px solid ${C.border}`, opacity:b.active ? 1 : .5, cursor:"pointer" }}>
                         <div style={{ width:40, height:40, borderRadius:12, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏠</div>
                         <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{b.name}</div><div style={{ fontSize:12, color:C.muted }}>

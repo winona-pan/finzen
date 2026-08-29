@@ -151,7 +151,7 @@ const GUIDE_SECTIONS = [
 ];
 
 /* ── 使用手冊：獨立一頁，跟目標、訂閱一樣是底部導覽切換的頁面，不是彈窗 ── */
-export default function UserGuidePage({ tab, setTab, C }) {
+export default function UserGuidePage({ tab, setTab, C, tr }) {
   const [openSections, setOpenSections] = useState({});
   const toggle = (k) => setOpenSections(p => ({ ...p, [k]: !p[k] }));
 
@@ -163,7 +163,7 @@ export default function UserGuidePage({ tab, setTab, C }) {
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <button onClick={() => setTab("settings")} style={{ background:"none", border:"none", cursor:"pointer", color:C.textSub, fontSize:18, padding:0, marginRight:4 }}>←</button>
           <span style={{ fontSize:18 }}>📖</span>
-          <span style={{ fontWeight:900, fontSize:16, color:C.text }}>使用手冊</span>
+          <span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("使用手冊")}</span>
         </div>
       </div>
       <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))" }}>
@@ -173,7 +173,7 @@ export default function UserGuidePage({ tab, setTab, C }) {
               style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"12px 0" }}>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:18 }}>{item.icon}</span>
-                <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{item.title}</span>
+                <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{tr(item.title)}</span>
               </div>
               <span style={{ fontSize:13, color:C.muted, display:"inline-block", transform:openSections[item.key]?"rotate(0deg)":"rotate(-90deg)", transition:"transform .2s", flexShrink:0 }}>▾</span>
             </button>
@@ -182,7 +182,7 @@ export default function UserGuidePage({ tab, setTab, C }) {
                 {item.steps.map((step, si) => (
                   <div key={si} style={{ display:"flex", gap:8, padding:"4px 0" }}>
                     <span style={{ color:C.accent, fontWeight:900, fontSize:12, flexShrink:0, marginTop:1 }}>{si+1}.</span>
-                    <span style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{step}</span>
+                    <span style={{ fontSize:12, color:C.textSub, lineHeight:1.6 }}>{tr(step)}</span>
                   </div>
                 ))}
               </div>

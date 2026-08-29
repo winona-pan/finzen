@@ -9,7 +9,7 @@ export default function WalletPage({
   collapsed, toggleSection, selAcc, setSelAcc, newBal, setNewBal, buckets, updateBucket, deleteBucket, moveBucket, growthBucket, setGrowthBucket,
   selSub, setSelSub, selBill, setSelBill, selPolicy, setSelPolicy, toggleSub, toggleBill,
   premAmt, setPremAmt, premAcc, setPremAcc, surrenderAmt, setSurrenderAmt, surrenderAcc, setSurrenderAcc,
-  hideAmounts,
+  hideAmounts, tr,
   // 共用 UI atoms
   InfoBtn, SH, Card, SwipeRow, Bdg, Btn, EmojiPicker
 }) {
@@ -47,7 +47,7 @@ export default function WalletPage({
           <div style={{ position:"relative", padding:"20px 20px 28px", background:`linear-gradient(150deg,${C.surface} 0%,${C.bg} 100%)` }}>
             <div style={{ position:"absolute", right:-30, top:-30, width:200, height:200, borderRadius:"50%", background:C.accent, filter:"blur(60px)", opacity:.07, pointerEvents:"none" }} />
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, position:"relative", zIndex:2 }}>
-              <span style={{ fontWeight:900, fontSize:24, color:C.text }}>錢包</span>
+              <span style={{ fontWeight:900, fontSize:24, color:C.text }}>{tr("錢包")}</span>
               <div style={{ display:"flex", gap:6 }}>
                 {[{ icon:"👁", mode:"vis" }, { icon:"⠿", mode:"sort" }, { icon:"➕", cb:() => setModal("addAccType") }].map((b, i) => (
                   <button key={i} onClick={b.cb || (() => setWMode(p => p === b.mode ? "normal" : b.mode))}
@@ -71,9 +71,9 @@ export default function WalletPage({
               </>}
             </div>}
             <div style={{ fontSize:12, fontWeight:700, color:C.textSub, marginBottom:3 }}>總資產淨值</div>
-            <div style={{ fontWeight:900, fontSize:34, color:C.text, letterSpacing:"-1.5px", marginBottom:18 }}>{fmt(netWorth)}</div>
+            <div onClick={() => hideAmounts && doPeek()} style={{ fontWeight:900, fontSize:34, color:C.text, letterSpacing:"-1.5px", marginBottom:18, cursor:hideAmounts?"pointer":"default", ...maskStyle }}>{fmt(netWorth)}</div>
             <div onClick={() => hideAmounts && doPeek()} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, textAlign:"center", cursor:hideAmounts?"pointer":"default" }}>
-              {[{ l:"資產", v:totAssets, c:C.income }, { l:"負債", v:totDebt, c:C.expense }, { l:"應收", v:totRec, c:C.teal }, { l:"應付", v:totPay, c:C.warn }].map(k => (
+              {[{ l:tr("資產"), v:totAssets, c:C.income }, { l:tr("負債"), v:totDebt, c:C.expense }, { l:tr("應收"), v:totRec, c:C.teal }, { l:tr("應付"), v:totPay, c:C.warn }].map(k => (
                 <div key={k.l}><div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{k.l}</div><div style={{ fontWeight:900, fontSize:13, color:k.c, ...maskStyle }}>{fmt(k.v)}</div></div>
               ))}
             </div>
@@ -155,7 +155,7 @@ export default function WalletPage({
                     return wMode === "sort" ? (
                       <div key={a.id} style={{ borderTop:i > 0 ? `1px solid ${C.border}` : undefined }}>{accRowContent}</div>
                     ) : (
-                      <SwipeRow key={a.id} onDelete={() => { confirm(`確定刪除「${a.name}」？`, () => { upd("accs", p => p.filter(x => x.id !== a.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== a.id)); }); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
+                      <SwipeRow key={a.id} onDelete={() => { confirm(`${tr("確定刪除")}「${a.name}」？`, () => { upd("accs", p => p.filter(x => x.id !== a.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== a.id)); }); }} onEdit={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("adjBal"); }} onClick={() => { setSelAcc({ ...a }); setNewBal(String(a.bal)); setModal("accDetail"); }}>
                         {accRowContent}
                       </SwipeRow>
                     );
@@ -185,7 +185,7 @@ export default function WalletPage({
                           <span style={{ fontSize:15 }}>{b.emoji}</span>
                           <span style={{ flex:1, fontSize:13, color:C.textSub }}>{a.name}・{b.name}</span>
                           {b.vis===false && <span style={{ fontSize:10, color:C.muted, background:`${C.muted}22`, padding:"1px 6px", borderRadius:6 }}>不計入資產</span>}
-                          <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{fmt(b.allocated)}</span>
+                          <span onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }} style={{ fontSize:13, fontWeight:700, color:C.text, ...maskStyle }}>{fmt(b.allocated)}</span>
                         </div>
                       );
                       const bucketActionBtns = wMode !== "sort" && editingBucket !== b.id && (b.history||[]).length > 1 ? (
@@ -196,7 +196,7 @@ export default function WalletPage({
                         <div key={b.id} style={{ display:"flex", gap:6, alignItems:"stretch", marginBottom: editingBucket===b.id ? 0 : 1 }}>
                           <div style={{ flex:1, minWidth:0 }}>
                             {editingBucket === b.id ? bucketRowContent : (
-                              <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))}>{bucketRowContent}</SwipeRow>
+                              <SwipeRow onDelete={() => confirm(`${tr("刪除子帳戶")}「${b.name}」？`, () => deleteBucket(b.id))}>{bucketRowContent}</SwipeRow>
                             )}
                           </div>
                           {bucketActionBtns}
@@ -226,12 +226,12 @@ export default function WalletPage({
                   const pct = c.limit > 0 ? Math.round(c.payable / c.limit * 100) : 0;
                   const overLimit = pct > 100;
                   const col = overLimit ? C.danger : pct > 70 ? C.warn : pct > 40 ? C.income : C.textSub;
-                  return <SwipeRow key={c.id} onDelete={() => confirm(`確定刪除「${c.name}」？`, () => upd("accs", p => p.filter(a => a.id !== c.id)))} onEdit={() => { setSelAcc({ ...c }); setModal("editCredit"); }}>
+                  return <SwipeRow key={c.id} onDelete={() => confirm(`${tr("確定刪除")}「${c.name}」？`, () => upd("accs", p => p.filter(a => a.id !== c.id)))} onEdit={() => { setSelAcc({ ...c }); setModal("editCredit"); }}>
                     <div style={{ padding:"14px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, cursor:"pointer" }}
                       onClick={() => { setSelAcc({ ...c }); setNewBal(String(c.payable || 0)); setModal("accDetail"); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
                         <div style={{ width:44, height:44, borderRadius:14, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>💳</div>
-                        <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{c.name}</div><div style={{ fontSize:12, color:C.muted }}>應付 <span style={{ color:col, fontWeight:overLimit?700:400 }}>{fmt(c.payable)}</span> / {fmt(c.limit)}</div></div>
+                        <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{c.name}</div><div style={{ fontSize:12, color:C.muted, ...maskStyle }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>應付 <span style={{ color:col, fontWeight:overLimit?700:400 }}>{fmt(c.payable)}</span> / {fmt(c.limit)}</div></div>
                         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                           <Bdg color={col}>{overLimit ? `⚠️ ${pct}%` : `${pct}%`}</Bdg>
                         </div>
@@ -273,21 +273,21 @@ export default function WalletPage({
                           {pl.maturityDate && <div style={{ fontSize:11, color:C.muted }}>到期 {pl.maturityDate}</div>}
                         </div>
                       </div>
-                      <div style={{ textAlign:"right" }}>
+                      <div style={{ textAlign:"right", cursor:hideAmounts?"pointer":"default" }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
                         <div style={{ fontSize:11, color:C.textSub }}>解約金</div>
-                        <div style={{ fontWeight:900, fontSize:14, color:C.accentL }}>
+                        <div style={{ fontWeight:900, fontSize:14, color:C.accentL, ...maskStyle }}>
                           {isForeign ? `${pl.cur} ${(pl.surrenderVal||0).toLocaleString()}` : fmt(pl.surrenderVal||0)}
                         </div>
-                        {isForeign && <div style={{ fontSize:11, color:C.muted }}>≈ {fmt(surrenderTWD)}</div>}
-                        <div style={{ fontSize:11, color:C.muted }}>已繳 {isForeign ? `${pl.cur} ${totalPaid.toLocaleString()}` : fmt(totalPaid)}</div>
-                        <div style={{ fontSize:12, fontWeight:700, color:pnlColor(pnl,C) }}>{pnl>=0?"▲ +":"▼ "}{fmt(Math.abs(pnl))}</div>
+                        {isForeign && <div style={{ fontSize:11, color:C.muted, ...maskStyle }}>≈ {fmt(surrenderTWD)}</div>}
+                        <div style={{ fontSize:11, color:C.muted, ...maskStyle }}>已繳 {isForeign ? `${pl.cur} ${totalPaid.toLocaleString()}` : fmt(totalPaid)}</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:pnlColor(pnl,C), ...maskStyle }}>{pnl>=0?"▲ +":"▼ "}{fmt(Math.abs(pnl))}</div>
                       </div>
                     </div>
                     <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                       <Btn sz="sm" v="secondary" onClick={() => { setSelPolicy({...pl}); setPremAmt(String(pl.lastPremium||"")); setPremAcc(""); setModal("payPremium"); }}>💰 繳保費</Btn>
                       <Btn sz="sm" v="secondary" onClick={() => { setSelPolicy({...pl}); setModal("editPolicy"); }}>✏️ 更新</Btn>
                       <Btn sz="sm" v="warn" onClick={() => { setSelPolicy({...pl}); setSurrenderAmt(String(pl.surrenderVal||"")); setSurrenderAcc(""); setModal("surrenderPolicy"); }}>📋 解約</Btn>
-                      <Btn sz="sm" v="danger" onClick={() => confirm(`刪除「${pl.name}」？`, () => upd("policies", p=>p.filter(x=>x.id!==pl.id)))}>🗑</Btn>
+                      <Btn sz="sm" v="danger" onClick={() => confirm(`${tr("刪除")}「${pl.name}」？`, () => upd("policies", p=>p.filter(x=>x.id!==pl.id)))}>🗑</Btn>
                     </div>
                   </div>;
                 })}
