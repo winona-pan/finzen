@@ -946,6 +946,36 @@ export default function App() {
   }, [selPool, recAmt, upd]);
 
   /* ── 訂閱：編輯 / 新增 ── */
+  /* ── 扣款帳戶欄位（訂閱/帳單的 acc）現在也能選子帳戶：存成 "bucket:<id>" 這種格式。
+     子帳戶本身沒有真的現金，錢實際上在它所屬的母帳戶裡，所以扣款時要「連動」：
+     子帳戶的 allocated 扣掉這筆錢（代表這筆預算被用掉了），同時母帳戶的真實餘額/應付也要扣掉這筆錢。
+     一般帳戶（母帳戶）就維持原本邏輯，直接扣。回傳的物件可以直接丟進 updMulti。 ── */
+  const chargeFromAccField = useCallback((accField, amt) => {
+    if (accField && accField.startsWith("bucket:")) {
+      const bucketId = accField.slice(7);
+      const bucket = buckets.find(b => b.id === bucketId);
+      const parentAcc = bucket ? accs.find(a => a.id === bucket.accId) : null;
+      return {
+        buckets: p => bucket ? (p||[]).map(b => b.id === bucketId ? { ...b, allocated: Math.max(0, b.allocated - amt) } : b) : (p||[]),
+        accs: p => parentAcc ? p.map(a => a.id === parentAcc.id ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      };
+    }
+    return {
+      accs: p => accField ? p.map(a => a.name===accField ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      buckets: p => p,
+    };
+  }, [accs, buckets]);
+  /* 扣款帳戶欄位轉成好看的顯示名稱（給表單下拉選單、清單顯示用） */
+  const accFieldLabel = useCallback((accField) => {
+    if (!accField) return "";
+    if (accField.startsWith("bucket:")) {
+      const bucket = buckets.find(b => b.id === accField.slice(7));
+      const parentAcc = bucket ? accs.find(a => a.id === bucket.accId) : null;
+      return bucket ? `${parentAcc?.name||""}・${bucket.name}` : "";
+    }
+    return accField;
+  }, [accs, buckets]);
+
   const saveSub = useCallback((sub) => { upd("subs", p => p.map(x => x.id === sub.id ? sub : x)); close(); }, [upd]);
   /* ── 刪除訂閱：連動清掉還沒認列完的「年繳分攤」池，避免留下孤兒紀錄污染分攤總額。已經發生過的分攤記錄（歷史支出）不動，只停止繼續追蹤 ── */
   const deleteSub = useCallback((subId) => {
@@ -960,6 +990,7 @@ export default function App() {
     const amt = +nS.amt;
     const newSub = { ...nS, id:"sub"+Date.now(), amt, active:true, lastBilled:TODAY };
     upd("subs", p => [...p, newSub]);
+    const charge = chargeFromAccField(nS.acc, amt);
     if (nS.deferExpense && nS.freq === "year") {
       const originId = Date.now();
       const poolId = "ep" + originId;
@@ -969,23 +1000,24 @@ export default function App() {
           { id:originId, type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${nS.name}（共 ${amt}）`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id },
           { id:originId+1, type:"expense", cat:nS.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${nS.name}`, acc:nS.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:newSub.id, noBalanceEffect:true, poolId, poolType:"expense" },
         ],
-        accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+        accs: charge.accs, buckets: charge.buckets,
       });
       upd("expensePools", p => [...(p||[]), { id:poolId, desc:nS.name, cat:nS.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:nS.acc||"", subId:newSub.id, originTxnId:originId }]);
     } else {
       updMulti({
         txns: p => [...p, { id:Date.now(), type:"expense", cat:nS.cat||"訂閱", amt, desc:nS.name, acc:nS.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newSub.id }],
-        accs: p => nS.acc ? p.map(a => a.name===nS.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+        accs: charge.accs, buckets: charge.buckets,
       });
     }
     setNS(S0); close();
-  }, [nS, upd, updMulti]);
+  }, [nS, upd, updMulti, chargeFromAccField]);
 
   /* ── 訂閱/開銷 啟用停用：啟用當下立即記一筆本期帳，不用等重新整理頁面 ── */
   const toggleSub = useCallback((s) => {
     if (s.active) { upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:false } : x)); return; }
     upd("subs", p => p.map(x => x.id === s.id ? { ...x, active:true, lastBilled:TODAY } : x));
     const amt = s.amt;
+    const charge = chargeFromAccField(s.acc, amt);
     if (s.deferExpense && s.freq === "year") {
       const originId = Date.now();
       const poolId = "ep" + originId;
@@ -995,24 +1027,25 @@ export default function App() {
           { id:originId, type:"transfer", cat:"帳戶調整", amt, desc:`年繳分攤：${s.name}（共 ${amt}）`, acc:s.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:s.id },
           { id:originId+1, type:"expense", cat:s.cat||"訂閱", amt:monthlyAmt, desc:`分攤：${s.name}`, acc:s.acc||"", date:TODAY, tags:"#分攤認列", autoSrc:s.id, noBalanceEffect:true, poolId, poolType:"expense" },
         ],
-        accs: p => s.acc ? p.map(a => a.name===s.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+        accs: charge.accs, buckets: charge.buckets,
       });
       upd("expensePools", p => [...(p||[]), { id:poolId, desc:s.name, cat:s.cat||"訂閱", totalAmt:amt, monthlyAmt, recognized:monthlyAmt, startDate:TODAY, acc:s.acc||"", subId:s.id, originTxnId:originId }]);
     } else {
       updMulti({
         txns: p => [...p, { id:Date.now(), type:"expense", cat:s.cat||"訂閱", amt, desc:s.name, acc:s.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:s.id }],
-        accs: p => s.acc ? p.map(a => a.name===s.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+        accs: charge.accs, buckets: charge.buckets,
       });
     }
-  }, [upd, updMulti]);
+  }, [upd, updMulti, chargeFromAccField]);
   const toggleBill = useCallback((b) => {
     if (b.active) { upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:false } : x)); return; }
     upd("bills", p => p.map(x => x.id === b.id ? { ...x, active:true, lastBilled:TODAY } : x));
+    const charge = chargeFromAccField(b.acc, b.amt);
     updMulti({
       txns: p => [...p, { id:Date.now(), type:"expense", cat:b.cat||"家居", amt:b.amt, desc:b.name, acc:b.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:b.id }],
-      accs: p => b.acc ? p.map(a => a.name===b.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+b.amt} : {...a, bal:a.bal-b.amt}) : a) : p,
+      accs: charge.accs, buckets: charge.buckets,
     });
-  }, [upd, updMulti]);
+  }, [upd, updMulti, chargeFromAccField]);
 
   /* ── 基本開銷：編輯 / 新增 ── */
   const saveBill = useCallback(() => { if (!selBill) return; upd("bills", p => p.map(x => x.id === selBill.id ? selBill : x)); close(); }, [selBill, upd]);
@@ -1021,12 +1054,13 @@ export default function App() {
     const amt = +nB.amt;
     const newBill = { ...nB, id:"bill"+Date.now(), amt, active:true, lastBilled:TODAY };
     upd("bills", p => [...(p||[]), newBill]);
+    const charge = chargeFromAccField(nB.acc, amt);
     updMulti({
       txns: p => [...p, { id:Date.now(), type:"expense", cat:nB.cat||"家居", amt, desc:nB.name, acc:nB.acc||"", date:TODAY, tags:"#自動記帳", autoSrc:newBill.id }],
-      accs: p => nB.acc ? p.map(a => a.name===nB.acc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+amt} : {...a, bal:a.bal-amt}) : a) : p,
+      accs: charge.accs, buckets: charge.buckets,
     });
     setNB(B0); close();
-  }, [nB, upd, updMulti]);
+  }, [nB, upd, updMulti, chargeFromAccField]);
 
   /* ── 新增帳戶 ── */
   const addAcc = useCallback(() => {
@@ -1230,10 +1264,23 @@ export default function App() {
     if (newTxns.length > 0) {
       newTxns.forEach(t => {
         if (t.acc) {
-          const acc = (d.accs || []).find(a => a.name === t.acc);
-          if (acc) {
-            if (acc.type === "credit") upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:(a.payable||0)+t.amt} : a));
-            else upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+          if (t.acc.startsWith("bucket:")) {
+            const bucketId = t.acc.slice(7);
+            const bucket = (d.buckets || []).find(bk => bk.id === bucketId);
+            if (bucket) {
+              upd("buckets", p => (p||[]).map(bk => bk.id === bucketId ? { ...bk, allocated: Math.max(0, bk.allocated - t.amt) } : bk));
+              const parentAcc = (d.accs || []).find(a => a.id === bucket.accId);
+              if (parentAcc) {
+                if (parentAcc.type === "credit") upd("accs", p => p.map(a => a.id===parentAcc.id ? {...a, payable:(a.payable||0)+t.amt} : a));
+                else upd("accs", p => p.map(a => a.id===parentAcc.id ? {...a, bal:a.bal-t.amt} : a));
+              }
+            }
+          } else {
+            const acc = (d.accs || []).find(a => a.name === t.acc);
+            if (acc) {
+              if (acc.type === "credit") upd("accs", p => p.map(a => a.name===t.acc ? {...a, payable:(a.payable||0)+t.amt} : a));
+              else upd("accs", p => p.map(a => a.name===t.acc ? {...a, bal:a.bal-t.amt} : a));
+            }
           }
         }
       });
@@ -2218,7 +2265,7 @@ export default function App() {
   /* ── AI 理財顧問（Firebase AI Logic / Gemini）：把目前的財務快照整理成一段文字，讓 AI 回答問題時有你的實際數字可以參考 ── */
   const advisorContext = useMemo(() => {
     const goalLines = (goals||[]).filter(g => !isGoalArchived(g)).map(g => {
-      const cur = goalCurrentAmount(g);
+      const cur = goalDisplayAmount[g.id] ?? goalCurrentAmount(g);
       const sched = (yearlyGoalSchedule||[]).find(x => x.id === g.id);
       let onTrack = "";
       if (sched) {
@@ -2290,7 +2337,7 @@ export default function App() {
     ].join("\n");
   }, [goals, isGoalArchived, goalCurrentAmount, fmt, moInc, moExp, guiltFreeGauge, budget502030, curSavingsTarget,
       moTxns, subs, bills, monthlyEquiv, subsMo, billsMo, stSum, debts, netWorth, totAssets, totDebt, totPay, totRec,
-      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion]);
+      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion, goalDisplayAmount]);
 
   /* AI 顧問對話：存在 localStorage，關掉 app 再打開還在，不會因為關掉聊天視窗或重新整理就消失 */
   const [advisorHistory, setAdvisorHistoryRaw] = useState(() => {
@@ -2458,7 +2505,7 @@ export default function App() {
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
     goalCurrentAmount, goalDisplayAmount, isGoalArchived, isGoalComplete, setGoalArchived, allocSettings, setAllocSettings, computeAllocation, priceForTicker, goalRecurringAmount, scheduledRecurringValue, pendingAutoInvest, confirmAutoInvest, updateGoalRecurringSchedule, goalStockShares,
-    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
+    buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, chargeFromAccField, accFieldLabel, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
     Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
