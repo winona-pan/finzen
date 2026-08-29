@@ -23,7 +23,7 @@ export default function OtherModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
-  goalRecurringAmount, scheduledRecurringValue,
+  goalRecurringAmount, scheduledRecurringValue, tr,
   // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji
 }) {
@@ -65,24 +65,24 @@ export default function OtherModals({
 
   return (
     <>
-        {modal === "addGoal" && <Sheet title="新增目標" onClose={close}>
+        {modal === "addGoal" && <Sheet title={tr("新增目標")} onClose={close}>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:12 }}>
             <button onClick={() => setShowGoalEP(true)} style={{ width:52, height:52, borderRadius:14, background:C.card, border:`2px solid ${C.accent}`, fontSize:26, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nG.emoji}</button>
-            <div style={{ flex:1 }}><Inp label="目標名稱" placeholder="買新電腦、旅遊基金、緊急預備金…" value={nG.name} onChange={e => setNG(p => ({ ...p, name:e.target.value }))} /></div>
+            <div style={{ flex:1 }}><Inp label={tr("目標名稱")} placeholder="買新電腦、旅遊基金、緊急預備金…" value={nG.name} onChange={e => setNG(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
-          <CalcInp label="目標金額" value={nG.target} onChange={v => setNG(p => ({ ...p, target:v }))} />
-          <Fld label="分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）">
-            <input list="goalGroups" value={nG.group||""} onChange={e => setNG(p => ({ ...p, group:e.target.value }))} placeholder="例如：願望、旅費" style={iSt} />
+          <CalcInp label={tr("目標金額")} value={nG.target} onChange={v => setNG(p => ({ ...p, target:v }))} />
+          <Fld label={tr("分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）")}>
+            <input list="goalGroups" value={nG.group||""} onChange={e => setNG(p => ({ ...p, group:e.target.value }))} placeholder={tr("例如：願望、旅費")} style={iSt} />
             <datalist id="goalGroups">
               {[...new Set((goals||[]).map(g=>g.group).filter(Boolean))].map(gr => <option key={gr} value={gr} />)}
             </datalist>
           </Fld>
-          <Fld label="目標性質">
+          <Fld label={tr("目標性質")}>
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {[
-                { v:"milestone", l:"🏔️ 純資產里程碑", d:"只用來追蹤總淨值，不參與每月分流扣款" },
-                { v:"sinking", l:"🎯 專案存錢池", d:"有截止日，系統自動算每月該存多少" },
-                { v:"wishlist", l:"🎁 自由願望池", d:"沒有截止日，用分流剩下的錢慢慢存滿" },
+                { v:"milestone", l:`🏔️ ${tr("純資產里程碑")}`, d:tr("只用來追蹤總淨值，不參與每月分流扣款") },
+                { v:"sinking", l:`🎯 ${tr("專案存錢池")}`, d:tr("有截止日，系統自動算每月該存多少") },
+                { v:"wishlist", l:`🎁 ${tr("自由願望池")}`, d:tr("沒有截止日，用分流剩下的錢慢慢存滿") },
               ].map(o => (
                 <button key={o.v} onClick={() => setNG(p => ({ ...p, goalType:o.v, deadline: o.v==="sinking" ? p.deadline : "" }))}
                   style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", padding:"8px 12px", borderRadius:10, background:nG.goalType===o.v?`${C.accent}20`:C.card, border:`1px solid ${nG.goalType===o.v?C.accent:C.border}`, cursor:"pointer", textAlign:"left" }}>
@@ -93,15 +93,15 @@ export default function OtherModals({
             </div>
           </Fld>
           {nG.goalType === "sinking" && (
-            <Fld label="截止日期（專案存錢池必填）">
+            <Fld label={tr("截止日期（專案存錢池必填）")}>
               <input type="date" value={nG.deadline||""} onChange={e => setNG(p => ({ ...p, deadline:e.target.value }))} style={iSt} min={TODAY} />
               {nG.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
-                ⏳ 還有 {Math.max(0, Math.ceil((new Date(nG.deadline)-new Date(TODAY))/(86400000)))} 天
+                ⏳ {tr("還有")} {Math.max(0, Math.ceil((new Date(nG.deadline)-new Date(TODAY))/(86400000)))} {tr("天")}
               </div>}
             </Fld>
           )}
           {nG.goalType !== "milestone" && (
-            <Fld label="優先級（1-10，數字越小分流時越優先）">
+            <Fld label={tr("優先級（1-10，數字越小分流時越優先）")}>
               <input type="number" min="1" max="10" value={nG.priority}
                 onChange={e => { const raw = e.target.value; setNG(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
                 onBlur={() => setNG(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
@@ -109,28 +109,28 @@ export default function OtherModals({
             </Fld>
           )}
           {nG.goalType === "sinking" && (
-            <Fld label="定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）">
+            <Fld label={tr("定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）")}>
               <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-                <button onClick={() => setNG(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(nG.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(nG.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(nG.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
-                <button onClick={() => setNG(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:nG.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${nG.recurringMode==="shares"?C.accent:C.border}`, color:nG.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
+                <button onClick={() => setNG(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(nG.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(nG.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(nG.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 {tr("固定金額")}</button>
+                <button onClick={() => setNG(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:nG.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${nG.recurringMode==="shares"?C.accent:C.border}`, color:nG.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 {tr("股數（股價變動自動換算）")}</button>
               </div>
               {nG.recurringMode === "shares" ? (
                 <div>
                   <div style={{ display:"flex", gap:6 }}>
-                    <input type="number" min="0" value={nG.recurringShares||""} placeholder="每月約幾股" onChange={e => setNG(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                    <input type="number" min="0" value={nG.recurringShares||""} placeholder={tr("每月約幾股")} onChange={e => setNG(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
                     <select value={nG.shareTicker||""} onChange={e => setNG(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                      <option value="">— 選股票 —</option>
+                      <option value="">— {tr("選股票")} —</option>
                       {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-                  <input type="number" min="0" value={nG.sharePriceOverride||""} placeholder="自訂股價（選填，不填就用目前報價/買進均價）" onChange={e => setNG(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
+                  <input type="number" min="0" value={nG.sharePriceOverride||""} placeholder={tr("自訂股價（選填，不填就用目前報價/買進均價）")} onChange={e => setNG(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
                 </div>
               ) : (
-                <input type="number" min="0" value={nG.recurringAmount||""} placeholder="例如：5000，留空＝用系統自動估算的節奏" onChange={e => setNG(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
+                <input type="number" min="0" value={nG.recurringAmount||""} placeholder={tr("例如：5000，留空＝用系統自動估算的節奏")} onChange={e => setNG(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
               )}
             </Fld>
           )}
-          <Fld label="計算哪些帳戶（不選則用總資產）">
+          <Fld label={tr("計算哪些帳戶（不選則用總資產）")}>
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {accs.filter(a => a.type !== "credit").map(a => (
                 <button key={a.id} onClick={() => setNG(p => ({ ...p, accIds:p.accIds.includes(a.id)?p.accIds.filter(x=>x!==a.id):[...p.accIds, a.id] }))}
@@ -175,24 +175,24 @@ export default function OtherModals({
           {showGoalEP && <EmojiPicker onSelect={e => { setNG(p => ({ ...p, emoji:e })); setShowGoalEP(false); }} onClose={() => setShowGoalEP(false)} />}
         </Sheet>}
 
-        {modal === "editGoal" && editGoal && <Sheet title="編輯目標" onClose={close}>
+        {modal === "editGoal" && editGoal && <Sheet title={tr("編輯目標")} onClose={close}>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:12 }}>
             <button onClick={() => setShowGoalEP(true)} style={{ width:52, height:52, borderRadius:14, background:C.card, border:`2px solid ${C.accent}`, fontSize:26, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{editGoal.emoji||"🎯"}</button>
-            <div style={{ flex:1 }}><Inp label="目標名稱" value={editGoal.name||""} onChange={e => setEditGoal(p => ({ ...p, name:e.target.value }))} /></div>
+            <div style={{ flex:1 }}><Inp label={tr("目標名稱")} value={editGoal.name||""} onChange={e => setEditGoal(p => ({ ...p, name:e.target.value }))} /></div>
           </div>
-          <CalcInp label="目標金額" value={String(editGoal.target||"")} onChange={v => setEditGoal(p => ({ ...p, target:+v }))} />
-          <Fld label="分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）">
-            <input list="goalGroupsEdit" value={editGoal.group||""} onChange={e => setEditGoal(p => ({ ...p, group:e.target.value }))} placeholder="例如：願望、旅費" style={iSt} />
+          <CalcInp label={tr("目標金額")} value={String(editGoal.target||"")} onChange={v => setEditGoal(p => ({ ...p, target:+v }))} />
+          <Fld label={tr("分類（選填，同分類會在目標頁合併成一個大框，例如「願望」「旅費」）")}>
+            <input list="goalGroupsEdit" value={editGoal.group||""} onChange={e => setEditGoal(p => ({ ...p, group:e.target.value }))} placeholder={tr("例如：願望、旅費")} style={iSt} />
             <datalist id="goalGroupsEdit">
               {[...new Set((goals||[]).map(g=>g.group).filter(Boolean))].map(gr => <option key={gr} value={gr} />)}
             </datalist>
           </Fld>
-          <Fld label="目標性質">
+          <Fld label={tr("目標性質")}>
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {[
-                { v:"milestone", l:"🏔️ 純資產里程碑", d:"只用來追蹤總淨值，不參與每月分流扣款" },
-                { v:"sinking", l:"🎯 專案存錢池", d:"有截止日，系統自動算每月該存多少" },
-                { v:"wishlist", l:"🎁 自由願望池", d:"沒有截止日，用分流剩下的錢慢慢存滿" },
+                { v:"milestone", l:`🏔️ ${tr("純資產里程碑")}`, d:tr("只用來追蹤總淨值，不參與每月分流扣款") },
+                { v:"sinking", l:`🎯 ${tr("專案存錢池")}`, d:tr("有截止日，系統自動算每月該存多少") },
+                { v:"wishlist", l:`🎁 ${tr("自由願望池")}`, d:tr("沒有截止日，用分流剩下的錢慢慢存滿") },
               ].map(o => (
                 <button key={o.v} onClick={() => setEditGoal(p => ({ ...p, goalType:o.v, deadline: o.v==="sinking" ? p.deadline : "" }))}
                   style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", padding:"8px 12px", borderRadius:10, background:editGoal.goalType===o.v?`${C.accent}20`:C.card, border:`1px solid ${editGoal.goalType===o.v?C.accent:C.border}`, cursor:"pointer", textAlign:"left" }}>
@@ -203,15 +203,15 @@ export default function OtherModals({
             </div>
           </Fld>
           {editGoal.goalType === "sinking" && (
-            <Fld label="截止日期">
+            <Fld label={tr("截止日期")}>
               <input type="date" value={editGoal.deadline||""} onChange={e => setEditGoal(p => ({ ...p, deadline:e.target.value }))} style={iSt} />
               {editGoal.deadline && <div style={{ fontSize:12, color:C.accentL, marginTop:4 }}>
-                ⏳ 還有 {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}天
+                ⏳ {tr("還有")} {Math.max(0, Math.ceil((new Date(editGoal.deadline)-new Date(TODAY))/86400000))}{tr("天")}
               </div>}
             </Fld>
           )}
           {editGoal.goalType !== "milestone" && (
-            <Fld label="優先級（1-10，數字越小分流時越優先）">
+            <Fld label={tr("優先級（1-10，數字越小分流時越優先）")}>
               <input type="number" min="1" max="10" value={editGoal.priority??5}
                 onChange={e => { const raw = e.target.value; setEditGoal(p => ({ ...p, priority: raw === "" ? "" : Math.max(1,Math.min(10,parseInt(raw,10)||1)) })); }}
                 onBlur={() => setEditGoal(p => ({ ...p, priority: p.priority === "" || p.priority == null ? 5 : p.priority }))}
@@ -219,38 +219,38 @@ export default function OtherModals({
             </Fld>
           )}
           {editGoal.goalType === "sinking" && (
-            <Fld label="🔁 定期定額（選填）">
+            <Fld label={`🔁 ${tr("定期定額（選填）")}`}>
               <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
-                設定後，每個月會固定幫你排這筆金額去存這個目標，不用每次都跑去「智慧分流」手動套用。可以是固定金額，也可以是「每月買幾股某支股票」讓系統照股價換算。什麼都不填的話，系統會自己抓「還差多少÷剩幾個月」估一個節奏。
+                {tr("設定後，每個月會固定幫你排這筆金額去存這個目標，不用每次都跑去「智慧分流」手動套用。可以是固定金額，也可以是「每月買幾股某支股票」讓系統照股價換算。什麼都不填的話，系統會自己抓「還差多少÷剩幾個月」估一個節奏。")}
               </div>
               <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 固定金額</button>
-                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 股數（股價變動自動換算）</button>
+                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 {tr("固定金額")}</button>
+                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 {tr("股數（股價變動自動換算）")}</button>
               </div>
               {(() => {
                 const amt = goalRecurringAmount(editGoal);
-                if (!(amt > 0)) return <div style={{ fontSize:11, color:C.muted, marginBottom:8, padding:"6px 10px", borderRadius:8, background:C.card }}>目前沒有生效中的定期定額（還沒設定，或排程還沒到起始月份）</div>;
+                if (!(amt > 0)) return <div style={{ fontSize:11, color:C.muted, marginBottom:8, padding:"6px 10px", borderRadius:8, background:C.card }}>{tr("目前沒有生效中的定期定額（還沒設定，或排程還沒到起始月份）")}</div>;
                 const shares = editGoal.recurringMode==="shares" ? scheduledRecurringValue(editGoal, TODAY.slice(0,7)) : null;
-                return <div style={{ fontSize:12, fontWeight:700, color:C.accentL, marginBottom:8, padding:"8px 10px", borderRadius:8, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>📌 這個月生效中：{editGoal.recurringMode==="shares" ? `約 ${shares ?? "—"} 股（≈${fmt(amt)}）` : fmt(amt)}／月</div>;
+                return <div style={{ fontSize:12, fontWeight:700, color:C.accentL, marginBottom:8, padding:"8px 10px", borderRadius:8, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>📌 {tr("這個月生效中")}：{editGoal.recurringMode==="shares" ? `~ ${shares ?? "—"} ${tr("股")}（≈${fmt(amt)}）` : fmt(amt)}／{tr("月")}</div>;
               })()}
               {editGoal.recurringMode === "shares" ? (
                 <div>
                   <div style={{ display:"flex", gap:6, marginBottom:6 }}>
                     <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                      <option value="">— 選股票 —</option>
+                      <option value="">— {tr("選股票")} —</option>
                       {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder="自訂股價（選填）" onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
+                    <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder={tr("自訂股價（選填）")} onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
                   </div>
                   <div style={{ fontSize:10, color:C.muted, marginBottom:6, lineHeight:1.6 }}>
-                    選了股票代號的話，下面「計算哪些帳戶」就算選了整個證券戶，這個目標的進度只會算「透過這個目標買的股數」（自動執行確認買進、或手動買進時有標記這個目標的），不會把帳戶裡其他股票、或同一支股票但沒標記這個目標的持股算進來——同一個證券戶、甚至同一支股票，都可以分給好幾個目標各自追蹤各自的份。
+                    {tr("選了股票代號的話，下面「計算哪些帳戶」就算選了整個證券戶，這個目標的進度只會算「透過這個目標買的股數」（自動執行確認買進、或手動買進時有標記這個目標的），不會把帳戶裡其他股票、或同一支股票但沒標記這個目標的持股算進來——同一個證券戶、甚至同一支股票，都可以分給好幾個目標各自追蹤各自的份。")}
                   </div>
                 </div>
               ) : null}
               <RecurringScheduleEditor editGoal={editGoal} setEditGoal={setEditGoal} C={C} iSt={iSt} />
             </Fld>
           )}
-          <Fld label="計算哪些帳戶（不選則用總資產）">
+          <Fld label={tr("計算哪些帳戶（不選則用總資產）")}>
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {accs.filter(a => a.type !== "credit").map(a => (
                 <button key={a.id} onClick={() => setEditGoal(p => ({ ...p, accIds:(p.accIds||[]).includes(a.id)?p.accIds.filter(x=>x!==a.id):[...(p.accIds||[]), a.id] }))}
@@ -308,70 +308,70 @@ export default function OtherModals({
             </button>
           )}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個目標的修改？", () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }, "確認編輯")}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這個目標的修改？"), () => { upd("goals", p => p.map(x => x.id===editGoal.id ? editGoal : x)); close(); }, tr("確認編輯"))}>{tr("儲存")}</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
           {showGoalEP && <EmojiPicker onSelect={e => { setEditGoal(p => ({ ...p, emoji:e })); setShowGoalEP(false); }} onClose={() => setShowGoalEP(false)} />}
         </Sheet>}
 
-        {modal === "addPolicy" && <Sheet title="新增儲蓄保單" onClose={close}>
+        {modal === "addPolicy" && <Sheet title={tr("新增儲蓄保單")} onClose={close}>
           <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, fontSize:12, color:C.accentL, marginBottom:12 }}>
-            🛡️ <strong>怎麼用：</strong> 填入保單基本資料和目前解約金，每年收到保單對帳單後更新一次解約金，就能追蹤損益。
-            <div style={{ marginTop:4, color:C.muted }}>醫療險、意外險等純保障型 → 放「基本開銷」設定每年自動記帳即可。</div>
+            🛡️ <strong>{tr("怎麼用：")}</strong> {tr("填入保單基本資料和目前解約金，每年收到保單對帳單後更新一次解約金，就能追蹤損益。")}
+            <div style={{ marginTop:4, color:C.muted }}>{tr("醫療險、意外險等純保障型 → 放「基本開銷」設定每年自動記帳即可。")}</div>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:8 }}>
             <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nPL.emoji || "🛡️"}</button>
-            <div style={{ flex:1 }}><Inp label="保單名稱" placeholder="例：南山利率變動型年金" value={nPL.name} onChange={e => setNPL(p=>({...p,name:e.target.value}))} /></div>
+            <div style={{ flex:1 }}><Inp label={tr("保單名稱")} placeholder={tr("例：南山利率變動型年金")} value={nPL.name} onChange={e => setNPL(p=>({...p,name:e.target.value}))} /></div>
           </div>
-          <Inp label="保險公司" placeholder="例：南山人壽" value={nPL.insurer} onChange={e => setNPL(p=>({...p,insurer:e.target.value}))} />
+          <Inp label={tr("保險公司")} placeholder={tr("例：南山人壽")} value={nPL.insurer} onChange={e => setNPL(p=>({...p,insurer:e.target.value}))} />
           <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8 }}>
-            <CalcInp label="目前解約金（現值，每年更新）" value={nPL.surrenderVal} onChange={v => setNPL(p=>({...p,surrenderVal:v}))} />
-            <Fld label="幣別"><select value={nPL.cur||"TWD"} onChange={e=>setNPL(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
+            <CalcInp label={tr("目前解約金（現值，每年更新）")} value={nPL.surrenderVal} onChange={v => setNPL(p=>({...p,surrenderVal:v}))} />
+            <Fld label={tr("幣別")}><select value={nPL.cur||"TWD"} onChange={e=>setNPL(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
           </div>
-          <CalcInp label="已繳總保費（到目前為止，同幣別）" value={nPL.totalPaid||""} onChange={v => setNPL(p=>({...p,totalPaid:+v}))} />
-          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 儲蓄險每年保費可能不同，請直接填截至今日的累計總額</div>
+          <CalcInp label={tr("已繳總保費（到目前為止，同幣別）")} value={nPL.totalPaid||""} onChange={v => setNPL(p=>({...p,totalPaid:+v}))} />
+          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 {tr("儲蓄險每年保費可能不同，請直接填截至今日的累計總額")}</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Fld label="起保日期"><input type="date" value={nPL.startDate} onChange={e=>setNPL(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
-            <Fld label="到期日（選填）"><input type="date" value={nPL.maturityDate} onChange={e=>setNPL(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label={tr("起保日期")}><input type="date" value={nPL.startDate} onChange={e=>setNPL(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label={tr("到期日（選填）")}><input type="date" value={nPL.maturityDate} onChange={e=>setNPL(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addPolicy}>新增</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={addPolicy}>{tr("新增")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
           {showGoalEP && <EmojiPicker onSelect={e=>{setNPL(p=>({...p,emoji:e}));setShowGoalEP(false);}} onClose={()=>setShowGoalEP(false)} />}
         </Sheet>}
 
-        {modal === "editPolicy" && selPolicy && <Sheet title="更新保單" onClose={close}>
+        {modal === "editPolicy" && selPolicy && <Sheet title={tr("更新保單")} onClose={close}>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:8 }}>
             <button onClick={() => setShowGoalEP(true)} style={{ width:48, height:48, borderRadius:12, background:C.card, border:`2px solid ${C.accent}`, fontSize:24, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{selPolicy.emoji||"🛡️"}</button>
-            <div style={{ flex:1 }}><Inp label="保單名稱" value={selPolicy.name} onChange={e=>setSelPolicy(p=>({...p,name:e.target.value}))} /></div>
+            <div style={{ flex:1 }}><Inp label={tr("保單名稱")} value={selPolicy.name} onChange={e=>setSelPolicy(p=>({...p,name:e.target.value}))} /></div>
           </div>
-          <Inp label="保險公司" value={selPolicy.insurer||""} onChange={e=>setSelPolicy(p=>({...p,insurer:e.target.value}))} />
+          <Inp label={tr("保險公司")} value={selPolicy.insurer||""} onChange={e=>setSelPolicy(p=>({...p,insurer:e.target.value}))} />
           <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8 }}>
-            <CalcInp label="目前解約金（現值）" value={String(selPolicy.surrenderVal||"")} onChange={v=>setSelPolicy(p=>({...p,surrenderVal:+v}))} />
-            <Fld label="幣別"><select value={selPolicy.cur||"TWD"} onChange={e=>setSelPolicy(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
+            <CalcInp label={tr("目前解約金（現值）")} value={String(selPolicy.surrenderVal||"")} onChange={v=>setSelPolicy(p=>({...p,surrenderVal:+v}))} />
+            <Fld label={tr("幣別")}><select value={selPolicy.cur||"TWD"} onChange={e=>setSelPolicy(p=>({...p,cur:e.target.value}))} style={iSt}>{ALL_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
           </div>
-          <CalcInp label="已繳總保費（累計，同幣別）" value={String(selPolicy.totalPaid||"")} onChange={v=>setSelPolicy(p=>({...p,totalPaid:+v}))} />
-          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 每年收到對帳單後更新解約金和已繳總額</div>
+          <CalcInp label={tr("已繳總保費（累計，同幣別）")} value={String(selPolicy.totalPaid||"")} onChange={v=>setSelPolicy(p=>({...p,totalPaid:+v}))} />
+          <div style={{ fontSize:11, color:C.muted, marginBottom:8 }}>💡 {tr("每年收到對帳單後更新解約金和已繳總額")}</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Fld label="起保日期"><input type="date" value={selPolicy.startDate||TODAY} onChange={e=>setSelPolicy(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
-            <Fld label="到期日"><input type="date" value={selPolicy.maturityDate||""} onChange={e=>setSelPolicy(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label={tr("起保日期")}><input type="date" value={selPolicy.startDate||TODAY} onChange={e=>setSelPolicy(p=>({...p,startDate:e.target.value}))} style={iSt} /></Fld>
+            <Fld label={tr("到期日")}><input type="date" value={selPolicy.maturityDate||""} onChange={e=>setSelPolicy(p=>({...p,maturityDate:e.target.value}))} style={iSt} /></Fld>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張保單的修改？", () => { upd("policies", p=>p.map(x=>x.id===selPolicy.id?selPolicy:x)); close(); }, "確認編輯")}>儲存</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這張保單的修改？"), () => { upd("policies", p=>p.map(x=>x.id===selPolicy.id?selPolicy:x)); close(); }, tr("確認編輯"))}>{tr("儲存")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
           {showGoalEP && <EmojiPicker onSelect={e=>{setSelPolicy(p=>({...p,emoji:e}));setShowGoalEP(false);}} onClose={()=>setShowGoalEP(false)} />}
         </Sheet>}
 
         {modal === "payPremium" && selPolicy && (() => {
-          return <Sheet title={`繳保費 — ${selPolicy.name}`} onClose={close}>
+          return <Sheet title={`${tr("繳保費")} — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
-              <div style={{ fontSize:13, color:C.textSub }}>幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> 已繳總額：<strong style={{ color:C.text }}>{selPolicy.cur&&selPolicy.cur!=="TWD"?`${selPolicy.cur} `:"NT$"}{(selPolicy.totalPaid||0).toLocaleString()}</strong></div>
+              <div style={{ fontSize:13, color:C.textSub }}>{tr("幣別")}：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> {tr("已繳總額")}：<strong style={{ color:C.text }}>{selPolicy.cur&&selPolicy.cur!=="TWD"?`${selPolicy.cur} `:"NT$"}{(selPolicy.totalPaid||0).toLocaleString()}</strong></div>
             </div>
-            <CalcInp label={`本次繳費金額（${selPolicy.cur||"TWD"}）`} value={premAmt} onChange={v => setPremAmt(v)} />
-            <Sl label="從哪個帳戶扣款" value={premAcc} onChange={e => setPremAcc(e.target.value)}>
-              <option value="">— 選擇帳戶 —</option>
+            <CalcInp label={`${tr("本次繳費金額")}（${selPolicy.cur||"TWD"}）`} value={premAmt} onChange={v => setPremAmt(v)} />
+            <Sl label={tr("從哪個帳戶扣款")} value={premAcc} onChange={e => setPremAcc(e.target.value)}>
+              <option value="">— {tr("選擇帳戶")} —</option>
               {accs.filter(a=>a.type!=="credit"&&a.type!=="investment").map(a=><option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name} ({fmt(a.bal,a.cur)})</option>)}
             </Sl>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
@@ -384,10 +384,10 @@ export default function OtherModals({
                   if (acc?.type==="credit") upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, payable:(a.payable||0)+amt} : a));
                   else upd("accs", p=>p.map(a=>a.name===premAcc ? {...a, bal:a.bal-amt} : a));
                 }
-                upd("txns", p=>[...p, { id:Date.now(), type:"expense", cat:"保費", amt, desc:`${selPolicy.name} 保費`, acc:premAcc||"", date:TODAY, tags:"#保單" }]);
+                upd("txns", p=>[...p, { id:Date.now(), type:"expense", cat:"保費", amt, desc:`${selPolicy.name} ${tr("保費")}`, acc:premAcc||"", date:TODAY, tags:"#保單" }]);
                 setPremAmt(""); setPremAcc(""); close();
-              }}>確認繳費</Btn>
-              <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+              }}>{tr("確認繳費")}</Btn>
+              <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
             </div>
           </Sheet>;
         })()}
@@ -398,25 +398,25 @@ export default function OtherModals({
           const surrenderTWD = toTWD(+surrenderAmt||0, selPolicy.cur||"TWD", rates);
           const totalPaidTWD = toTWD(totalPaid, selPolicy.cur||"TWD", rates);
           const pnl = surrenderTWD - totalPaidTWD;
-          return <Sheet title={`解約 — ${selPolicy.name}`} onClose={close}>
+          return <Sheet title={`${tr("解約")} — ${selPolicy.name}`} onClose={close}>
             <div style={{ padding:12, borderRadius:12, background:C.card, marginBottom:12 }}>
               <div style={{ fontSize:13, color:C.textSub }}>
-                幣別：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> 
-                已繳總保費：<strong style={{ color:C.text }}>{isForeign?`${selPolicy.cur} `:""}{totalPaid.toLocaleString()}</strong>
+                {tr("幣別")}：<strong style={{ color:C.accentL }}>{selPolicy.cur||"TWD"}</strong> 
+                {tr("已繳總保費")}：<strong style={{ color:C.text }}>{isForeign?`${selPolicy.cur} `:""}{totalPaid.toLocaleString()}</strong>
                 {isForeign && <span style={{ color:C.muted }}> ≈ {fmt(totalPaidTWD)}</span>}
               </div>
             </div>
-            <CalcInp label={`實際領回金額（${selPolicy.cur||"TWD"}）`} value={surrenderAmt} onChange={v => setSurrenderAmt(v)} />
+            <CalcInp label={`${tr("實際領回金額")}（${selPolicy.cur||"TWD"}）`} value={surrenderAmt} onChange={v => setSurrenderAmt(v)} />
             {surrenderAmt && <div style={{ padding:"10px 12px", borderRadius:10, background:`${pnlColor(pnl,C)}15`, marginBottom:8 }}>
               <div style={{ fontSize:13, fontWeight:900, color:pnlColor(pnl,C) }}>
-                {pnl >= 0 ? "▲ 獲利" : "▼ 虧損"} {fmt(Math.abs(pnl))}
+                {pnl >= 0 ? `▲ ${tr("獲利")}` : `▼ ${tr("虧損")}`} {fmt(Math.abs(pnl))}
               </div>
               <div style={{ fontSize:11, color:C.muted }}>
-                領回 {isForeign?`${selPolicy.cur} `:""}{(+surrenderAmt).toLocaleString()}{isForeign?` ≈ ${fmt(surrenderTWD)}`:""} − 已繳 {fmt(totalPaidTWD)}
+                {tr("領回")} {isForeign?`${selPolicy.cur} `:""}{(+surrenderAmt).toLocaleString()}{isForeign?` ≈ ${fmt(surrenderTWD)}`:""} − {tr("已繳")} {fmt(totalPaidTWD)}
               </div>
             </div>}
-            <Sl label="款項存入哪個帳戶" value={surrenderAcc} onChange={e => setSurrenderAcc(e.target.value)}>
-              <option value="">— 選擇帳戶 —</option>
+            <Sl label={tr("款項存入哪個帳戶")} value={surrenderAcc} onChange={e => setSurrenderAcc(e.target.value)}>
+              <option value="">— {tr("選擇帳戶")} —</option>
               {accs.filter(a=>a.type!=="credit"&&a.type!=="investment").map(a=><option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name}</option>)}
             </Sl>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
@@ -426,8 +426,8 @@ export default function OtherModals({
                 const now = Date.now();
                 if (surrenderAcc) upd("accs", p=>p.map(a=>a.name===surrenderAcc ? {...a, bal:a.bal+surrenderTWD} : a));
                 upd("txns", p=>[...p,
-                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaidTWD, desc:`${selPolicy.name} 解約 — 本金回收${isForeign?` (${selPolicy.cur})`:""}`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
-                  ...(pnl !== 0 ? [{ id:now+1, type: pnl > 0 ? "income" : "expense", cat: pnl > 0 ? "投資收益" : "其他", amt: Math.abs(pnl), desc:`${selPolicy.name} 解約 — ${pnl>0?"獲利":"虧損"}${isForeign?` (${selPolicy.cur}換算)`:""}`, acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
+                  { id:now, type:"transfer", cat:"往來帳", amt:totalPaidTWD, desc:`${selPolicy.name} ${tr("解約")} — ${tr("本金回收")}${isForeign?` (${selPolicy.cur})`:""}`, acc:"", toAcc:surrenderAcc||"", date:TODAY, tags:"#保單" },
+                  ...(pnl !== 0 ? [{ id:now+1, type: pnl > 0 ? "income" : "expense", cat: pnl > 0 ? "投資收益" : "其他", amt: Math.abs(pnl), desc:`${selPolicy.name} ${tr("解約")} — ${pnl>0?tr("獲利"):tr("虧損")}${isForeign?` (${selPolicy.cur}${tr("換算")})`:""}`, acc: surrenderAcc||"", date:TODAY, tags:"#保單" }] : []),
                 ]);
                 upd("policies", p=>p.filter(x=>x.id!==selPolicy.id));
                 setSurrenderAmt(""); setSurrenderAcc(""); close();

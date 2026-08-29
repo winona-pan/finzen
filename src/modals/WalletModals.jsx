@@ -26,7 +26,7 @@ export default function WalletModals({
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, PL0,
   // 共用 UI atoms 與資料
-  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card, SwipeRow
+  CUR_NAME, Sheet, Inp, Sl, Fld, CalcInp, CatPicker, Btn, EmojiPicker, TP, DatePicker, ConfirmDialog, Card, SwipeRow, tr
 }) {
 
   /* ── 局部狀態 ── */
@@ -44,10 +44,29 @@ export default function WalletModals({
   useEffect(() => { setAccDetailMonth(null); }, [selAcc?.id]);
   const closeConfirm = () => setConfirmDlg(null);
 
-  /* ── 信用卡繳費處理 ── */
+  /* ── 信用卡繳費處理：扣款來源可能是母帳戶或子帳戶 ── */
   const payCredit = () => {
     const a = +payF.amt; if (!a || !payF.creditId || !payF.fromId) return;
     const creditAcc = accs.find(x => x.id === payF.creditId);
+    if (payF.fromId.startsWith("bucket:")) {
+      const bucketId = payF.fromId.slice(7);
+      const bucket = buckets.find(x => x.id === bucketId);
+      if (!bucket) return;
+      const parentAcc = accs.find(x => x.id === bucket.accId);
+      upd("buckets", p => (p||[]).map(bk => bk.id === bucketId ? { ...bk, allocated: Math.max(0, bk.allocated - a) } : bk));
+      upd("accs", p => p.map(ac => {
+        if (ac.id === payF.creditId) return { ...ac, payable: Math.max(0, (ac.payable || 0) - a) };
+        if (ac.id === parentAcc?.id) return { ...ac, bal: ac.bal - a };
+        return ac;
+      }));
+      upd("txns", p => [...p, {
+        id: Date.now(), type: "transfer", cat: "帳戶調整", amt: a,
+        desc: payF.note || "信用卡繳費",
+        acc: `${parentAcc?.name||""}・${bucket.name}`, toAcc: creditAcc?.name || "", date: payF.date, tags: "#繳費"
+      }]);
+      setPayF({ creditId: "", fromId: "", amt: "", date: TODAY, note: "" }); close();
+      return;
+    }
     const fromAcc = accs.find(x => x.id === payF.fromId);
     upd("accs", p => p.map(ac => { 
       if (ac.id === payF.creditId) return { ...ac, payable: Math.max(0, (ac.payable || 0) - a) }; 
@@ -64,14 +83,14 @@ export default function WalletModals({
 
   return (
     <>
-        {modal === "addAccType" && <Sheet title="新增項目" onClose={close}>
+        {modal === "addAccType" && <Sheet title={tr("新增項目")} onClose={close}>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {[
-              { icon:"💰", label:"現金帳戶", sub:"錢包現金", cb:() => { setNAcc({...nAcc, type:"cash"}); setModal("addAcc"); } },
-              { icon:"🏦", label:"金融卡帳戶", sub:"銀行存款、活存", cb:() => { setNAcc({...nAcc, type:"debit"}); setModal("addAcc"); } },
-              { icon:"📊", label:"證券帳戶", sub:"股票投資帳戶", cb:() => { setNAcc({...nAcc, type:"investment"}); setModal("addAcc"); } },
-              { icon:"💳", label:"信用卡", sub:"記錄應付帳款", cb:() => { setNAcc({...nAcc, type:"credit"}); setModal("addAcc"); } },
-              { icon:"🛡️", label:"儲蓄保單", sub:"儲蓄險、投資型保單（追蹤解約金損益）", cb:() => { setNPL(PL0); setModal("addPolicy"); } },
+              { icon:"💰", label:tr("現金帳戶"), sub:tr("錢包現金"), cb:() => { setNAcc({...nAcc, type:"cash"}); setModal("addAcc"); } },
+              { icon:"🏦", label:tr("金融卡帳戶"), sub:tr("銀行存款、活存"), cb:() => { setNAcc({...nAcc, type:"debit"}); setModal("addAcc"); } },
+              { icon:"📊", label:tr("證券帳戶"), sub:tr("股票投資帳戶"), cb:() => { setNAcc({...nAcc, type:"investment"}); setModal("addAcc"); } },
+              { icon:"💳", label:tr("信用卡"), sub:tr("記錄應付帳款"), cb:() => { setNAcc({...nAcc, type:"credit"}); setModal("addAcc"); } },
+              { icon:"🛡️", label:tr("儲蓄保單"), sub:tr("儲蓄險、投資型保單（追蹤解約金損益）"), cb:() => { setNPL(PL0); setModal("addPolicy"); } },
             ].map((item, i) => (
               <button key={i} onClick={() => { close(); setTimeout(item.cb, 50); }}
                 style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", borderRadius:14, background:C.card, border:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left", width:"100%" }}>
@@ -86,24 +105,24 @@ export default function WalletModals({
           </div>
         </Sheet>}
 
-        {modal === "addAcc" && <Sheet title="新增帳戶" onClose={close}>
-          <Inp label="帳戶名稱" placeholder="玉山銀行" value={nAcc.name} onChange={e => setNAcc(p => ({ ...p, name:e.target.value }))} />
-          <Sl label="帳戶類型" value={nAcc.type} onChange={e => setNAcc(p => ({ ...p, type:e.target.value }))}>
-            <option value="cash">💰 現金</option>
-            <option value="debit">🏦 金融卡</option>
-            <option value="investment">📊 證券帳戶</option>
-            <option value="credit">💳 信用卡</option>
+        {modal === "addAcc" && <Sheet title={tr("新增帳戶")} onClose={close}>
+          <Inp label={tr("帳戶名稱")} placeholder="玉山銀行" value={nAcc.name} onChange={e => setNAcc(p => ({ ...p, name:e.target.value }))} />
+          <Sl label={tr("帳戶類型")} value={nAcc.type} onChange={e => setNAcc(p => ({ ...p, type:e.target.value }))}>
+            <option value="cash">💰 {tr("現金")}</option>
+            <option value="debit">🏦 {tr("金融卡")}</option>
+            <option value="investment">📊 {tr("證券帳戶")}</option>
+            <option value="credit">💳 {tr("信用卡")}</option>
           </Sl>
-          <Fld label="幣別">
-            <input placeholder="搜尋幣別（如 USD、EUR、日圓）" value={curSearch} onChange={e => setCurSearch(e.target.value)} style={{ ...iSt, marginBottom:6 }} />
+          <Fld label={tr("幣別")}>
+            <input placeholder={tr("搜尋幣別（如 USD、EUR、日圓）")} value={curSearch} onChange={e => setCurSearch(e.target.value)} style={{ ...iSt, marginBottom:6 }} />
             <select value={nAcc.cur} onChange={e => setNAcc(p => ({ ...p, cur:e.target.value }))} style={iSt}>
               {ALL_CURS.filter(c => !curSearch || c.toLowerCase().includes(curSearch.toLowerCase()) || (CUR_NAME[c] || "").includes(curSearch)).map(c => <option key={c} value={c}>{c} {CUR_NAME[c] || ""} (1{c}≈{toTWD(1, c, rates) >= 1 ? toTWD(1, c, rates).toFixed(2) : toTWD(1, c, rates).toFixed(4)} TWD)</option>)}
             </select>
           </Fld>
-          {nAcc.type === "credit" && <Inp label="信用額度" type="number" value={nAcc.limit} onChange={e => setNAcc(p => ({ ...p, limit:e.target.value }))} />}
+          {nAcc.type === "credit" && <Inp label={tr("信用額度")} type="number" value={nAcc.limit} onChange={e => setNAcc(p => ({ ...p, limit:e.target.value }))} />}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addAccFn}>新增</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={addAccFn}>{tr("新增")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
         </Sheet>}
 
@@ -111,27 +130,27 @@ export default function WalletModals({
           const isFirst = selAcc.bal === 0 && !txns.some(t => t.acc === selAcc.name);
           const moAdj = moTxns.filter(t => t.cat === "帳戶調整" && t.acc === selAcc.name);
           const moAdjTotal = moAdj.reduce((s, t) => s + (t.adjDiff || 0), 0);
-          return <Sheet title={`編輯帳戶 — ${selAcc.name}`} onClose={close}>
-            <Fld label="圖示（點擊更換）">
+          return <Sheet title={`${tr("編輯帳戶")} — ${selAcc.name}`} onClose={close}>
+            <Fld label={tr("圖示（點擊更換）")}>
               <button onClick={() => setShowAccEP(true)} style={{ width:56, height:56, borderRadius:16, background:C.card, border:`2px solid ${C.accent}`, fontSize:28, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                 {selAcc.icon || AT[selAcc.type] || "💳"}
               </button>
             </Fld>
-            <Inp label="帳戶名稱" value={selAcc.name} onChange={e => setSelAcc(p => ({ ...p, name:e.target.value }))} />
-            <Fld label="帳戶類型"><div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {[{ v:"cash", l:"💰 現金" }, { v:"debit", l:"🏦 金融卡" }, { v:"investment", l:"📊 證券" }, { v:"credit", l:"💳 信用卡" }].map(o => <button key={o.v} onClick={() => setSelAcc(p => ({ ...p, type:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:selAcc.type === o.v ? `${C.accent}30` : C.card, color:selAcc.type === o.v ? C.accentL : C.muted, border:`1px solid ${selAcc.type === o.v ? C.accent : C.border}`, cursor:"pointer", minWidth:60 }}>{o.l}</button>)}
+            <Inp label={tr("帳戶名稱")} value={selAcc.name} onChange={e => setSelAcc(p => ({ ...p, name:e.target.value }))} />
+            <Fld label={tr("帳戶類型")}><div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {[{ v:"cash", l:`💰 ${tr("現金")}` }, { v:"debit", l:`🏦 ${tr("金融卡")}` }, { v:"investment", l:`📊 ${tr("證券")}` }, { v:"credit", l:`💳 ${tr("信用卡")}` }].map(o => <button key={o.v} onClick={() => setSelAcc(p => ({ ...p, type:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:selAcc.type === o.v ? `${C.accent}30` : C.card, color:selAcc.type === o.v ? C.accentL : C.muted, border:`1px solid ${selAcc.type === o.v ? C.accent : C.border}`, cursor:"pointer", minWidth:60 }}>{o.l}</button>)}
             </div></Fld>
             <div style={{ borderRadius:14, padding:16, marginBottom:12, background:C.surface }}>
               <div style={{ display:"flex", justifyContent:"space-between" }}>
-                <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>目前餘額</div><div style={{ fontWeight:900, fontSize:24, color:C.accentL }}>{fmt(selAcc.bal, selAcc.cur)}</div></div>
-                {moAdjTotal !== 0 && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>本月已調整</div><div style={{ fontWeight:700, fontSize:15, color:moAdjTotal > 0 ? C.income : C.expense }}>{moAdjTotal > 0 ? "+" : ""}{fmt(moAdjTotal, selAcc.cur)}</div></div>}
+                <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("目前餘額")}</div><div style={{ fontWeight:900, fontSize:24, color:C.accentL }}>{fmt(selAcc.bal, selAcc.cur)}</div></div>
+                {moAdjTotal !== 0 && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("本月已調整")}</div><div style={{ fontWeight:700, fontSize:15, color:moAdjTotal > 0 ? C.income : C.expense }}>{moAdjTotal > 0 ? "+" : ""}{fmt(moAdjTotal, selAcc.cur)}</div></div>}
               </div>
             </div>
-            <Inp label="輸入新餘額" type="number" value={newBal} onChange={e => setNewBal(e.target.value)} placeholder={String(selAcc.bal)} />
-            {newBal && +newBal !== selAcc.bal && <Inp label="調整說明（選填）" placeholder="例：現金盤點差異" value={adjDesc} onChange={e => setAdjDesc(e.target.value)} />}
+            <Inp label={tr("輸入新餘額")} type="number" value={newBal} onChange={e => setNewBal(e.target.value)} placeholder={String(selAcc.bal)} />
+            {newBal && +newBal !== selAcc.bal && <Inp label={tr("調整說明（選填）")} placeholder={tr("例：現金盤點差異")} value={adjDesc} onChange={e => setAdjDesc(e.target.value)} />}
             {newBal && +newBal !== selAcc.bal && <div style={{ marginBottom:12, padding:12, borderRadius:10, fontSize:14, fontWeight:700, background:C.card, border:`1px solid ${C.borderL}` }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}><span style={{ color:C.textSub }}>調整金額</span><span style={{ color:+newBal > selAcc.bal ? C.income : C.expense, fontWeight:900 }}>{+newBal > selAcc.bal ? "+" : ""}{fmt(+newBal - selAcc.bal, selAcc.cur)}</span></div>
-              <div style={{ fontSize:12, color:isFirst ? C.teal : C.muted }}>{isFirst ? "✅ 初次設定，不計入收支" : "📝 調整記錄只用於對帳，不計入收支"}</div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}><span style={{ color:C.textSub }}>{tr("調整金額")}</span><span style={{ color:+newBal > selAcc.bal ? C.income : C.expense, fontWeight:900 }}>{+newBal > selAcc.bal ? "+" : ""}{fmt(+newBal - selAcc.bal, selAcc.cur)}</span></div>
+              <div style={{ fontSize:12, color:isFirst ? C.teal : C.muted }}>{isFirst ? `✅ ${tr("初次設定，不計入收支")}` : `📝 ${tr("調整記錄只用於對帳，不計入收支")}`}</div>
             </div>}
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
@@ -141,7 +160,7 @@ export default function WalletModals({
               }}>{isFirst && newBal && +newBal !== selAcc.bal ? "設為初始金額" : "儲存"}</Btn>
               <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
             </div>
-            <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此帳戶</Btn>
+            <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`${tr("確定刪除")}「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 {tr("刪除此帳戶")}</Btn>
             {showAccEP && <EmojiPicker onSelect={e => { setSelAcc(p => ({ ...p, icon:e })); setShowAccEP(false); }} onClose={() => setShowAccEP(false)} />}
           </Sheet>;
         })()}
@@ -151,16 +170,16 @@ export default function WalletModals({
           <Inp label="信用額度" type="number" value={selAcc.limit || ""} onChange={e => setSelAcc(p => ({ ...p, limit:+e.target.value }))} />
           <Inp label="目前應付金額" type="number" value={selAcc.payable != null ? String(selAcc.payable) : "0"} onChange={e => setSelAcc(p => ({ ...p, payable:+e.target.value }))} />
           <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這張信用卡的修改？", () => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); }, "確認編輯")}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這張信用卡的修改？"), () => { upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, limit:selAcc.limit, payable:selAcc.payable } : a)); close(); }, tr("確認編輯"))}>{tr("儲存")}</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
-          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 刪除此信用卡</Btn>
+          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`${tr("確定刪除")}「${selAcc.name}」？`, () => { upd("accs", p => p.filter(a => a.id !== selAcc.id)); upd("buckets", p => (p||[]).filter(b => b.accId !== selAcc.id)); close(); })}>🗑 {tr("刪除此信用卡")}</Btn>
         </Sheet>}
 
         {modal === "payCred" && <Sheet title="信用卡繳費 / Pay" onClose={close}>
           <Fld label="Date（日期）"><input type="date" value={payF.date} onChange={e => setPayF(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           <Sl label="信用卡 (To)" value={payF.creditId} onChange={e => { const c = accs.find(a => a.id === e.target.value); setPayF(p => ({ ...p, creditId:e.target.value, amt:String(c?.payable || 0) })); }}><option value="">— 選擇 —</option>{accs.filter(a => a.type === "credit").map(c => <option key={c.id} value={c.id}>{c.name}（應付 {fmt(c.payable)}）</option>)}</Sl>
-          <Sl label="From（扣款帳戶）" value={payF.fromId} onChange={e => setPayF(p => ({ ...p, fromId:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.id}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
+          <Sl label="From（扣款帳戶）" value={payF.fromId} onChange={e => setPayF(p => ({ ...p, fromId:e.target.value }))}><option value="">— 選擇 —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.id}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name} ({fmt(b.allocated)})</option>)}</optgroup>}</Sl>
           <CalcInp label="Amount（金額）" value={payF.amt} onChange={v => setPayF(p => ({ ...p, amt:v }))} />
           <Inp label="Note（備註）" placeholder="4月卡費" value={payF.note} onChange={e => setPayF(p => ({ ...p, note:e.target.value }))} />
           <div style={{ display:"flex", gap:8, marginTop:12 }}>
@@ -206,7 +225,7 @@ export default function WalletModals({
                       <button onClick={() => setEditingBucketId(null)} style={{ padding:"6px 10px", borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer", flexShrink:0 }}>完成</button>
                     </div>
                   ) : (
-                    <SwipeRow onDelete={() => confirm(`刪除子帳戶「${b.name}」？`, () => deleteBucket(b.id))} onClick={() => setEditingBucketId(b.id)}>
+                    <SwipeRow onDelete={() => confirm(`${tr("刪除子帳戶")}「${b.name}」？`, () => deleteBucket(b.id))} onClick={() => setEditingBucketId(b.id)}>
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderBottom:`1px solid ${C.border}`, opacity:b.vis===false?0.5:1, cursor:"pointer" }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:`${C.border}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{b.emoji}</div>
                         <div style={{ flex:1, fontWeight:700, fontSize:13, color:C.text }}>{b.name}{b.vis===false && <span style={{ fontSize:10, fontWeight:400, color:C.muted, marginLeft:6 }}>不計入資產</span>}</div>
@@ -281,13 +300,13 @@ export default function WalletModals({
 
         {confirmDlg && <ConfirmDialog msg={confirmDlg.msg} onOk={() => { confirmDlg.onOk(); closeConfirm(); }} onCancel={closeConfirm} />}
 
-        {modal === "addSub" && <Sheet title="新增訂閱" onClose={close}>
-          <Inp label="名稱" placeholder="Netflix" value={nS.name} onChange={e => setNS(p => ({ ...p, name:e.target.value }))} />
-          <CalcInp label="金額" value={nS.amt} onChange={v => setNS(p => ({ ...p, amt:v }))} />
-          <Sl label="扣款帳戶" value={nS.acc} onChange={e => setNS(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <Fld label="扣款頻率">
+        {modal === "addSub" && <Sheet title={tr("新增訂閱")} onClose={close}>
+          <Inp label={tr("名稱")} placeholder="Netflix" value={nS.name} onChange={e => setNS(p => ({ ...p, name:e.target.value }))} />
+          <CalcInp label={tr("金額")} value={nS.amt} onChange={v => setNS(p => ({ ...p, amt:v }))} />
+          <Sl label={tr("扣款帳戶")} value={nS.acc} onChange={e => setNS(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
+          <Fld label={tr("扣款頻率")}>
             <div style={{ display:"flex", gap:8 }}>
-              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+              {[{v:"month",l:tr("每月")},{v:"week",l:tr("每週")},{v:"year",l:tr("每年")}].map(o => (
                 <button key={o.v} onClick={() => setNS(p=>({...p,freq:o.v}))}
                   style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
                     background:nS.freq===o.v?`${C.accent}28`:C.card, color:nS.freq===o.v?C.accentL:C.muted,
@@ -296,7 +315,7 @@ export default function WalletModals({
             </div>
           </Fld>
           {nS.freq==="week"
-            ? <Fld label="星期幾">
+            ? <Fld label={tr("星期幾")}>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
                   {["日","一","二","三","四","五","六"].map((d,i) => (
                     <button key={i} onClick={() => setNS(p=>({...p,weekday:String(i)}))}
@@ -308,34 +327,34 @@ export default function WalletModals({
               </Fld>
             : nS.freq==="year"
             ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
-                <Fld label="月份"><select value={nS.yearMonth||"1"} onChange={e => setNS(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                <Fld label={tr("月份")}><select value={nS.yearMonth||"1"} onChange={e => setNS(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
                   {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
                 </select></Fld>
-                <Inp label="日期（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p=>({...p,day:e.target.value}))} />
+                <Inp label={tr("日期（幾號）")} type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p=>({...p,day:e.target.value}))} />
               </div>
-            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />}
+            : <Inp label={tr("扣款日（幾號）")} type="number" min="1" max="31" value={nS.day} onChange={e => setNS(p => ({ ...p, day:e.target.value }))} />}
 
           {nS.freq === "year" && (
             <button onClick={() => setNS(p => ({ ...p, deferExpense:!p.deferExpense }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:nS.deferExpense ? `${C.teal}22` : C.card, color:nS.deferExpense ? C.teal : C.textSub, border:`1px solid ${nS.deferExpense ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
               <span>{nS.deferExpense ? "✅" : "⬜"}</span>
-              <span style={{ textAlign:"left" }}>年繳分攤認列（扣款當下不算整筆支出，改成 {nS.amt ? Math.round(+nS.amt/12) : "每月"} 分 12 個月慢慢認列）</span>
+              <span style={{ textAlign:"left" }}>{tr("年繳分攤認列（扣款當下不算整筆支出，改成")} {nS.amt ? Math.round(+nS.amt/12) : tr("每月")} {tr("分 12 個月慢慢認列）")}</span>
             </button>
           )}
 
           <CatPicker value={nS.cat} onChange={v => setNS(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addSub}>新增</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={addSub}>{tr("新增")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
         </Sheet>}
 
-        {modal === "editSub" && selSub && <Sheet title="編輯訂閱" onClose={close}>
-          <Inp label="名稱" value={selSub.name} onChange={e => setSelSub(p => ({ ...p, name:e.target.value }))} />
-          <CalcInp label="金額" value={String(selSub.amt)} onChange={v => setSelSub(p => ({ ...p, amt:+v }))} />
-          <Sl label="扣款帳戶" value={selSub.acc} onChange={e => setSelSub(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <Fld label="扣款頻率">
+        {modal === "editSub" && selSub && <Sheet title={tr("編輯訂閱")} onClose={close}>
+          <Inp label={tr("名稱")} value={selSub.name} onChange={e => setSelSub(p => ({ ...p, name:e.target.value }))} />
+          <CalcInp label={tr("金額")} value={String(selSub.amt)} onChange={v => setSelSub(p => ({ ...p, amt:+v }))} />
+          <Sl label={tr("扣款帳戶")} value={selSub.acc} onChange={e => setSelSub(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
+          <Fld label={tr("扣款頻率")}>
             <div style={{ display:"flex", gap:8 }}>
-              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+              {[{v:"month",l:tr("每月")},{v:"week",l:tr("每週")},{v:"year",l:tr("每年")}].map(o => (
                 <button key={o.v} onClick={() => setSelSub(p=>({...p,freq:o.v}))}
                   style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
                     background:selSub.freq===o.v?`${C.accent}28`:C.card, color:selSub.freq===o.v?C.accentL:C.muted,
@@ -344,7 +363,7 @@ export default function WalletModals({
             </div>
           </Fld>
           {selSub.freq==="week"
-            ? <Fld label="星期幾">
+            ? <Fld label={tr("星期幾")}>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
                   {["日","一","二","三","四","五","六"].map((d,i) => (
                     <button key={i} onClick={() => setSelSub(p=>({...p,weekday:String(i)}))}
@@ -356,35 +375,35 @@ export default function WalletModals({
               </Fld>
             : selSub.freq==="year"
             ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
-                <Fld label="月份"><select value={selSub.yearMonth||"1"} onChange={e => setSelSub(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                <Fld label={tr("月份")}><select value={selSub.yearMonth||"1"} onChange={e => setSelSub(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
                   {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
                 </select></Fld>
-                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p=>({...p,day:+e.target.value}))} />
+                <Inp label={tr("日期（幾號）")} type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p=>({...p,day:+e.target.value}))} />
               </div>
-            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />}
+            : <Inp label={tr("扣款日（幾號）")} type="number" min="1" max="31" value={selSub.day} onChange={e => setSelSub(p => ({ ...p, day:+e.target.value }))} />}
 
           {selSub.freq === "year" && (
             <button onClick={() => setSelSub(p => ({ ...p, deferExpense:!p.deferExpense }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:selSub.deferExpense ? `${C.teal}22` : C.card, color:selSub.deferExpense ? C.teal : C.textSub, border:`1px solid ${selSub.deferExpense ? C.teal : C.border}`, cursor:"pointer", marginBottom:12 }}>
               <span>{selSub.deferExpense ? "✅" : "⬜"}</span>
-              <span style={{ textAlign:"left" }}>年繳分攤認列（下次扣款起分 12 個月慢慢認列）</span>
+              <span style={{ textAlign:"left" }}>{tr("年繳分攤認列（下次扣款起分 12 個月慢慢認列）")}</span>
             </button>
           )}
 
           <CatPicker value={selSub.cat} onChange={v => setSelSub(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這個訂閱的修改？", () => saveSub(selSub), "確認編輯")}>儲存</Btn>
-            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`確定刪除訂閱「${selSub.name}」？連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）`, () => { deleteSub(selSub.id); close(); })}>刪除</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這個訂閱的修改？"), () => saveSub(selSub), tr("確認編輯"))}>{tr("儲存")}</Btn>
+            <Btn v="danger" style={{ flex:1 }} onClick={() => confirm(`${tr("確定刪除訂閱")}「${selSub.name}」？${tr("連動的年繳分攤紀錄也會一起清掉（已經發生過的支出紀錄不會動）")}`, () => { deleteSub(selSub.id); close(); })}>{tr("刪除")}</Btn>
           </div>
         </Sheet>}
 
-        {modal === "addBill" && <Sheet title="新增基本開銷" onClose={close}>
-          <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, fontSize:12, color:C.warn, marginBottom:12 }}>🏠 預設停用，需要時再點開啟</div>
-          <Inp label="名稱" placeholder="電費、水費、房租…" value={nB.name} onChange={e => setNB(p => ({ ...p, name:e.target.value }))} />
-          <CalcInp label="金額" value={nB.amt} onChange={v => setNB(p => ({ ...p, amt:v }))} />
-          <Sl label="扣款帳戶" value={nB.acc} onChange={e => setNB(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <Fld label="扣款頻率">
+        {modal === "addBill" && <Sheet title={tr("新增基本開銷")} onClose={close}>
+          <div style={{ padding:"8px 12px", borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, fontSize:12, color:C.warn, marginBottom:12 }}>🏠 {tr("預設停用，需要時再點開啟")}</div>
+          <Inp label={tr("名稱")} placeholder={tr("電費、水費、房租…")} value={nB.name} onChange={e => setNB(p => ({ ...p, name:e.target.value }))} />
+          <CalcInp label={tr("金額")} value={nB.amt} onChange={v => setNB(p => ({ ...p, amt:v }))} />
+          <Sl label={tr("扣款帳戶")} value={nB.acc} onChange={e => setNB(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
+          <Fld label={tr("扣款頻率")}>
             <div style={{ display:"flex", gap:8 }}>
-              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+              {[{v:"month",l:tr("每月")},{v:"week",l:tr("每週")},{v:"year",l:tr("每年")}].map(o => (
                 <button key={o.v} onClick={() => setNB(p=>({...p,freq:o.v}))}
                   style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
                     background:nB.freq===o.v?`${C.accent}28`:C.card, color:nB.freq===o.v?C.accentL:C.muted,
@@ -393,7 +412,7 @@ export default function WalletModals({
             </div>
           </Fld>
           {nB.freq==="week"
-            ? <Fld label="星期幾">
+            ? <Fld label={tr("星期幾")}>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
                   {["日","一","二","三","四","五","六"].map((d,i) => (
                     <button key={i} onClick={() => setNB(p=>({...p,weekday:String(i)}))}
@@ -405,26 +424,26 @@ export default function WalletModals({
               </Fld>
             : nB.freq==="year"
             ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
-                <Fld label="月份"><select value={nB.yearMonth||"1"} onChange={e => setNB(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                <Fld label={tr("月份")}><select value={nB.yearMonth||"1"} onChange={e => setNB(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
                   {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
                 </select></Fld>
-                <Inp label="日期（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p=>({...p,day:e.target.value}))} />
+                <Inp label={tr("日期（幾號）")} type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p=>({...p,day:e.target.value}))} />
               </div>
-            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />}
+            : <Inp label={tr("扣款日（幾號）")} type="number" min="1" max="31" value={nB.day} onChange={e => setNB(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={nB.cat} onChange={v => setNB(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addBill}>新增</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={addBill}>{tr("新增")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
         </Sheet>}
 
-        {modal === "editBill" && selBill && <Sheet title="編輯基本開銷" onClose={close}>
-          <Inp label="名稱" value={selBill.name} onChange={e => setSelBill(p => ({ ...p, name:e.target.value }))} />
-          <CalcInp label="金額" value={String(selBill.amt)} onChange={v => setSelBill(p => ({ ...p, amt:+v }))} />
-          <Sl label="扣款帳戶" value={selBill.acc} onChange={e => setSelBill(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <Fld label="扣款頻率">
+        {modal === "editBill" && selBill && <Sheet title={tr("編輯基本開銷")} onClose={close}>
+          <Inp label={tr("名稱")} value={selBill.name} onChange={e => setSelBill(p => ({ ...p, name:e.target.value }))} />
+          <CalcInp label={tr("金額")} value={String(selBill.amt)} onChange={v => setSelBill(p => ({ ...p, amt:+v }))} />
+          <Sl label={tr("扣款帳戶")} value={selBill.acc} onChange={e => setSelBill(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
+          <Fld label={tr("扣款頻率")}>
             <div style={{ display:"flex", gap:8 }}>
-              {[{v:"month",l:"每月"},{v:"week",l:"每週"},{v:"year",l:"每年"}].map(o => (
+              {[{v:"month",l:tr("每月")},{v:"week",l:tr("每週")},{v:"year",l:tr("每年")}].map(o => (
                 <button key={o.v} onClick={() => setSelBill(p=>({...p,freq:o.v}))}
                   style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer",
                     background:selBill.freq===o.v?`${C.accent}28`:C.card, color:selBill.freq===o.v?C.accentL:C.muted,
@@ -433,7 +452,7 @@ export default function WalletModals({
             </div>
           </Fld>
           {selBill.freq==="week"
-            ? <Fld label="星期幾">
+            ? <Fld label={tr("星期幾")}>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
                   {["日","一","二","三","四","五","六"].map((d,i) => (
                     <button key={i} onClick={() => setSelBill(p=>({...p,weekday:String(i)}))}
@@ -445,18 +464,18 @@ export default function WalletModals({
               </Fld>
             : selBill.freq==="year"
             ? <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
-                <Fld label="月份"><select value={selBill.yearMonth||"1"} onChange={e => setSelBill(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
+                <Fld label={tr("月份")}><select value={selBill.yearMonth||"1"} onChange={e => setSelBill(p=>({...p,yearMonth:e.target.value}))} style={iSt}>
                   {["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"].map((m,i)=><option key={i} value={String(i+1)}>{m}</option>)}
                 </select></Fld>
-                <Inp label="日期（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
+                <Inp label={tr("日期（幾號）")} type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p=>({...p,day:e.target.value}))} />
               </div>
-            : <Inp label="扣款日（幾號）" type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
+            : <Inp label={tr("扣款日（幾號）")} type="number" min="1" max="31" value={selBill.day} onChange={e => setSelBill(p => ({ ...p, day:e.target.value }))} />}
           <CatPicker value={selBill.cat} onChange={v => setSelBill(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({...p, expense:[...p.expense, v]})); addCustomCE(v,e); }} />
           <div style={{ display:"flex", gap:8, marginTop:8, marginBottom:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆開銷的修改？", saveBill, "確認編輯")}>儲存</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這筆開銷的修改？"), saveBill, tr("確認編輯"))}>{tr("儲存")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
-          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`確定刪除「${selBill.name}」？`, () => { deleteBill(selBill.id); close(); })}>🗑 刪除</Btn>
+          <Btn v="danger" style={{ width:"100%" }} onClick={() => confirm(`${tr("確定刪除")}「${selBill.name}」？`, () => { deleteBill(selBill.id); close(); })}>🗑 {tr("刪除")}</Btn>
         </Sheet>}
 
         {modal === "bucketTransfer" && (() => {
@@ -482,7 +501,7 @@ export default function WalletModals({
               <Btn style={{ flex:1 }} onClick={() => {
                 const f = options.find(o=>o.key===(bkFrom||options[0]?.key)), t = options.find(o=>o.key===bkTo);
                 if (!f || !t || !bkAmt || +bkAmt<=0) return;
-                confirm(`確定從「${f.label}」轉 ${fmt(+bkAmt)} 到「${t.label}」？`, () => {
+                confirm(`${tr("確定從")}「${f.label}」${tr("轉")} ${fmt(+bkAmt)} ${tr("到")}「${t.label}」？`, () => {
                   doTransfer(f.key, t.key, bkAmt);
                   setBkFrom(null); setBkTo(null); setBkAmt(""); close();
                 }, "確認轉帳");

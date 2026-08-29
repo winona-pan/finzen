@@ -4,7 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  updateGoalRecurringSchedule,
+  updateGoalRecurringSchedule, tr,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -102,65 +102,65 @@ export default function TxnModals({
 
   return (
     <>
-        {modal === "addTxn" && <Sheet title="新增 / 補記" onClose={close}>
+        {modal === "addTxn" && <Sheet title={tr("新增 / 補記")} onClose={close}>
           <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-            {[{ v:"expense", l:"支出 💸", c:C.expense }, { v:"income", l:"收入 💰", c:C.income }].map(o => <TP key={o.v} active={nT.type === o.v} color={o.c} onClick={() => setNT(p => ({ ...p, type:o.v, cat:o.v === "income" ? "薪資" : "食物" }))}>{o.l}</TP>)}
+            {[{ v:"expense", l:`${tr("支出")} 💸`, c:C.expense }, { v:"income", l:`${tr("收入")} 💰`, c:C.income }].map(o => <TP key={o.v} active={nT.type === o.v} color={o.c} onClick={() => setNT(p => ({ ...p, type:o.v, cat:o.v === "income" ? "薪資" : "食物" }))}>{o.l}</TP>)}
           </div>
-          <Fld label="分類"><div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+          <Fld label={tr("分類")}><div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
             {(nT.type === "income" ? cats.income : cats.expense).map(cat => <button key={cat} onClick={() => setNT(p => ({ ...p, cat }))} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:nT.cat === cat ? `${C.accent}30` : C.card, border:`1px solid ${nT.cat === cat ? C.accent : C.border}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>{ceMap[cat] || "📦"}</span><span style={{ fontSize:11, color:nT.cat === cat ? C.accentL : C.textSub }}>{cat.length > 3 ? cat.slice(0, 3) + "…" : cat}</span></button>)}
-            <button onClick={() => setModal("catSet")} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>➕</span><span style={{ fontSize:11, color:C.accentL }}>新增</span></button>
+            <button onClick={() => setModal("catSet")} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>➕</span><span style={{ fontSize:11, color:C.accentL }}>{tr("新增")}</span></button>
           </div></Fld>
-          <CalcInp label="金額" value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v }))} />
-          <AutoInput label="說明" placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
-          <AutoInput label="標籤（選填）" placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
-          <Sl label="帳戶" value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— 選擇帳戶 —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
-          <Fld label={`日期${nT.date !== TODAY ? " 📅 補記 " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+          <CalcInp label={tr("金額")} value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v }))} />
+          <AutoInput label={tr("說明")} placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
+          <AutoInput label={tr("標籤（選填）")} placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
+          <Sl label={tr("帳戶")} value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇帳戶")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+          <Fld label={`${tr("日期")}${nT.date !== TODAY ? " 📅 " + tr("補記") + " " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           
           {nT.type === "expense" && <div style={{ marginBottom:12 }}>
             <button onClick={() => setNT(p => ({ ...p, proxy:!p.proxy }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.proxy ? `${C.warn}22` : C.card, color:nT.proxy ? C.warn : C.textSub, border:`1px solid ${nT.proxy ? C.warn : C.border}`, cursor:"pointer" }}>
-              <span>{nT.proxy ? "✅" : "⬜"}</span> 含代墊款項（自動建立應收帳款）
+              <span>{nT.proxy ? "✅" : "⬜"}</span> {tr("含代墊款項（自動建立應收帳款）")}
             </button>
             {nT.proxy && <div style={{ marginTop:8, padding:12, borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}44` }}>
-              {nT.amt && nT.proxyList.length > 1 && <button onClick={() => { const each = Math.round(+nT.amt / nT.proxyList.length); setNT(p => ({ ...p, proxyList:p.proxyList.map(pl => ({ ...pl, amt:String(each) })) })); }} style={{ width:"100%", marginBottom:8, padding:"6px", borderRadius:8, background:`${C.warn}30`, color:C.warn, border:"none", fontSize:12, fontWeight:700, cursor:"pointer" }}>÷ 平均分配（每人 {fmt(Math.round(+nT.amt / nT.proxyList.length))}）</button>}
+              {nT.amt && nT.proxyList.length > 1 && <button onClick={() => { const each = Math.round(+nT.amt / nT.proxyList.length); setNT(p => ({ ...p, proxyList:p.proxyList.map(pl => ({ ...pl, amt:String(each) })) })); }} style={{ width:"100%", marginBottom:8, padding:"6px", borderRadius:8, background:`${C.warn}30`, color:C.warn, border:"none", fontSize:12, fontWeight:700, cursor:"pointer" }}>÷ {tr("平均分配")}（{tr("每人")} {fmt(Math.round(+nT.amt / nT.proxyList.length))}）</button>}
               {nT.proxyList.map((pl, i) => <div key={i} style={{ display:"flex", gap:6, alignItems:"flex-end", marginBottom:8 }}>
-                <div style={{ flex:1 }}><Inp label={`對象 ${i + 1}`} placeholder="朋友A" value={pl.person} onChange={e => setNT(p => ({ ...p, proxyList:p.proxyList.map((x, j) => j === i ? { ...x, person:e.target.value } : x) }))} /></div>
-                <div style={{ flex:1 }}><Inp label="金額" type="number" placeholder="350" value={pl.amt} onChange={e => setNT(p => ({ ...p, proxyList:p.proxyList.map((x, j) => j === i ? { ...x, amt:e.target.value } : x) }))} /></div>
+                <div style={{ flex:1 }}><Inp label={`${tr("對象")} ${i + 1}`} placeholder="朋友A" value={pl.person} onChange={e => setNT(p => ({ ...p, proxyList:p.proxyList.map((x, j) => j === i ? { ...x, person:e.target.value } : x) }))} /></div>
+                <div style={{ flex:1 }}><Inp label={tr("金額")} type="number" placeholder="350" value={pl.amt} onChange={e => setNT(p => ({ ...p, proxyList:p.proxyList.map((x, j) => j === i ? { ...x, amt:e.target.value } : x) }))} /></div>
                 {nT.proxyList.length > 1 && <button onClick={() => setNT(p => ({ ...p, proxyList:p.proxyList.filter((_, j) => j !== i) }))} style={{ width:32, height:38, borderRadius:8, background:C.danger + "22", border:"none", color:C.danger, cursor:"pointer", fontSize:16, marginBottom:12 }}>✕</button>}
               </div>)}
-              <button onClick={() => setNT(p => ({ ...p, proxyList:[...p.proxyList, { person:"", amt:"" }] }))} style={{ width:"100%", padding:"6px", borderRadius:8, background:"transparent", border:`1px dashed ${C.warn}`, color:C.warn, fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ 新增代墊對象</button>
-              <div style={{ fontSize:12, color:C.warn, marginTop:6 }}>✨ 自動在「往來帳」為每位對象建立應收記錄</div>
+              <button onClick={() => setNT(p => ({ ...p, proxyList:[...p.proxyList, { person:"", amt:"" }] }))} style={{ width:"100%", padding:"6px", borderRadius:8, background:"transparent", border:`1px dashed ${C.warn}`, color:C.warn, fontSize:12, fontWeight:700, cursor:"pointer" }}>＋ {tr("新增代墊對象")}</button>
+              <div style={{ fontSize:12, color:C.warn, marginTop:6 }}>✨ {tr("自動在「往來帳」為每位對象建立應收記錄")}</div>
             </div>}
 
             <button onClick={() => setNT(p => ({ ...p, installExp:!p.installExp, installMonths:p.installMonths||"3" }))} style={{ width:"100%", marginTop:8, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.installExp ? `${C.teal}22` : C.card, color:nT.installExp ? C.teal : C.textSub, border:`1px solid ${nT.installExp ? C.teal : C.border}`, cursor:"pointer" }}>
-              <span>{nT.installExp ? "✅" : "⬜"}</span> 分期付款（例：分期買家電）
+              <span>{nT.installExp ? "✅" : "⬜"}</span> {tr("分期付款（例：分期買家電）")}
             </button>
             {nT.installExp && <div style={{ marginTop:8, padding:12, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}44` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                <Inp label="分幾期" type="number" min="2" placeholder="3" value={nT.installMonths||"3"} onChange={e => setNT(p => ({ ...p, installMonths:e.target.value }))} />
+                <Inp label={tr("分幾期")} type="number" min="2" placeholder="3" value={nT.installMonths||"3"} onChange={e => setNT(p => ({ ...p, installMonths:e.target.value }))} />
                 <div>
-                  <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>每期約</div>
+                  <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("每期約")}</div>
                   <div style={{ fontWeight:900, fontSize:15, color:C.teal, padding:"9px 0" }}>{nT.amt && nT.installMonths ? fmt(Math.round(+nT.amt / +nT.installMonths)) : "—"}</div>
                 </div>
               </div>
-              <div style={{ fontSize:12, color:C.teal, marginTop:4 }}>💡 帳戶當下不會整筆扣款，改成每月自動認列一部分支出</div>
+              <div style={{ fontSize:12, color:C.teal, marginTop:4 }}>💡 {tr("帳戶當下不會整筆扣款，改成每月自動認列一部分支出")}</div>
             </div>}
           </div>}
 
           {nT.type === "income" && <div style={{ marginBottom:12 }}>
             <button onClick={() => setNT(p => ({ ...p, deferred:!p.deferred }))} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:14, fontWeight:700, background:nT.deferred ? `${C.teal}22` : C.card, color:nT.deferred ? C.teal : C.textSub, border:`1px solid ${nT.deferred ? C.teal : C.border}`, cursor:"pointer" }}>
-              <span>{nT.deferred ? "✅" : "⬜"}</span> 開啟分月認列（收入分期計算）
+              <span>{nT.deferred ? "✅" : "⬜"}</span> {tr("開啟分月認列（收入分期計算）")}
             </button>
             {nT.deferred && <div style={{ marginTop:8, padding:12, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}44` }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                <Inp label="分幾個月" type="number" placeholder="4" value={nT.deferMonths} onChange={e => setNT(p => ({ ...p, deferMonths:e.target.value, deferMoAmt:p.amt ? String(Math.round(+p.amt / +(e.target.value || 1))) : "" }))} />
-                <Inp label="本月認列" type="number" placeholder="5000" value={nT.deferMoAmt} onChange={e => setNT(p => ({ ...p, deferMoAmt:e.target.value }))} />
+                <Inp label={tr("分幾個月")} type="number" placeholder="4" value={nT.deferMonths} onChange={e => setNT(p => ({ ...p, deferMonths:e.target.value, deferMoAmt:p.amt ? String(Math.round(+p.amt / +(e.target.value || 1))) : "" }))} />
+                <Inp label={tr("本月認列")} type="number" placeholder="5000" value={nT.deferMoAmt} onChange={e => setNT(p => ({ ...p, deferMoAmt:e.target.value }))} />
               </div>
-              <div style={{ fontSize:12, color:C.teal }}>💡 Wallet 顯示全額，Overview 只計本月認列</div>
+              <div style={{ fontSize:12, color:C.teal }}>💡 {tr("Wallet 顯示全額，Overview 只計本月認列")}</div>
             </div>}
           </div>}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={addTxn}>確認新增</Btn>
-            <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
+            <Btn style={{ flex:1 }} onClick={addTxn}>{tr("確認新增")}</Btn>
+            <Btn v="secondary" style={{ flex:1 }} onClick={close}>{tr("取消")}</Btn>
           </div>
         </Sheet>}
 
@@ -177,7 +177,7 @@ export default function TxnModals({
           <Sl label="帳戶" value={selTxn.acc || ""} onChange={e => setSelTxn(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
           <Fld label="日期"><input type="date" value={selTxn.date} onChange={e => setSelTxn(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
-            <Btn style={{ flex:1 }} onClick={() => confirm("確定儲存這筆修改？帳戶餘額會依新舊金額差異自動調整", () => saveTxn(selTxn), "確認編輯")}>儲存</Btn>
+            <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這筆修改？帳戶餘額會依新舊金額差異自動調整"), () => saveTxn(selTxn), tr("確認編輯"))}>{tr("儲存")}</Btn>
             <Btn v="secondary" style={{ flex:1 }} onClick={close}>取消</Btn>
           </div>
         </Sheet>}
@@ -205,74 +205,74 @@ export default function TxnModals({
           {pools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
               <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.date}</div></div>
-              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.teal }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
+              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>{tr("已認列/總額")}</div><div style={{ fontWeight:700, fontSize:13, color:C.teal }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
               <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
-              <button onClick={() => confirm(`確定刪除「${p.desc}」整筆分月認列？連同已認列的紀錄都會一起清除`, () => {
+              <button onClick={() => confirm(`${tr("確定刪除")}「${p.desc}」${tr("整筆分月認列？連同已認列的紀錄都會一起清除")}`, () => {
                 if (p.originTxnId) { delTxn(p.originTxnId); }
                 else { upd("pools", pr => pr.filter(x => x.id !== p.id)); upd("txns", pr => pr.filter(x => x.poolId !== p.id)); }
-              }, "確認刪除")} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
+              }, tr("確認刪除"))} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
             </div>
             {editPool?.id === p.id && (
               <div style={{ padding:10, borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, marginBottom:10 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                  <Inp label="總額" type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
-                  <Inp label="已認列" type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
+                  <Inp label={tr("總額")} type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
+                  <Inp label={tr("已認列")} type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <Btn sz="sm" v="teal" style={{ flex:1 }} onClick={() => {
                     const newTotal = +editPool.totalAmt, newRec = Math.min(+editPool.recognized, newTotal);
                     const diff = newRec - p.recognized;
-                    confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
+                    confirm(`${tr("確定調整")}「${p.desc}」？${tr("已認列將從")} ${fmt(p.recognized)} ${tr("改為")} ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），${tr("會自動記一筆調整交易")}`, () => {
                       upd("pools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec } : x));
-                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`認列調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"income", recognizedDiff:diff }]);
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"income":"expense", cat: p.cat||"其他收入", amt:Math.abs(diff), desc:`${tr("認列調整")}：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"income", recognizedDiff:diff }]);
                       setEditPool(null);
-                    }, "確認調整");
-                  }}>儲存</Btn>
-                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
+                    }, tr("確認調整"));
+                  }}>{tr("儲存")}</Btn>
+                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>{tr("取消")}</Btn>
                 </div>
               </div>
             )}
             <div style={{ height:6, borderRadius:3, background:C.border, marginBottom:12 }}><div style={{ height:"100%", borderRadius:3, width:`${Math.min(100,(p.recognized / p.totalAmt * 100)).toFixed(0)}%`, background:C.teal }} /></div>
             <div style={{ display:"flex", gap:8 }}>
-              <input type="number" placeholder={`最多 ${fmt(p.totalAmt - p.recognized)}`} value={selPool?.id === p.id ? recAmt : ""} onFocus={() => setSelPool(p)} onChange={e => setRecAmt(e.target.value)} style={{ ...iSt, flex:1 }} />
-              <Btn v="teal" sz="sm" onClick={() => { setSelPool(p); setTimeout(doRecognize, 50); }}>認列</Btn>
+              <input type="number" placeholder={`${tr("最多")} ${fmt(p.totalAmt - p.recognized)}`} value={selPool?.id === p.id ? recAmt : ""} onFocus={() => setSelPool(p)} onChange={e => setRecAmt(e.target.value)} style={{ ...iSt, flex:1 }} />
+              <Btn v="teal" sz="sm" onClick={() => { setSelPool(p); setTimeout(doRecognize, 50); }}>{tr("認列")}</Btn>
             </div>
           </div>)}
         </Sheet>}
 
-        {modal === "expensePools" && <Sheet title="年繳分攤進度" onClose={close}>
+        {modal === "expensePools" && <Sheet title={tr("年繳分攤進度")} onClose={close}>
           <div style={{ fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-            這些是開了「分攤認列」的訂閱或支出。扣款/入帳當下就已經是那一筆錢的最終去向了（現金帳戶會扣款、信用卡會計入應付），這裡只是把同一筆錢拆開顯示在每個月的支出統計裡，不會再額外扣一次錢。
+            {tr("這些是開了「分攤認列」的訂閱或支出。扣款/入帳當下就已經是那一筆錢的最終去向了（現金帳戶會扣款、信用卡會計入應付），這裡只是把同一筆錢拆開顯示在每個月的支出統計裡，不會再額外扣一次錢。")}
           </div>
-          {expensePools.filter(p => p.totalAmt - p.recognized > 0).length === 0 && <div style={{ padding:"32px 0", textAlign:"center", color:C.muted }}>目前沒有進行中的分攤</div>}
+          {expensePools.filter(p => p.totalAmt - p.recognized > 0).length === 0 && <div style={{ padding:"32px 0", textAlign:"center", color:C.muted }}>{tr("目前沒有進行中的分攤")}</div>}
           {expensePools.filter(p => p.totalAmt - p.recognized > 0).map(p => <div key={p.id} style={{ borderRadius:14, padding:16, marginBottom:12, background:C.card }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-              <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} 開始・每期 {fmt(p.monthlyAmt)}</div></div>
-              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>已認列/總額</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
+              <div><div style={{ fontWeight:700, fontSize:14, color:C.text }}>{p.desc}</div><div style={{ fontSize:12, color:C.muted }}>{p.startDate} {tr("開始・每期")} {fmt(p.monthlyAmt)}</div></div>
+              {editPool?.id !== p.id && <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:C.textSub }}>{tr("已認列/總額")}</div><div style={{ fontWeight:700, fontSize:13, color:C.warn }}>{fmt(p.recognized)}/{fmt(p.totalAmt)}</div></div>}
               <button onClick={() => setEditPool(editPool?.id===p.id ? null : { id:p.id, totalAmt:String(p.totalAmt), recognized:String(p.recognized) })} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:14, flexShrink:0, marginLeft:8 }}>✏️</button>
-              <button onClick={() => confirm(`確定刪除「${p.desc}」整筆分攤？連同已扣款、已認列的紀錄都會一起清除`, () => {
+              <button onClick={() => confirm(`${tr("確定刪除")}「${p.desc}」${tr("整筆分攤？連同已扣款、已認列的紀錄都會一起清除")}`, () => {
                 if (p.originTxnId) { delTxn(p.originTxnId); }
                 else { upd("expensePools", pr => pr.filter(x => x.id !== p.id)); upd("txns", pr => pr.filter(x => x.poolId !== p.id)); }
-              }, "確認刪除")} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
+              }, tr("確認刪除"))} style={{ background:"none", border:"none", cursor:"pointer", color:C.expense, fontSize:14, flexShrink:0, marginLeft:6 }}>🗑</button>
             </div>
             {editPool?.id === p.id && (
               <div style={{ padding:10, borderRadius:10, background:`${C.warn}12`, border:`1px solid ${C.warn}33`, marginBottom:10 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                  <Inp label="總額" type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
-                  <Inp label="已認列" type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
+                  <Inp label={tr("總額")} type="number" value={editPool.totalAmt} onChange={e => setEditPool(ep => ({ ...ep, totalAmt:e.target.value }))} />
+                  <Inp label={tr("已認列")} type="number" value={editPool.recognized} onChange={e => setEditPool(ep => ({ ...ep, recognized:e.target.value }))} />
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <Btn sz="sm" v="warn" style={{ flex:1 }} onClick={() => {
                     const newTotal = +editPool.totalAmt, newRec = Math.min(+editPool.recognized, newTotal);
                     const diff = newRec - p.recognized;
                     const newMonthly = Math.round(newTotal / (p.installments || 12));
-                    confirm(`確定調整「${p.desc}」？已認列將從 ${fmt(p.recognized)} 改為 ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），會自動記一筆調整交易`, () => {
+                    confirm(`${tr("確定調整")}「${p.desc}」？${tr("已認列將從")} ${fmt(p.recognized)} ${tr("改為")} ${fmt(newRec)}（${diff>=0?"+":""}${fmt(diff)}），${tr("會自動記一筆調整交易")}`, () => {
                       upd("expensePools", pr => pr.map(x => x.id===p.id ? { ...x, totalAmt:newTotal, recognized:newRec, monthlyAmt:newMonthly } : x));
-                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`分攤調整：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"expense", recognizedDiff:diff }]);
+                      if (diff !== 0) upd("txns", pr => [...pr, { id:Date.now(), type: diff>0?"expense":"income", cat: p.cat||"其他", amt:Math.abs(diff), desc:`${tr("分攤調整")}：${p.desc}`, acc:p.acc||"", date:TODAY, tags:"#認列調整", noBalanceEffect:true, poolId:p.id, poolType:"expense", recognizedDiff:diff }]);
                       setEditPool(null);
-                    }, "確認調整");
-                  }}>儲存</Btn>
-                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>取消</Btn>
+                    }, tr("確認調整"));
+                  }}>{tr("儲存")}</Btn>
+                  <Btn sz="sm" v="secondary" style={{ flex:1 }} onClick={() => setEditPool(null)}>{tr("取消")}</Btn>
                 </div>
               </div>
             )}
@@ -281,20 +281,20 @@ export default function TxnModals({
         </Sheet>}
         {modal === "savingsTarget" && (() => {
           const target = curSavingsTarget;
-          return <Sheet title="設定這個月的存錢目標" onClose={close}>
+          return <Sheet title={tr("設定這個月的存錢目標")} onClose={close}>
             <SavingsTargetForm
               ym={curYm} target={target} accs={accs} buckets={buckets}
               setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
               confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt}
-              Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn}
+              Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} tr={tr}
             />
             <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
-              <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>下個月（{nextYm}）也可以先想好</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>{tr("下個月（")}{nextYm}{tr("）也可以先想好")}</div>
               <SavingsTargetForm
                 ym={nextYm} target={nextSavingsTarget} accs={accs} buckets={buckets}
                 setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget}
                 confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt}
-                Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn}
+                Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} tr={tr}
               />
             </div>
           </Sheet>;
@@ -319,7 +319,7 @@ export default function TxnModals({
               {fs.historyMonths === 0 && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>還沒有足夠的歷史資料，用這個月目前的支出估算，之後累積更多資料會更準</div>}
             </div>
             {fs.suggested > 0 && buckets.length > 0 ? (
-              <SmartSuggestApply amount={fs.suggested} buckets={buckets} accs={accs} setSavingsTarget={setSavingsTarget} ym={curYm} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} />
+              <SmartSuggestApply amount={fs.suggested} buckets={buckets} accs={accs} setSavingsTarget={setSavingsTarget} ym={curYm} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} tr={tr} />
             ) : fs.suggested > 0 ? (
               <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有子帳戶，先到錢包建一個再回來套用建議吧</div>
             ) : (
@@ -341,7 +341,7 @@ export default function TxnModals({
             getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} setDefaultIncomeItems={setDefaultIncomeItems}
             accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
             confirm={confirm} close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt}
-            Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} Sheet={Sheet}
+            Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} Sheet={Sheet} tr={tr}
           />
         )}
 
@@ -363,7 +363,7 @@ export default function TxnModals({
               <div style={{ fontSize:12, color:C.teal }}>{isWishlist ? "願望池累積金額" : "這個目標存下的錢，還剩"}</div>
               <div style={{ fontSize:22, fontWeight:900, color:C.teal }}>{fmt(current)}</div>
             </div>
-            <WishOffsetForm g={g} current={current} accs={accs} buckets={buckets} confirm={confirm} close={close} upd={upd} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} />
+            <WishOffsetForm g={g} current={current} accs={accs} buckets={buckets} confirm={confirm} close={close} upd={upd} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} tr={tr} />
           </Sheet>;
         })()}
 
@@ -375,27 +375,27 @@ export default function TxnModals({
               <div style={{ fontSize:12, color:C.accentL }}>目前已存</div>
               <div style={{ fontSize:22, fontWeight:900, color:C.accentL }}>{fmt(current)} / {fmt(g.target)}</div>
             </div>
-            <GoalDepositForm g={g} accs={accs} buckets={buckets} doTransfer={doTransfer} confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} />
+            <GoalDepositForm g={g} accs={accs} buckets={buckets} doTransfer={doTransfer} confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} tr={tr} />
           </Sheet>;
         })()}
 
         {modal === "sweepMoney" && (
-          <SweepMoneySheet title="🧹 月底零錢一鍵掃入" amount={guiltFreeGauge.remaining} amountLabel="這個月生活區還剩下" ym={curYm} kind="leftover" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
+          <SweepMoneySheet title={`🧹 ${tr("月底零錢一鍵掃入")}`} amount={guiltFreeGauge.remaining} amountLabel={tr("這個月生活區還剩下")} ym={curYm} kind="leftover" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} tr={tr} />
         )}
 
         {modal === "sweepPassive" && (
-          <SweepMoneySheet title="🏦 被動收入分配" amount={passiveMo} amountLabel="這個月還沒分配的非勞務收入" ym={curYm} kind="passive" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} />
+          <SweepMoneySheet title={`🏦 ${tr("被動收入分配")}`} amount={passiveMo} amountLabel={tr("這個月還沒分配的非勞務收入")} ym={curYm} kind="passive" addSweptAmount={addSweptAmount} goals={goals} buckets={buckets} updateBucket={updateBucket} confirm={confirm} close={close} C={C} fmt={fmt} Btn={Btn} Sheet={Sheet} tr={tr} />
         )}
     </>
   );
 }
 
 /* ── 智慧建議：選擇要把建議存款金額套用到哪個子帳戶 ── */
-function SmartSuggestApply({ amount, buckets, accs, setSavingsTarget, ym, confirm, close, C, fmt, Btn }) {
+function SmartSuggestApply({ amount, buckets, accs, setSavingsTarget, ym, confirm, close, C, fmt, Btn, tr }) {
   const [bucketId, setBucketId] = useState(buckets[0]?.id || "");
   return (
     <div>
-      <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>要把這筆建議存款設成哪個子帳戶的目標？</div>
+      <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>{tr("要把這筆建議存款設成哪個子帳戶的目標？")}</div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:14 }}>
         {buckets.map(b => (
           <button key={b.id} onClick={() => setBucketId(b.id)} style={{ padding:"6px 12px", borderRadius:10, fontSize:12, fontWeight:700, background:bucketId===b.id?`${C.teal}28`:C.card, color:bucketId===b.id?C.teal:C.muted, border:`1px solid ${bucketId===b.id?C.teal:C.border}`, cursor:"pointer" }}>{b.emoji} {b.name}</button>
@@ -403,17 +403,17 @@ function SmartSuggestApply({ amount, buckets, accs, setSavingsTarget, ym, confir
       </div>
       <Btn style={{ width:"100%" }} onClick={() => {
         const b = buckets.find(x => x.id === bucketId);
-        confirm(`確定把這個月的存錢目標設成「${b?.name}」存 ${fmt(amount)}？`, () => {
+        confirm(`${tr("確定把這個月的存錢目標設成")}「${b?.name}」${tr("存")} ${fmt(amount)}？`, () => {
           setSavingsTarget(ym, null, bucketId, amount, "由智慧建議自動設定");
           close();
-        }, "確認設定");
-      }}>套用這個建議</Btn>
+        }, tr("確認設定"));
+      }}>{tr("套用這個建議")}</Btn>
     </div>
   );
 }
 
 /* ── 單一月份的存錢目標設定小表單 ── */
-function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, removeSavingsTarget, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn }) {
+function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, removeSavingsTarget, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, tr }) {
   const [kind, setKind] = useState(target?.bucketId ? "bucket" : "acc");
   const [accId, setAccId] = useState(target?.accId || (accs[0]?.id || ""));
   const [bucketId, setBucketId] = useState(target?.bucketId || (buckets[0]?.id || ""));
@@ -442,18 +442,18 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
         <Btn style={{ flex:1 }} onClick={() => {
           if (!amount || +amount <= 0) return;
-          confirm(`確定設定 ${ym} 存錢目標 ${fmt(+amount)}？`, () => {
+          confirm(`${tr("確定設定")} ${ym} ${tr("存錢目標")} ${fmt(+amount)}？`, () => {
             setSavingsTarget(ym, kind==="acc"?accId:null, kind==="bucket"?bucketId:null, amount, note);
           }, "確認設定");
         }}>{target?"更新目標":"設定目標"}</Btn>
-        {target && <Btn v="danger" onClick={() => confirm(`確定移除 ${ym} 的存錢目標？`, () => removeSavingsTarget(ym), "確認移除")}>移除</Btn>}
+        {target && <Btn v="danger" onClick={() => confirm(`${tr("確定移除")} ${ym} ${tr("的存錢目標？")}`, () => removeSavingsTarget(ym), tr("確認移除"))}>{tr("移除")}</Btn>}
       </div>
     </div>
   );
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet }) {
+function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet, tr }) {
   /* 這個分流引擎現在操作的「目標月份」：如果有設定計畫起始月份且晚於這個月（例如這個月還不想開始規劃），就用那個月，不然就是這個月 */
   const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
   /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到「目標月份」的排程 */
@@ -518,7 +518,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:8, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
       這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部變成「剩餘資金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
     </div>
-    <button onClick={() => confirm("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？", resetAll)} style={{ width:"100%", marginBottom:14, padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>🗑 清空以上規劃，重新輸入</button>
+    <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={{ width:"100%", marginBottom:14, padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>🗑 {tr("清空以上規劃，重新輸入")}</button>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
       <span>💵 這個月的收入來源</span>
@@ -645,7 +645,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     </div>
 
     <Btn style={{ width:"100%" }} disabled={applyMonths.length===0} onClick={() => {
-      confirm(`確定把這份分流建議套用到 ${applyMonths.join("、")}？只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字`, () => {
+      confirm(`${tr("確定把這份分流建議套用到")} ${applyMonths.join("、")}？${tr("只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字")}`, () => {
         applyMonths.forEach(ym => {
           [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
             if (g.alloc <= 0) return;
@@ -674,7 +674,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
 }
 
 /* ── 願望對沖表單：記一筆消費，用願望池對沖，不干擾生活費常態分析 ── */
-function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt, fmt, TODAY, Fld, Sl, CalcInp, Btn }) {
+function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt, fmt, TODAY, Fld, Sl, CalcInp, Btn, tr }) {
   const isWishlist = g.goalType === "wishlist";
   const [price, setPrice] = useState(String(Math.round(current)));
   const linkedBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
@@ -688,7 +688,7 @@ function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt
       <Btn style={{ width:"100%" }} onClick={() => {
         const amt = +price || 0;
         if (amt <= 0) return;
-        confirm(`確定記錄「${g.name}」${isWishlist?"已實現":"支出"}，花費 ${fmt(amt)}？`, () => {
+        confirm(`${tr("確定記錄")}「${g.name}」${isWishlist?tr("已實現"):tr("支出")}，${tr("花費")} ${fmt(amt)}？`, () => {
           upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`${isWishlist?"🎁 願望兌現":"💸 目標支出"}：${g.name}`, acc:linkedAcc?.name||linkedBucket?.name&&accs.find(a=>a.id===linkedBucket.accId)?.name||"", date:TODAY, tags:"#願望兌現" }]);
           if (linkedBucket) upd("buckets", p => (p||[]).map(b => b.id===linkedBucket.id ? { ...b, allocated:Math.max(0, b.allocated-amt) } : b));
           if (isWishlist) upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
@@ -700,7 +700,7 @@ function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt
 }
 
 /* ── 把這個月多存的錢，直接存入某個目標的連結帳戶／子帳戶 ── */
-function GoalDepositForm({ g, accs, buckets, doTransfer, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Btn }) {
+function GoalDepositForm({ g, accs, buckets, doTransfer, confirm, close, C, iSt, fmt, Fld, Sl, CalcInp, Btn, tr }) {
   const targetBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
   const targetAcc = accs.find(a => (g.accIds||[]).includes(a.id));
   const targetKey = targetBucket ? `bucket:${targetBucket.id}` : targetAcc ? `acc:${targetAcc.id}` : null;
@@ -724,7 +724,7 @@ function GoalDepositForm({ g, accs, buckets, doTransfer, confirm, close, C, iSt,
         const amt = +amount || 0;
         if (amt <= 0 || !fromAccId) return;
         const fromAcc = accs.find(a => a.id === fromAccId);
-        confirm(`確定從「${fromAcc?.name}」轉 ${fmt(amt)} 存入「${targetName}」？`, () => {
+        confirm(`${tr("確定從")}「${fromAcc?.name}」${tr("轉")} ${fmt(amt)} ${tr("存入")}「${targetName}」？`, () => {
           doTransfer(`acc:${fromAccId}`, targetKey, amt);
           close();
         }, "確認存入");
@@ -734,7 +734,7 @@ function GoalDepositForm({ g, accs, buckets, doTransfer, confirm, close, C, iSt,
 }
 
 /* ── 月底零錢一鍵掃入：生活區結餘掃進願望池或存錢區 ── */
-function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount, goals, buckets, updateBucket, confirm, close, C, fmt, Btn, Sheet }) {
+function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount, goals, buckets, updateBucket, confirm, close, C, fmt, Btn, Sheet, tr }) {
   const wishGoals = goals.filter(g => g.goalType === "wishlist" && (g.bucketIds||[]).length > 0);
   const [target, setTarget] = useState(null); // { bucketId, label }
   const options = [];
@@ -761,7 +761,7 @@ function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount,
     )}
     <Btn style={{ width:"100%" }} disabled={!target || amount <= 0} onClick={() => {
       if (!target || amount <= 0) return;
-      confirm(`確定把 ${fmt(amount)} 掃進「${target.label}」？`, () => {
+      confirm(`${tr("確定把")} ${fmt(amount)} ${tr("掃進")}「${target.label}」？`, () => {
         updateBucket(target.bucketId, { allocated: (buckets.find(b=>b.id===target.bucketId)?.allocated||0) + amount });
         if (ym && kind && addSweptAmount) addSweptAmount(ym, kind, amount);
         close();
