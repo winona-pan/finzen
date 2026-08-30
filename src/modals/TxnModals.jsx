@@ -4,7 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  updateGoalRecurringSchedule, tr,
+  updateGoalRecurringSchedule, tr, accFieldLabel,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -35,12 +35,24 @@ export default function TxnModals({
   const [editPool, setEditPool] = useState(null);
 
   /* ── 新增交易（含代墊拆分、分月認列）── */
+  /* acc 欄位可能是子帳戶（"bucket:<id>"）：真正要動餘額的是它所屬的母帳戶，子帳戶本身則調整 allocated */
+  const resolveAccField = (field) => {
+    if (field && field.startsWith("bucket:")) {
+      const bucketId = field.slice(7);
+      const bucket = buckets.find(b => b.id === bucketId);
+      const parentAcc = bucket ? accs.find(a => a.id === bucket.accId) : null;
+      return { bucketId, bucket, parentAcc };
+    }
+    return { bucketId:null, bucket:null, parentAcc: accs.find(a => a.name === field) };
+  };
+
   const addTxn = () => {
     if (!nT.amt) return;
     const id = Date.now();
     const validProxies = nT.proxy ? nT.proxyList.filter(p => p.person && +p.amt > 0) : [];
     const totalProxyAmt = validProxies.reduce((s, p) => s + +p.amt, 0);
     const ownAmt = +nT.amt - totalProxyAmt;
+    const { bucketId, parentAcc: acc } = resolveAccField(nT.acc);
 
     if (validProxies.length > 0) {
       // 拆成兩筆：自己支出 + 代墊往來
@@ -56,14 +68,14 @@ export default function TxnModals({
       upd("txns", p => [...p, ownTxn, proxyTxn]);
 
       // 扣全額
-      const acc = accs.find(a => a.name === nT.acc);
       if (acc) {
         if (acc.type === "credit") {
           upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable: (a.payable || 0) + (+nT.amt) } : a));
         } else {
-          upd("accs", p => p.map(a => a.name === nT.acc ? { ...a, bal: a.bal - (+nT.amt) } : a));
+          upd("accs", p => p.map(a => a.id === acc.id ? { ...a, bal: a.bal - (+nT.amt) } : a));
         }
       }
+      if (bucketId) upd("buckets", p => (p||[]).map(b => b.id === bucketId ? { ...b, allocated: Math.max(0, b.allocated - (+nT.amt)) } : b));
       // 建立應收帳款
       validProxies.forEach(pr => {
         upd("debts", p => [...p, { id: "d" + Date.now() + Math.random(), type: "receivable", person: pr.person, amt: +pr.amt, desc: `代墊：${nT.desc || nT.cat}`, date: nT.date, settled: false, srcTxnId: id }]);
@@ -72,16 +84,17 @@ export default function TxnModals({
       // 無代墊普通記帳
       const t = { ...nT, id, amt: +nT.amt, proxyAmt: 0, proxyFor: "", proxyList: [] };
       upd("txns", p => [...p, t]);
-      const acc = accs.find(a => a.name === t.acc);
       if (acc) {
         if (t.type === "income") {
-          upd("accs", p => p.map(a => a.name === t.acc ? { ...a, bal: a.bal + t.amt } : a));
+          upd("accs", p => p.map(a => a.id === acc.id ? { ...a, bal: a.bal + t.amt } : a));
+          if (bucketId) upd("buckets", p => (p||[]).map(b => b.id === bucketId ? { ...b, allocated: b.allocated + t.amt } : b));
         } else if (t.type === "expense") {
           if (acc.type === "credit") {
             upd("accs", p => p.map(a => a.id === acc.id ? { ...a, payable: (a.payable || 0) + t.amt } : a));
           } else {
-            upd("accs", p => p.map(a => a.name === t.acc ? { ...a, bal: a.bal - t.amt } : a));
+            upd("accs", p => p.map(a => a.id === acc.id ? { ...a, bal: a.bal - t.amt } : a));
           }
+          if (bucketId) upd("buckets", p => (p||[]).map(b => b.id === bucketId ? { ...b, allocated: Math.max(0, b.allocated - t.amt) } : b));
         }
       }
     }
@@ -113,7 +126,7 @@ export default function TxnModals({
           <CalcInp label={tr("金額")} value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v }))} />
           <AutoInput label={tr("說明")} placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
           <AutoInput label={tr("標籤（選填）")} placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
-          <Sl label={tr("帳戶")} value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇帳戶")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+          <Sl label={tr("帳戶")} value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇帳戶")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
           <Fld label={`${tr("日期")}${nT.date !== TODAY ? " 📅 " + tr("補記") + " " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           
           {nT.type === "expense" && <div style={{ marginBottom:12 }}>
@@ -174,7 +187,7 @@ export default function TxnModals({
           <CalcInp label="金額" value={String(selTxn.amt)} onChange={v => setSelTxn(p => ({ ...p, amt:+v }))} />
           <AutoInput label="說明" value={selTxn.desc || ""} onChange={v => setSelTxn(p => ({ ...p, desc:v }))} history={descHistory} />
           <AutoInput label="標籤" value={selTxn.tags || ""} placeholder="#標籤" onChange={v => setSelTxn(p => ({ ...p, tags:v }))} history={tagsHistory} />
-          <Sl label="帳戶" value={selTxn.acc || ""} onChange={e => setSelTxn(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+          <Sl label="帳戶" value={selTxn.acc || ""} onChange={e => setSelTxn(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
           <Fld label="日期"><input type="date" value={selTxn.date} onChange={e => setSelTxn(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => confirm(tr("確定儲存這筆修改？帳戶餘額會依新舊金額差異自動調整"), () => saveTxn(selTxn), tr("確認編輯"))}>{tr("儲存")}</Btn>
@@ -188,7 +201,7 @@ export default function TxnModals({
               <div style={{ width:54, height:54, borderRadius:16, background:C.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>{ceMap[selTxn.cat] || "📦"}</div>
               <div><div style={{ fontWeight:900, fontSize:15, color:C.text }}>{selTxn.cat}</div><div style={{ fontWeight:900, fontSize:22, color:selTxn.type === "income" ? C.income : C.expense }}>{selTxn.type === "income" ? "+" : "-"}{fmt(selTxn.amt)}</div></div>
             </div>
-            {[{ l:"日期", v:selTxn.date }, { l:"說明", v:selTxn.desc || "—" }, { l:"帳戶", v:selTxn.acc || "—" }, { l:"標籤", v:selTxn.tags || "—" }, ...(selTxn.proxyAmt > 0 ? [{ l:"代墊對象", v:selTxn.proxyFor }, { l:"代墊金額", v:fmt(selTxn.proxyAmt) }] : [])].map(r => (
+            {[{ l:"日期", v:selTxn.date }, { l:"說明", v:selTxn.desc || "—" }, { l:"帳戶", v:accFieldLabel(selTxn.acc) || "—" }, { l:"標籤", v:selTxn.tags || "—" }, ...(selTxn.proxyAmt > 0 ? [{ l:"代墊對象", v:selTxn.proxyFor }, { l:"代墊金額", v:fmt(selTxn.proxyAmt) }] : [])].map(r => (
               <div key={r.l} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}` }}>
                 <span style={{ fontSize:13, color:C.textSub }}>{r.l}</span><span style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.v}</span>
               </div>
