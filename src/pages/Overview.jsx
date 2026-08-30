@@ -8,7 +8,7 @@ export default function OverviewPage({
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, goalDisplayAmount, guiltFreeGauge, allocSettings,
-  hideAmounts, tr,
+  hideAmounts, tr, accFieldLabel,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
 }) {
@@ -143,7 +143,7 @@ export default function OverviewPage({
                             {t.type === "adjust" && <Bdg color={C.muted}>{tr("調整")}</Bdg>}
                           </div>
                           <div style={{ fontSize:12, color:C.textSub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {t.desc}{t.acc && <span style={{ color:C.muted }}> · {t.acc}</span>}{t.tags && <span style={{ color:C.accentL }}> {t.tags}</span>}
+                            {t.desc}{t.acc && <span style={{ color:C.muted }}> · {accFieldLabel(t.acc)}</span>}{t.tags && <span style={{ color:C.accentL }}> {t.tags}</span>}
                           </div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -157,7 +157,7 @@ export default function OverviewPage({
                              : t.type === "adjust" ? (t.adjDiff > 0 ? "+" : "-")
                              : "-"}{fmt(t.amt)}
                           </div>
-                          {t.type === "transfer" && t.toAcc && <div style={{ fontSize:11, color:C.muted }}>{t.acc} ➜ {t.toAcc}</div>}
+                          {t.type === "transfer" && t.toAcc && <div style={{ fontSize:11, color:C.muted }}>{accFieldLabel(t.acc)} ➜ {accFieldLabel(t.toAcc)}</div>}
                           {t.proxyAmt > 0 && <div style={{ fontSize:11, color:C.warn }}>{tr("代墊")} {fmt(t.proxyAmt)}</div>}
                         </div>
                       </div>
