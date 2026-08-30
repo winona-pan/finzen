@@ -845,32 +845,67 @@ export default function App() {
       const poolKey = old.poolType === "income" ? "pools" : "expensePools";
       upd(poolKey, p => (p||[]).map(x => x.id === old.poolId ? { ...x, recognized: Math.max(0, x.recognized + diff) } : x));
     }
+    /* acc/toAcc 可能是子帳戶（"bucket:<id>"），要拆成「真正要動的母帳戶名稱」＋「要動的子帳戶id」兩條線分別處理 */
+    const resolveField = (field) => {
+      if (field && field.startsWith("bucket:")) {
+        const bucketId = field.slice(7);
+        const bucket = buckets.find(b => b.id === bucketId);
+        const parentName = bucket ? accs.find(a => a.id === bucket.accId)?.name : null;
+        return { bucketId, parentName };
+      }
+      return { bucketId:null, parentName:field };
+    };
+    const oldFrom = resolveField(old?.acc), oldTo = resolveField(old?.toAcc);
+    const editedFrom = resolveField(edited.acc), editedTo = resolveField(edited.toAcc);
     updMulti({
       txns: prevTxns => prevTxns.map(t => t.id === edited.id ? { ...edited, amt:+edited.amt, poolId:old?.poolId, poolType:old?.poolType, noBalanceEffect:old?.noBalanceEffect } : t),
       accs: prevAccs => prevAccs.map(a => {
         let bal = a.bal, payable = a.payable;
         if (old && !old.noBalanceEffect) {
-          if (old.acc === a.name) {
+          if (oldFrom.parentName === a.name) {
             if (old.type === "income") bal -= old.amt;
             else if (old.type === "expense") { if (a.type === "credit") payable = (payable||0) - old.amt; else bal += old.amt; }
             else if (old.type === "adjust") bal -= (old.adjDiff || 0);
             else if (old.type === "transfer") { if (a.type === "credit") payable = Math.max(0,(payable||0)-old.amt); else bal += old.amt; }
           }
-          if (old.type === "transfer" && old.toAcc === a.name) { if (a.type === "credit") payable = Math.max(0,(payable||0)+old.amt); else bal -= old.amt; }
+          if (old.type === "transfer" && oldTo.parentName === a.name) { if (a.type === "credit") payable = Math.max(0,(payable||0)+old.amt); else bal -= old.amt; }
         }
-        if (edited.acc === a.name && !edited.noBalanceEffect) {
+        if (editedFrom.parentName === a.name && !edited.noBalanceEffect) {
           const amt = +edited.amt;
           if (edited.type === "income") bal += amt;
           else if (edited.type === "expense") { if (a.type === "credit") payable = (payable||0) + amt; else bal -= amt; }
           else if (edited.type === "adjust") bal += (edited.adjDiff || 0);
           else if (edited.type === "transfer") { if (a.type === "credit") payable = (payable||0) + amt; else bal -= amt; }
         }
-        if (edited.type === "transfer" && edited.toAcc === a.name && !edited.noBalanceEffect) { if (a.type === "credit") payable = Math.max(0,(payable||0)-(+edited.amt)); else bal += +edited.amt; }
+        if (edited.type === "transfer" && editedTo.parentName === a.name && !edited.noBalanceEffect) { if (a.type === "credit") payable = Math.max(0,(payable||0)-(+edited.amt)); else bal += +edited.amt; }
         return (bal !== a.bal || payable !== a.payable) ? { ...a, bal, payable } : a;
-      })
+      }),
+      buckets: prevBuckets => (prevBuckets||[]).map(bk => {
+        let allocated = bk.allocated;
+        if (old && !old.noBalanceEffect) {
+          if (oldFrom.bucketId === bk.id) {
+            if (old.type === "income") allocated -= old.amt;
+            else if (old.type === "expense") allocated += old.amt;
+            else if (old.type === "adjust") allocated -= (old.adjDiff || 0);
+            else if (old.type === "transfer") allocated += old.amt;
+          }
+          if (old.type === "transfer" && oldTo.bucketId === bk.id) allocated -= old.amt;
+        }
+        if (!edited.noBalanceEffect) {
+          const amt = +edited.amt;
+          if (editedFrom.bucketId === bk.id) {
+            if (edited.type === "income") allocated += amt;
+            else if (edited.type === "expense") allocated -= amt;
+            else if (edited.type === "adjust") allocated += (edited.adjDiff || 0);
+            else if (edited.type === "transfer") allocated -= amt;
+          }
+          if (edited.type === "transfer" && editedTo.bucketId === bk.id) allocated += amt;
+        }
+        return allocated !== bk.allocated ? { ...bk, allocated:Math.max(0,allocated) } : bk;
+      }),
     });
     close();
-  }, [txns, updMulti, upd]);
+  }, [txns, updMulti, upd, accs, buckets]);
 
   /* ── 刪除交易：還原對帳戶的影響 ── */
   const delTxn = useCallback((id) => {
@@ -901,27 +936,51 @@ export default function App() {
     }
     // 如果刪的是代墊產生的原始交易，把還沒結清的對應應收帳款一併清掉（已結清的保留，那是真實發生過的還款紀錄）
     upd("debts", p => (p||[]).filter(x => !(x.srcTxnId === id && !x.settled)));
+    const resolveField = (field) => {
+      if (field && field.startsWith("bucket:")) {
+        const bucketId = field.slice(7);
+        const bucket = buckets.find(b => b.id === bucketId);
+        const parentName = bucket ? accs.find(a => a.id === bucket.accId)?.name : null;
+        return { bucketId, parentName };
+      }
+      return { bucketId:null, parentName:field };
+    };
+    const tFrom = resolveField(t?.acc), tTo = resolveField(t?.toAcc);
     updMulti({
       txns: prevTxns => prevTxns.filter(x => x.id !== id),
       accs: prevAccs => {
         if (!t || t.noBalanceEffect) return prevAccs;
         return prevAccs.map(a => {
           let next = a;
-          if (t.acc === a.name) {
+          if (tFrom.parentName === a.name) {
             if (t.type === "income") next = { ...next, bal: next.bal - t.amt };
             else if (t.type === "expense") next = a.type === "credit" ? { ...next, payable:(next.payable||0)-t.amt } : { ...next, bal:next.bal+t.amt };
             else if (t.type === "adjust") next = { ...next, bal: next.bal - (t.adjDiff || 0) };
             else if (t.type === "transfer") next = a.type === "credit" ? { ...next, payable:Math.max(0,(next.payable||0)-t.amt) } : { ...next, bal:next.bal + t.amt };
           }
-          if (t.type === "transfer" && t.toAcc === a.name) {
+          if (t.type === "transfer" && tTo.parentName === a.name) {
             next = a.type === "credit" ? { ...next, payable:Math.max(0,(next.payable||0)+t.amt) } : { ...next, bal: next.bal - t.amt };
           }
           return next;
         });
-      }
+      },
+      buckets: prevBuckets => {
+        if (!t || t.noBalanceEffect) return prevBuckets;
+        return (prevBuckets||[]).map(bk => {
+          let allocated = bk.allocated;
+          if (tFrom.bucketId === bk.id) {
+            if (t.type === "income") allocated -= t.amt;
+            else if (t.type === "expense") allocated += t.amt;
+            else if (t.type === "adjust") allocated -= (t.adjDiff || 0);
+            else if (t.type === "transfer") allocated += t.amt;
+          }
+          if (t.type === "transfer" && tTo.bucketId === bk.id) allocated -= t.amt;
+          return allocated !== bk.allocated ? { ...bk, allocated:Math.max(0,allocated) } : bk;
+        });
+      },
     });
     close();
-  }, [txns, updMulti, upd, pools, expensePools]);
+  }, [txns, updMulti, upd, pools, expensePools, accs, buckets]);
 
   /* ── 帳戶餘額調整（初次設定 / 對帳差異，皆不計入收支）── */
   const adjBal = useCallback((acc, newBalStr, isFirst, desc) => {
