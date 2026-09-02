@@ -30,6 +30,7 @@ export default function InvestPage({
 
   const [growthMode, setGrowthMode] = useState("monthly");
   const [peek, setPeek] = useState(false);
+  const [loadingHoldings, setLoadingHoldings] = useState(false);
   const doPeek = () => { setPeek(true); setTimeout(() => setPeek(false), 3000); };
   const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
   const [expandedWatch, setExpandedWatch] = useState(null);
@@ -84,6 +85,10 @@ export default function InvestPage({
                   </div>
                 </Card>
               )}
+
+              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
+                <button onClick={async () => { setLoadingHoldings(true); try { await fetchAllPrices(); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
+              </div>
 
               <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
@@ -508,7 +513,7 @@ export default function InvestPage({
 
           {invTab === "watch" && (
             <div>
-              <WatchStockAdder addWatchStock={addWatchStock} C={C} iSt={iSt} tr={tr} />
+              <WatchStockAdder addWatchStock={addWatchStock} refreshWatchStocks={refreshWatchStocks} C={C} iSt={iSt} tr={tr} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
                 <button onClick={refreshWatchStocks} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
               </div>
@@ -634,7 +639,7 @@ export default function InvestPage({
 }
 
 /* ── 自選股新增小表單 ── */
-function WatchStockAdder({ addWatchStock, C, iSt, tr }) {
+function WatchStockAdder({ addWatchStock, refreshWatchStocks, C, iSt, tr }) {
   const [ticker, setTicker] = useState("");
   const [name, setName] = useState("");
   const [market, setMarket] = useState("TW");
@@ -642,6 +647,8 @@ function WatchStockAdder({ addWatchStock, C, iSt, tr }) {
     if (!ticker.trim()) return;
     addWatchStock({ ticker:ticker.trim().toUpperCase(), name:name.trim(), market, curPrice:0 });
     setTicker(""); setName("");
+    // 加入後不用等使用者自己再按一次「更新報價」，直接自動抓一次名稱跟現價
+    setTimeout(() => refreshWatchStocks(), 100);
   };
   return (
     <div style={{ marginBottom:14, padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
