@@ -1221,14 +1221,15 @@ export default function App() {
   /* ── 讀取股價 ── */
   const fetchPrice = useCallback(async (ticker, market) => {
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
-    const yahooV7 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}&fields=regularMarketPrice,shortName,longName`;
+    // v7/quote 從 2024 年底起被 Yahoo 陸續封鎖，現在大多回 401，優先試 v8/chart（還在正常運作），v7 留著當最後備援
     const yahooV8 = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
+    const yahooV7 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}&fields=regularMarketPrice,shortName,longName`;
     const proxies = [
       (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
       (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     ];
     for (const makeProxy of proxies) {
-      for (const apiUrl of [yahooV7, yahooV8]) {
+      for (const apiUrl of [yahooV8, yahooV7]) {
         try {
           const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(7000) });
           if (!r.ok) continue;
