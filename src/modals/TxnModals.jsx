@@ -123,7 +123,26 @@ export default function TxnModals({
             {(nT.type === "income" ? cats.income : cats.expense).map(cat => <button key={cat} onClick={() => setNT(p => ({ ...p, cat }))} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:nT.cat === cat ? `${C.accent}30` : C.card, border:`1px solid ${nT.cat === cat ? C.accent : C.border}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>{ceMap[cat] || "📦"}</span><span style={{ fontSize:11, color:nT.cat === cat ? C.accentL : C.textSub }}>{cat.length > 3 ? cat.slice(0, 3) + "…" : cat}</span></button>)}
             <button onClick={() => setModal("catSet")} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:8, borderRadius:10, background:C.card, border:`1px dashed ${C.accent}`, cursor:"pointer" }}><span style={{ fontSize:20 }}>➕</span><span style={{ fontSize:11, color:C.accentL }}>{tr("新增")}</span></button>
           </div></Fld>
-          <CalcInp label={tr("金額")} value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v }))} />
+          <button onClick={() => setNT(p => ({ ...p, overseasFee:!p.overseasFee, overseasBase:p.amt||"", overseasFeePct:p.overseasFeePct||"1.5" }))} style={{ width:"100%", marginBottom:8, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:nT.overseasFee ? `${C.accent}22` : C.card, color:nT.overseasFee ? C.accentL : C.textSub, border:`1px solid ${nT.overseasFee ? C.accent : C.border}`, cursor:"pointer" }}>
+            <span>{nT.overseasFee ? "✅" : "⬜"}</span> {tr("海外刷卡（幫我算手續費）")}
+          </button>
+          {nT.overseasFee ? (
+            <div style={{ padding:12, borderRadius:10, background:`${C.accent}10`, border:`1px solid ${C.accent}33`, marginBottom:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8 }}>
+                <Inp label={tr("商品金額（未含手續費）")} type="number" placeholder="1000" value={nT.overseasBase||""} onChange={e => {
+                  const base = e.target.value; const pct = +(nT.overseasFeePct||0);
+                  setNT(p => ({ ...p, overseasBase:base, amt: base ? String(Math.round(+base*(1+pct/100))) : "" }));
+                }} />
+                <Inp label={tr("手續費%")} type="number" placeholder="1.5" value={nT.overseasFeePct||""} onChange={e => {
+                  const pct = e.target.value; const base = +(nT.overseasBase||0);
+                  setNT(p => ({ ...p, overseasFeePct:pct, amt: base ? String(Math.round(base*(1+(+pct||0)/100))) : p.amt }));
+                }} />
+              </div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>{tr("台灣各銀行海外刷卡手續費大約落在 1%–1.5% 左右（不同銀行/卡片不同，請自行確認），在台灣刷國外網站（訂房網、海外購物網站等）通常也算海外消費")}</div>
+              {nT.amt && <div style={{ marginTop:8, fontSize:13, fontWeight:900, color:C.accentL }}>{tr("含手續費總額")}：{fmt(+nT.amt)}</div>}
+            </div>
+          ) : null}
+          <CalcInp label={tr("金額")} value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v, overseasFee:false }))} />
           <AutoInput label={tr("說明")} placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
           <AutoInput label={tr("標籤（選填）")} placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
           <Sl label={tr("帳戶")} value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇帳戶")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
@@ -696,14 +715,21 @@ function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt
     <div>
       <CalcInp label={isWishlist ? "實際購買金額" : "這筆支出金額（可以分好幾次記，不用一次花完）"} value={price} onChange={setPrice} />
       <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-        會記一筆支出（標記為{isWishlist?"願望兌現":"目標支出"}，不會拉高你的「生活費自適應學習」平均值，也不會讓「生活區安全水位」被算成超支），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」扣除對應金額` : linkedAcc ? "" : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
+        會記一筆支出（標記為{isWishlist?"願望兌現":"目標支出"}，不會拉高你的「生活費自適應學習」平均值，也不會讓「生活區安全水位」被算成超支），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」和它所屬的帳戶扣除對應金額` : linkedAcc ? `並從「${linkedAcc.name}」扣除對應金額` : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
       </div>
       <Btn style={{ width:"100%" }} onClick={() => {
         const amt = +price || 0;
         if (amt <= 0) return;
         confirm(`${tr("確定記錄")}「${g.name}」${isWishlist?tr("已實現"):tr("支出")}，${tr("花費")} ${fmt(amt)}？`, () => {
-          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`${isWishlist?"🎁 願望兌現":"💸 目標支出"}：${g.name}`, acc:linkedAcc?.name||linkedBucket?.name&&accs.find(a=>a.id===linkedBucket.accId)?.name||"", date:TODAY, tags:"#願望兌現" }]);
+          const parentOfBucket = linkedBucket ? accs.find(a=>a.id===linkedBucket.accId) : null;
+          const chargeAcc = linkedAcc || parentOfBucket;
+          const accField = linkedBucket ? `bucket:${linkedBucket.id}` : (linkedAcc ? linkedAcc.name : "");
+          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`${isWishlist?"🎁 願望兌現":"💸 目標支出"}：${g.name}`, acc:accField, date:TODAY, tags:"#願望兌現" }]);
           if (linkedBucket) upd("buckets", p => (p||[]).map(b => b.id===linkedBucket.id ? { ...b, allocated:Math.max(0, b.allocated-amt) } : b));
+          if (chargeAcc) {
+            if (chargeAcc.type === "credit") upd("accs", p => p.map(a => a.id===chargeAcc.id ? { ...a, payable:(a.payable||0)+amt } : a));
+            else upd("accs", p => p.map(a => a.id===chargeAcc.id ? { ...a, bal:a.bal-amt } : a));
+          }
           if (isWishlist) upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
           close();
         }, "確認記錄");
