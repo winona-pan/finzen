@@ -119,7 +119,7 @@ def main():
     prices = {}
 
     try:
-        with open("stock_prices.json", "r", encoding="utf-8") as f:
+        with open("public/stock_prices.json", "r", encoding="utf-8") as f:
             prices = json.load(f)
     except Exception:
         pass
@@ -190,7 +190,7 @@ def main():
         "us_count": len(US_STOCKS),
         "institutional_date": inst_date,
     }
-    with open("stock_prices.json", "w", encoding="utf-8") as f:
+    with open("public/stock_prices.json", "w", encoding="utf-8") as f:
         json.dump(prices, f, ensure_ascii=False, indent=2)
 
     real = [k for k in prices if not k.startswith("_") and not k.endswith(".TW")]
@@ -218,7 +218,7 @@ def fetch_rates():
                 if cur in r and r[cur]:
                     rates[cur] = round(1 / r[cur], 6)
             rates["_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            with open("rates.json", "w", encoding="utf-8") as f:
+            with open("public/rates.json", "w", encoding="utf-8") as f:
                 json.dump(rates, f, ensure_ascii=False, indent=2)
             print(f"  ✅ 匯率更新完成（{len(rates)-1} 種貨幣）")
             return
