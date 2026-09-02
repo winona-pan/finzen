@@ -180,6 +180,10 @@ const D = {
   // ── Common actions used broadly ──
   "確定": { en:"Confirm" }, "取消": { en:"Cancel" }, "儲存": { en:"Save" }, "刪除": { en:"Delete" }, "編輯": { en:"Edit" },
   "關閉": { en:"Close" }, "新增": { en:"Add" }, "送出": { en:"Send" }, "選填": { en:"optional" },
+  "海外刷卡（幫我算手續費）": { en:"Overseas transaction (calculate fee for me)" },
+  "商品金額（未含手續費）": { en:"Item Price (before fee)" }, "手續費%": { en:"Fee %" },
+  "台灣各銀行海外刷卡手續費大約落在 1%–1.5% 左右（不同銀行/卡片不同，請自行確認），在台灣刷國外網站（訂房網、海外購物網站等）通常也算海外消費": { en:"Taiwan banks' overseas transaction fees are typically around 1%–1.5% (varies by bank/card, please confirm with yours) — paying on foreign websites from Taiwan (booking sites, overseas shopping sites, etc.) usually counts as an overseas transaction too" },
+  "含手續費總額": { en:"Total incl. fee" },
 
   // ── Add/Edit Transaction ──
   "新增 / 補記": { en:"Add / Backfill" }, "金額": { en:"Amount" }, "說明": { en:"Note" },
