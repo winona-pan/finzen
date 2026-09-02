@@ -94,8 +94,8 @@ export default function WalletPage({
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>資產</span>
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:C.textSub }}>{fmt(visA.reduce((s,a) => {
+              <div style={{ display:"flex", alignItems:"center", gap:8 }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
+                <span style={{ fontSize:11, color:C.textSub, ...maskStyle }}>{fmt(visA.reduce((s,a) => {
                   if (a.type === "investment") {
                     const stForAcc = stByAcc[a.name] || [];
                     const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
@@ -127,7 +127,7 @@ export default function WalletPage({
                 upd("accs", p => p.map(a => orderMap[a.id] !== undefined ? { ...a, order:orderMap[a.id] } : a));
               };
               return <div key={grp.type}>
-                <SH title={grp.label} right={fmt(total)} />
+                <SH title={grp.label} right={<span onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }} style={{ cursor:hideAmounts?"pointer":"default", ...maskStyle }}>{fmt(total)}</span>} />
                 <Card style={{ overflow:"hidden" }}>
                   {all.map((a, i) => {
                     const accRowContent = (
@@ -215,8 +215,8 @@ export default function WalletPage({
                 <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>負債（信用卡）</span>
                 <InfoBtn msg="信用卡應付金額是你欠銀行的錢，已從總資產中扣除。" />
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:totDebt>0?C.expense:C.textSub }}>{totDebt>0?`-${fmt(totDebt)}`:fmt(0)}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
+                <span style={{ fontSize:11, color:totDebt>0?C.expense:C.textSub, ...maskStyle }}>{totDebt>0?`-${fmt(totDebt)}`:fmt(0)}</span>
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["credit"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
@@ -237,7 +237,7 @@ export default function WalletPage({
                         </div>
                       </div>
                       <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, width:`${Math.min(100, pct)}%`, background:col }} /></div>
-                      {overLimit && <div style={{ fontSize:11, color:C.danger, marginTop:4 }}>已超過信用額度 {fmt(c.payable - c.limit)}</div>}
+                      {overLimit && <div style={{ fontSize:11, color:C.danger, marginTop:4, ...maskStyle }}>已超過信用額度 {fmt(c.payable - c.limit)}</div>}
                     </div>
                   </SwipeRow>;
                 })}

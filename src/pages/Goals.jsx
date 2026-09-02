@@ -63,8 +63,14 @@ export default function GoalsPage({
           const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
           return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>算法：{gs.shares} 股 × {goalUseMv ? `目前股價 ${fmt(price)}` : `平均成本 ${fmt(gs.shares>0?gs.cost/gs.shares:0)}`} = {fmt(current)}</div>;
         })()}
-        {remaining > 0 && <div style={{ marginTop:6, fontSize:compact?11:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
-        {pct >= 100 && (
+        {remaining > 0 && !g.wishPurchased && <div style={{ marginTop:6, fontSize:compact?11:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
+        {g.wishPurchased ? (
+          <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, textAlign:"center" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.teal, marginBottom:6 }}>🎁 已實現願望！</div>
+            <button onClick={() => setGoalArchived(g.id, true)} style={{ padding:"6px 14px", borderRadius:8, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>📦 封存這個目標</button>
+            <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>不封存也沒關係，會繼續留在這裡</div>
+          </div>
+        ) : pct >= 100 && (
           <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, textAlign:"center" }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.teal, marginBottom:6 }}>🎉 已達成目標！</div>
             <button onClick={() => setGoalArchived(g.id, true)} style={{ padding:"6px 14px", borderRadius:8, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>📦 封存這個目標</button>
