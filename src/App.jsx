@@ -1224,9 +1224,11 @@ export default function App() {
     // v7/quote 從 2024 年底起被 Yahoo 陸續封鎖，現在大多回 401，優先試 v8/chart（還在正常運作），v7 留著當最後備援
     const yahooV8 = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
     const yahooV7 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}&fields=regularMarketPrice,shortName,longName`;
+    // corsproxy.io 免費版現在只給 localhost 用，部署到真正網域基本上打不通，排到最後、優先試其他還能用的
     const proxies = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
       (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
     ];
     for (const makeProxy of proxies) {
       for (const apiUrl of [yahooV8, yahooV7]) {
@@ -1582,8 +1584,9 @@ export default function App() {
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
     const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y`;
     const proxies = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
       (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
     ];
     for (const makeProxy of proxies) {
       try {
@@ -1614,9 +1617,9 @@ export default function App() {
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
     const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=${opt.interval}&range=${opt.range}`;
     const proxies = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
       (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
     ];
     for (const makeProxy of proxies) {
       try {
@@ -1720,14 +1723,21 @@ export default function App() {
 
   /* ── 自選股（尚未持有，追蹤價格用）── */
   const watchStocks = d.watchStocks || [];
-  const addWatchStock = useCallback((item) => upd("watchStocks", p => [...(p||[]), { id:"ws"+Date.now(), ...item }]), [upd]);
+  /* 加入自選股前先檢查同代號+市場是不是已經在清單裡，不然容易不小心按兩次造成重複 */
+  const addWatchStock = useCallback((item) => upd("watchStocks", p => {
+    const list = p || [];
+    const exists = list.some(w => w.ticker.toUpperCase() === item.ticker.toUpperCase() && w.market === item.market);
+    if (exists) return list;
+    return [...list, { id:"ws"+Date.now(), ...item }];
+  }), [upd]);
   const removeWatchStock = useCallback((id) => upd("watchStocks", p => (p||[]).filter(x=>x.id!==id)), [upd]);
   const [loadingWatch, setLoadingWatch] = useState(false);
   const [growthBucket, setGrowthBucket] = useState(null);
   const [offsetGoal, setOffsetGoal] = useState(null);
   const [depositGoal, setDepositGoal] = useState(null);
   const refreshWatchStocks = useCallback(async () => {
-    if (!watchStocks.length) return;
+    const list = (dRef.current?.watchStocks) || watchStocks; // 用 dRef 讀最新狀態，避免剛加入一支股票、閉包還沒更新就抓不到那支新加的
+    if (!list.length) return;
     setLoadingWatch(true);
     try {
       const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
@@ -1746,7 +1756,7 @@ export default function App() {
           return w;
         }));
       } else {
-        needsLiveLookup.push(...watchStocks);
+        needsLiveLookup.push(...list);
       }
       // 靜態清單裡沒有的（自選股通常不在你原本的持股清單內），改用即時查詢逐一補上
       for (const w of needsLiveLookup) {
@@ -1755,7 +1765,7 @@ export default function App() {
         await new Promise(r => setTimeout(r, 200));
       }
     } finally { setLoadingWatch(false); }
-  }, [watchStocks, fetchPrice, upd]);
+  }, [watchStocks, fetchPrice, upd, dRef]);
 
   /* ── 每日損益熱力圖（近 90 天，依交易記帳的淨收支）── */
   const dailyPnlHeatmap = useMemo(() => {
@@ -1789,8 +1799,9 @@ export default function App() {
         const sym = s.market === "TW" ? `${s.ticker}.TW` : s.ticker;
         const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y&events=div`;
         const proxies = [
-          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+          (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
           (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
         ];
         for (const makeProxy of proxies) {
           try {
