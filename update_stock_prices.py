@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 FinZen 股價 + 法人資料自動更新腳本
-- 台股股價：Yahoo Finance v7（最穩定）
+- 台股股價：Yahoo Finance v8/chart（v7/quote 從 2024 年底起陸續被 Yahoo 封鎖，改用還在正常運作的端點）
 - 三大法人：台灣證交所公開 JSON（完整欄位修正版）
-- 美股：Yahoo Finance v7
+- 美股：Yahoo Finance v8/chart
 每次執行會更新 stock_prices.json
 """
 
@@ -30,35 +30,49 @@ def req(url, timeout=12):
         return None
 
 def fetch_yahoo(symbols_str):
-    """批量抓取 Yahoo Finance v7，回傳 {symbol: data}"""
-    url = (f"https://query1.finance.yahoo.com/v7/finance/quote"
-           f"?symbols={symbols_str}"
-           f"&fields=regularMarketPrice,regularMarketDayHigh,regularMarketDayLow,"
-           f"regularMarketVolume,shortName,longName,regularMarketChangePercent")
-    raw = req(url)
-    if not raw:
-        url2 = url.replace("query1", "query2")
-        raw = req(url2)
-    if not raw:
-        return {}
-    try:
-        d = json.loads(raw)
-        results = d.get("quoteResponse", {}).get("result", [])
-        out = {}
-        for q in results:
-            sym = q.get("symbol", "")
+    """逐一抓取 Yahoo Finance v8/chart（v7/quote 從 2024 年底起被 Yahoo 陸續封鎖，改用還在正常運作的 v8/chart 端點，一次一檔），回傳 {symbol: data}"""
+    out = {}
+    symbols = [s for s in symbols_str.split(",") if s]
+    for sym in symbols:
+        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
+               f"?interval=1d&range=1d")
+        raw = req(url)
+        if not raw:
+            url2 = url.replace("query1", "query2")
+            raw = req(url2)
+        if not raw:
+            time.sleep(0.3)
+            continue
+        try:
+            d = json.loads(raw)
+            result = d.get("chart", {}).get("result")
+            if not result:
+                time.sleep(0.3)
+                continue
+            meta = result[0].get("meta", {})
+            price = meta.get("regularMarketPrice")
+            prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+            if price is None:
+                time.sleep(0.3)
+                continue
+            chg_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close else 0
+            # v8/chart 沒有當天最高/最低/成交量欄位，退回抓當天K棒的 high/low/volume（如果有）
+            quote = result[0].get("indicators", {}).get("quote", [{}])[0]
+            highs = [v for v in (quote.get("high") or []) if v is not None]
+            lows = [v for v in (quote.get("low") or []) if v is not None]
+            vols = [v for v in (quote.get("volume") or []) if v is not None]
             out[sym] = {
-                "price":  q.get("regularMarketPrice"),
-                "high":   q.get("regularMarketDayHigh"),
-                "low":    q.get("regularMarketDayLow"),
-                "vol":    q.get("regularMarketVolume"),
-                "chgPct": round(q.get("regularMarketChangePercent", 0), 2) if q.get("regularMarketChangePercent") is not None else 0,
-                "name":   q.get("shortName") or q.get("longName") or sym,
+                "price":  price,
+                "high":   max(highs) if highs else meta.get("regularMarketDayHigh"),
+                "low":    min(lows) if lows else meta.get("regularMarketDayLow"),
+                "vol":    sum(vols) if vols else meta.get("regularMarketVolume"),
+                "chgPct": chg_pct,
+                "name":   meta.get("shortName") or meta.get("longName") or sym,
             }
-        return out
-    except Exception as e:
-        print(f"    Yahoo parse error: {e}")
-        return {}
+        except Exception as e:
+            print(f"    Yahoo parse error ({sym}): {e}")
+        time.sleep(0.3)  # 每檔之間留點間隔，避免被判定成濫用
+    return out
 
 def fetch_institutional(date_str):
     """
