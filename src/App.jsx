@@ -488,8 +488,15 @@ export default function App() {
     }, 1500);
   }, []);
   useEffect(() => {
-    // 從 Google 登入頁導回來時，先把導回結果撈一次（主要是為了在失敗時能看到錯誤訊息）
-    checkRedirectResult();
+    // 從 Google/Apple 登入頁導回來時，先把導回結果撈一次；如果失敗，直接把原因秀出來，不要默默吞掉
+    checkRedirectResult().catch(e => {
+      console.error("登入導回失敗", e);
+      let msg = e.message || String(e);
+      if (e.code === "auth/unauthorized-domain") msg = "這個網域還沒被加進 Firebase 的「已授權網域」清單，登入頁面設定 → Authentication → Settings → Authorized domains，把網站網址加進去";
+      else if (e.code === "auth/operation-not-allowed") msg = "這個登入方式還沒在 Firebase 後台開啟，去 Authentication → Sign-in method 確認有沒有啟用";
+      else if (e.code === "auth/account-exists-with-different-credential") msg = "這個信箱已經用別的方式（例如 Email/密碼）註冊過了，請改用原本的方式登入";
+      alert(`登入失敗：${msg}`);
+    });
     const unsub = watchAuth(async (u) => {
       if (u) {
         uidRef.current = u.uid;
@@ -1250,21 +1257,28 @@ export default function App() {
   const fetchAllPrices = useCallback(async (stockList) => {
     const list = stockList || stocks;
     if (!list || list.length === 0) return;
+    // stock_prices.json 只有固定追蹤的一小群熱門股票（不是你實際持有的股票清單），
+    // 所以就算這個檔案讀取成功，也只處理「剛好有在那份清單裡」的持股；沒對到的，都要落到下面逐檔即時抓
+    let remaining = list;
     try {
       const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
       const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
       if (res.ok) {
         const data = await res.json();
+        const stillMissing = [];
         upd("stocks", p => p.map(s => {
+          if (!list.some(x => x.id === s.id)) return s; // 不在這次要更新的範圍內，原樣保留
           const keys = [`${s.ticker}.TW`, s.ticker, s.ticker.toUpperCase(), `${s.ticker}.US`];
           const item = keys.map(k => data[k]).find(v => v?.price);
           if (item) return { ...s, curPrice:item.price, name:item.name||s.name, lastUpdated:item.updated||"", _extra: { high:item.high, low:item.low, vol:item.vol, chgPct:item.chgPct, institutional:item.institutional, institutional_date:item.institutional_date } };
+          stillMissing.push(s);
           return s;
         }));
-        return;
+        remaining = stillMissing;
       }
     } catch {}
-    for (const st of list) {
+    // 靜態清單裡沒有涵蓋到的股票（你實際持有、但不在那份固定追蹤清單裡），逐檔即時抓
+    for (const st of remaining) {
       try {
         const res = await fetchPrice(st.ticker, st.market);
         if (res?.price) upd("stocks", p => p.map(s => s.id===st.id ? {...s, curPrice:res.price, name:res.name||s.name, lastUpdated:new Date().toLocaleTimeString("zh-TW")} : s));

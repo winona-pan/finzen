@@ -77,7 +77,9 @@ export function loginAnonymously() {
    實際登入狀態 onAuthStateChanged 也會自動收到，這裡才能拿到失敗原因） */
 export function checkRedirectResult() {
   if (!auth) return Promise.resolve(null);
-  return getRedirectResult(auth).catch(e => { console.error("登入導回失敗", e); return null; });
+  // 不要在這裡吞掉錯誤——外面呼叫的地方要能看到真正的失敗原因（例如網域沒授權、Apple 還沒在後台開通），
+  // 不然使用者按了登入、被導去 Google/Apple 頁面繞一圈回來，畫面上什麼都沒發生，完全不知道發生了什麼事
+  return getRedirectResult(auth);
 }
 
 /* Email／密碼登入：Google 登入不方便時的替代方案（例如某些瀏覽器環境擋掉導轉） */
