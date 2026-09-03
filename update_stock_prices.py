@@ -197,7 +197,17 @@ def main():
     print(f"\n✅ 完成！共更新 {len(real)} 檔股票資料")
 
 def fetch_rates():
-    """抓取匯率（對 TWD），存入 rates.json"""
+    """抓取匯率（對 TWD），存入 rates.json；一天只真的抓一次，避免現在改成15分鐘跑一次之後，
+    對免費匯率 API 一天打將近100次那麼頻繁（匯率本來就不需要抓那麼勤）"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        with open("public/rates.json", "r", encoding="utf-8") as f:
+            existing = json.load(f)
+        if existing.get("_updated", "").startswith(today):
+            print(f"  ⏭️ 匯率今天（{today}）已經更新過了，跳過")
+            return
+    except Exception:
+        pass
     TWD_CURS = ["USD","EUR","JPY","GBP","HKD","SGD","CNY","KRW","AUD","CAD","CHF","MYR","THB"]
     to = ",".join(TWD_CURS)
     apis = [
