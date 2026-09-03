@@ -1737,10 +1737,11 @@ export default function App() {
 
   /* ── 自選股（尚未持有，追蹤價格用）── */
   const watchStocks = d.watchStocks || [];
-  /* 加入自選股前先檢查同代號+市場是不是已經在清單裡，不然容易不小心按兩次造成重複 */
+  /* 加入自選股前先檢查同代號+市場是不是已經在清單裡，不然容易不小心按兩次造成重複；
+     用 ?. 保護一下，避免清單裡萬一有壞掉/缺欄位的舊資料，讓整個新增功能跟著壞掉 */
   const addWatchStock = useCallback((item) => upd("watchStocks", p => {
     const list = p || [];
-    const exists = list.some(w => w.ticker.toUpperCase() === item.ticker.toUpperCase() && w.market === item.market);
+    const exists = list.some(w => w?.ticker?.toUpperCase?.() === item.ticker.toUpperCase() && w.market === item.market);
     if (exists) return list;
     return [...list, { id:"ws"+Date.now(), ...item }];
   }), [upd]);
@@ -1763,6 +1764,7 @@ export default function App() {
       const needsLiveLookup = [];
       if (data) {
         upd("watchStocks", p => (p||[]).map(w => {
+          if (!w?.ticker) return w; // 保護一下，避免清單裡有壞掉/缺欄位的舊資料讓整批更新都失敗
           const keys = [`${w.ticker}.TW`, w.ticker, w.ticker.toUpperCase(), `${w.ticker}.US`];
           const item = keys.map(k => data[k]).find(v => v?.price);
           if (item) return { ...w, curPrice:item.price, name:item.name||w.name, _extra:{ chgPct:item.chgPct } };
@@ -1774,8 +1776,11 @@ export default function App() {
       }
       // 靜態清單裡沒有的（自選股通常不在你原本的持股清單內），改用即時查詢逐一補上
       for (const w of needsLiveLookup) {
-        const res = await fetchPrice(w.ticker, w.market);
-        if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
+        if (!w?.ticker) continue;
+        try {
+          const res = await fetchPrice(w.ticker, w.market);
+          if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
+        } catch (e) { console.error(`抓 ${w.ticker} 報價失敗`, e); }
         await new Promise(r => setTimeout(r, 200));
       }
     } finally { setLoadingWatch(false); }

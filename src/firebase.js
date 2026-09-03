@@ -9,7 +9,7 @@
       （免費、不用連信用卡，專案會留在 Spark 方案）→ 照精靈跑完
    ══════════════════════════════════════════════════════ */
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
@@ -53,18 +53,33 @@ export const firebaseEnabled = !!auth;
 export const aiEnabled = !!aiModel;
 export const aiGroundedEnabled = !!aiModelGrounded;
 
-/* 手機瀏覽器（尤其 iOS Safari）常常會擋掉 signInWithPopup，改用 signInWithRedirect：
-   整個頁面導去 Google 登入頁，登入完再導回來，比較不會被瀏覽器的彈窗/第三方限制擋掉 */
-export function loginWithGoogle() {
+/* 手機瀏覽器（尤其 iOS Safari）的隱私保護機制，常常會讓整頁導轉（signInWithRedirect）
+   卡在 firebaseapp.com 那個空白頁面回不來——這是 Firebase 導轉登入在 iOS Safari 上一個滿常見的相容性問題，
+   沒有保證有效的純程式解法。改成優先試「彈出視窗」，卡住/被瀏覽器擋掉彈窗的話才退回整頁導轉當備援。 */
+export async function loginWithGoogle() {
   if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
-  return signInWithRedirect(auth, googleProvider);
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (e) {
+    if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") {
+      return signInWithRedirect(auth, googleProvider);
+    }
+    throw e;
+  }
 }
 
-/* Apple 登入：跟 Google 一樣用整頁導轉的方式。要先在 Firebase 主控台 Authentication 開啟「Apple」提供者，
+/* Apple 登入：跟 Google 一樣，先試彈出視窗，卡住才退回整頁導轉。要先在 Firebase 主控台 Authentication 開啟「Apple」提供者，
    而且要有 Apple Developer 帳號設定 Service ID，比 Google 麻煩一些，沒設定的話按下去會直接報錯 */
-export function loginWithApple() {
+export async function loginWithApple() {
   if (!auth) return Promise.reject(new Error("Firebase 尚未設定"));
-  return signInWithRedirect(auth, appleProvider);
+  try {
+    return await signInWithPopup(auth, appleProvider);
+  } catch (e) {
+    if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") {
+      return signInWithRedirect(auth, appleProvider);
+    }
+    throw e;
+  }
 }
 
 /* 匿名登入：不用任何帳號就能用雲端同步，缺點是換瀏覽器/清資料就找不回來了，沒有辦法「登入」回同一個匿名帳號 */
