@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "last_updated": "2026-09-09 17:23:46",
+    "last_updated": "2026-09-09 19:53:51",
     "tw_count": 49,
     "us_count": 50,
     "institutional_date": "20260909"
@@ -19,7 +19,7 @@
       "dealer": -337
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "0050.TW": {
     "price": 109.65,
@@ -35,7 +35,7 @@
       "dealer": -337
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "0056": {
     "price": 55.75,
@@ -51,7 +51,7 @@
       "dealer": -45
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "0056.TW": {
     "price": 55.75,
@@ -67,7 +67,7 @@
       "dealer": -45
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00878": {
     "price": 34.13,
@@ -83,7 +83,7 @@
       "dealer": -1003
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00878.TW": {
     "price": 34.13,
@@ -99,7 +99,7 @@
       "dealer": -1003
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00881": {
     "price": 50.95,
@@ -115,7 +115,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00881.TW": {
     "price": 50.95,
@@ -131,7 +131,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "009816": {
     "price": 16.11,
@@ -147,7 +147,7 @@
       "dealer": 433
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "009816.TW": {
     "price": 16.11,
@@ -163,7 +163,7 @@
       "dealer": 433
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00981A": {
     "price": 29.92,
@@ -179,7 +179,7 @@
       "dealer": 873
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00981A.TW": {
     "price": 29.92,
@@ -195,7 +195,7 @@
       "dealer": 873
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00929": {
     "price": 29.12,
@@ -211,7 +211,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00929.TW": {
     "price": 29.12,
@@ -227,7 +227,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00939": {
     "price": 23.73,
@@ -243,7 +243,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00939.TW": {
     "price": 23.73,
@@ -259,7 +259,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00940": {
     "price": 12.94,
@@ -275,7 +275,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00940.TW": {
     "price": 12.94,
@@ -291,7 +291,7 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00713": {
     "price": 63.65,
@@ -307,7 +307,7 @@
       "dealer": 10
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "00713.TW": {
     "price": 63.65,
@@ -323,13 +323,13 @@
       "dealer": 10
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2330": {
     "price": 2465.0,
     "high": 2490.0,
     "low": 2460.0,
-    "vol": 16569413,
+    "vol": 15619432,
     "chgPct": -0.2,
     "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
     "market": "TW",
@@ -339,13 +339,13 @@
       "dealer": 89
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2330.TW": {
     "price": 2465.0,
     "high": 2490.0,
     "low": 2460.0,
-    "vol": 16569413,
+    "vol": 15619432,
     "chgPct": -0.2,
     "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
     "market": "TW",
@@ -355,13 +355,13 @@
       "dealer": 89
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2454": {
     "price": 4625.0,
     "high": 4780.0,
     "low": 4625.0,
-    "vol": 5358620,
+    "vol": 4731174,
     "chgPct": -1.8,
     "name": "MEDIATEK INC",
     "market": "TW",
@@ -371,13 +371,13 @@
       "dealer": -34
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2454.TW": {
     "price": 4625.0,
     "high": 4780.0,
     "low": 4625.0,
-    "vol": 5358620,
+    "vol": 4731174,
     "chgPct": -1.8,
     "name": "MEDIATEK INC",
     "market": "TW",
@@ -387,13 +387,13 @@
       "dealer": -34
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2317": {
     "price": 252.0,
     "high": 254.0,
     "low": 250.5,
-    "vol": 19685274,
+    "vol": 19302475,
     "chgPct": 0.2,
     "name": "HON HAI PRECISION INDUSTRY",
     "market": "TW",
@@ -403,13 +403,13 @@
       "dealer": -380
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2317.TW": {
     "price": 252.0,
     "high": 254.0,
     "low": 250.5,
-    "vol": 19685274,
+    "vol": 19302475,
     "chgPct": 0.2,
     "name": "HON HAI PRECISION INDUSTRY",
     "market": "TW",
@@ -419,13 +419,13 @@
       "dealer": -380
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2308": {
     "price": 1795.0,
     "high": 1855.0,
     "low": 1780.0,
-    "vol": 8004332,
+    "vol": 7476593,
     "chgPct": -0.55,
     "name": "DELTA ELECTRONIC",
     "market": "TW",
@@ -435,13 +435,13 @@
       "dealer": -34
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2308.TW": {
     "price": 1795.0,
     "high": 1855.0,
     "low": 1780.0,
-    "vol": 8004332,
+    "vol": 7476593,
     "chgPct": -0.55,
     "name": "DELTA ELECTRONIC",
     "market": "TW",
@@ -451,13 +451,13 @@
       "dealer": -34
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3711": {
     "price": 640.0,
     "high": 645.0,
     "low": 621.0,
-    "vol": 22878529,
+    "vol": 21514181,
     "chgPct": 3.56,
     "name": "ASE TECHNOLOGY HOLDING CO LTD",
     "market": "TW",
@@ -467,13 +467,13 @@
       "dealer": 161
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3711.TW": {
     "price": 640.0,
     "high": 645.0,
     "low": 621.0,
-    "vol": 22878529,
+    "vol": 21514181,
     "chgPct": 3.56,
     "name": "ASE TECHNOLOGY HOLDING CO LTD",
     "market": "TW",
@@ -483,13 +483,13 @@
       "dealer": 161
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2382": {
     "price": 342.0,
     "high": 344.0,
     "low": 335.0,
-    "vol": 26224742,
+    "vol": 25846633,
     "chgPct": 4.27,
     "name": "QUANTA COMPUTER",
     "market": "TW",
@@ -499,13 +499,13 @@
       "dealer": 364
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2382.TW": {
     "price": 342.0,
     "high": 344.0,
     "low": 335.0,
-    "vol": 26224742,
+    "vol": 25846633,
     "chgPct": 4.27,
     "name": "QUANTA COMPUTER",
     "market": "TW",
@@ -515,13 +515,13 @@
       "dealer": 364
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2412": {
     "price": 139.5,
     "high": 139.5,
     "low": 137.5,
-    "vol": 9786860,
+    "vol": 9708214,
     "chgPct": 0.36,
     "name": "CHUNGHWA TELECOM",
     "market": "TW",
@@ -531,13 +531,13 @@
       "dealer": -60
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2412.TW": {
     "price": 139.5,
     "high": 139.5,
     "low": 137.5,
-    "vol": 9786860,
+    "vol": 9708214,
     "chgPct": 0.36,
     "name": "CHUNGHWA TELECOM",
     "market": "TW",
@@ -547,13 +547,13 @@
       "dealer": -60
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3037": {
     "price": 993.0,
     "high": 1005.0,
     "low": 980.0,
-    "vol": 21287090,
+    "vol": 20258575,
     "chgPct": 4.09,
     "name": "UNIMICRON TECHNOLOGY",
     "market": "TW",
@@ -563,13 +563,13 @@
       "dealer": -94
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3037.TW": {
     "price": 993.0,
     "high": 1005.0,
     "low": 980.0,
-    "vol": 21287090,
+    "vol": 20258575,
     "chgPct": 4.09,
     "name": "UNIMICRON TECHNOLOGY",
     "market": "TW",
@@ -579,13 +579,13 @@
       "dealer": -94
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2303": {
     "price": 141.5,
     "high": 144.5,
     "low": 137.0,
-    "vol": 270290313,
+    "vol": 268302470,
     "chgPct": 3.28,
     "name": "UNITED MICRO ELECTRONICS",
     "market": "TW",
@@ -595,13 +595,13 @@
       "dealer": 165
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2303.TW": {
     "price": 141.5,
     "high": 144.5,
     "low": 137.0,
-    "vol": 270290313,
+    "vol": 268302470,
     "chgPct": 3.28,
     "name": "UNITED MICRO ELECTRONICS",
     "market": "TW",
@@ -611,13 +611,13 @@
       "dealer": 165
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2881": {
     "price": 147.0,
     "high": 149.0,
     "low": 145.0,
-    "vol": 16518446,
+    "vol": 16313177,
     "chgPct": -1.34,
     "name": "FUBON FINANCIAL HLDG CO LTD",
     "market": "TW",
@@ -627,13 +627,13 @@
       "dealer": -97
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2881.TW": {
     "price": 147.0,
     "high": 149.0,
     "low": 145.0,
-    "vol": 16518446,
+    "vol": 16313177,
     "chgPct": -1.34,
     "name": "FUBON FINANCIAL HLDG CO LTD",
     "market": "TW",
@@ -643,13 +643,13 @@
       "dealer": -97
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2891": {
     "price": 66.6,
     "high": 67.4000015258789,
     "low": 66.19999694824219,
-    "vol": 29218650,
+    "vol": 28797737,
     "chgPct": -2.35,
     "name": "CTBC FINANCIAL HOLDINGS COMPANY",
     "market": "TW",
@@ -659,13 +659,13 @@
       "dealer": -191
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2891.TW": {
     "price": 66.6,
     "high": 67.4000015258789,
     "low": 66.19999694824219,
-    "vol": 29218650,
+    "vol": 28797737,
     "chgPct": -2.35,
     "name": "CTBC FINANCIAL HOLDINGS COMPANY",
     "market": "TW",
@@ -675,13 +675,13 @@
       "dealer": -191
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2882": {
     "price": 110.5,
     "high": 113.0,
     "low": 109.0,
-    "vol": 23497782,
+    "vol": 23307232,
     "chgPct": -2.64,
     "name": "CATHAY FINANCIAL HLDG CO",
     "market": "TW",
@@ -691,13 +691,13 @@
       "dealer": -78
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2882.TW": {
     "price": 110.5,
     "high": 113.0,
     "low": 109.0,
-    "vol": 23497782,
+    "vol": 23307232,
     "chgPct": -2.64,
     "name": "CATHAY FINANCIAL HLDG CO",
     "market": "TW",
@@ -707,13 +707,13 @@
       "dealer": -78
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2884": {
     "price": 44.25,
     "high": 46.04999923706055,
     "low": 43.79999923706055,
-    "vol": 62871784,
+    "vol": 62166457,
     "chgPct": -2.85,
     "name": "E SUN FINANCIAL HOLDINGS",
     "market": "TW",
@@ -723,13 +723,13 @@
       "dealer": -154
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2884.TW": {
     "price": 44.25,
     "high": 46.04999923706055,
     "low": 43.79999923706055,
-    "vol": 62871784,
+    "vol": 62166457,
     "chgPct": -2.85,
     "name": "E SUN FINANCIAL HOLDINGS",
     "market": "TW",
@@ -739,13 +739,13 @@
       "dealer": -154
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2886": {
     "price": 50.3,
     "high": 50.5,
     "low": 49.599998474121094,
-    "vol": 14852524,
+    "vol": 14752769,
     "chgPct": -0.59,
     "name": "MEGA FINANCIAL HOLDING CO",
     "market": "TW",
@@ -755,13 +755,13 @@
       "dealer": -100
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2886.TW": {
     "price": 50.3,
     "high": 50.5,
     "low": 49.599998474121094,
-    "vol": 14852524,
+    "vol": 14752769,
     "chgPct": -0.59,
     "name": "MEGA FINANCIAL HOLDING CO",
     "market": "TW",
@@ -771,13 +771,13 @@
       "dealer": -100
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2892": {
     "price": 37.8,
     "high": 38.099998474121094,
     "low": 37.150001525878906,
-    "vol": 30620781,
+    "vol": 30497038,
     "chgPct": -0.13,
     "name": "FIRST FINANCIAL HOLDING CO LTD",
     "market": "TW",
@@ -787,13 +787,13 @@
       "dealer": -111
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2892.TW": {
     "price": 37.8,
     "high": 38.099998474121094,
     "low": 37.150001525878906,
-    "vol": 30620781,
+    "vol": 30497038,
     "chgPct": -0.13,
     "name": "FIRST FINANCIAL HOLDING CO LTD",
     "market": "TW",
@@ -803,13 +803,13 @@
       "dealer": -111
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2880": {
     "price": 44.35,
     "high": 45.25,
     "low": 44.04999923706055,
-    "vol": 9102427,
+    "vol": 8891108,
     "chgPct": -1.77,
     "name": "HUA NAN FINANCIAL HOLDINGS CO",
     "market": "TW",
@@ -819,13 +819,13 @@
       "dealer": -84
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2880.TW": {
     "price": 44.35,
     "high": 45.25,
     "low": 44.04999923706055,
-    "vol": 9102427,
+    "vol": 8891108,
     "chgPct": -1.77,
     "name": "HUA NAN FINANCIAL HOLDINGS CO",
     "market": "TW",
@@ -835,13 +835,13 @@
       "dealer": -84
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5880": {
     "price": 26.85,
     "high": 26.850000381469727,
     "low": 26.450000762939453,
-    "vol": 15129769,
+    "vol": 15050119,
     "chgPct": 0.0,
     "name": "TAIWAN COOPERATIVE FINANCIAL HL",
     "market": "TW",
@@ -851,13 +851,13 @@
       "dealer": 77
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5880.TW": {
     "price": 26.85,
     "high": 26.850000381469727,
     "low": 26.450000762939453,
-    "vol": 15129769,
+    "vol": 15050119,
     "chgPct": 0.0,
     "name": "TAIWAN COOPERATIVE FINANCIAL HL",
     "market": "TW",
@@ -867,13 +867,13 @@
       "dealer": 77
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1303": {
     "price": 236.5,
     "high": 244.5,
     "low": 231.0,
-    "vol": 67504427,
+    "vol": 66913292,
     "chgPct": 0.64,
     "name": "NAN YA PLASTIC",
     "market": "TW",
@@ -883,13 +883,13 @@
       "dealer": 196
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1303.TW": {
     "price": 236.5,
     "high": 244.5,
     "low": 231.0,
-    "vol": 67504427,
+    "vol": 66913292,
     "chgPct": 0.64,
     "name": "NAN YA PLASTIC",
     "market": "TW",
@@ -899,13 +899,13 @@
       "dealer": 196
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1301": {
     "price": 66.7,
     "high": 67.4000015258789,
     "low": 64.5999984741211,
-    "vol": 26876764,
+    "vol": 26758834,
     "chgPct": 2.46,
     "name": "FORMOSA PLASTIC",
     "market": "TW",
@@ -915,13 +915,13 @@
       "dealer": 98
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1301.TW": {
     "price": 66.7,
     "high": 67.4000015258789,
     "low": 64.5999984741211,
-    "vol": 26876764,
+    "vol": 26758834,
     "chgPct": 2.46,
     "name": "FORMOSA PLASTIC",
     "market": "TW",
@@ -931,13 +931,13 @@
       "dealer": 98
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2002": {
     "price": 19.25,
     "high": 19.25,
     "low": 18.950000762939453,
-    "vol": 33455877,
+    "vol": 33331567,
     "chgPct": 0.79,
     "name": "CHINA STEEL CORP",
     "market": "TW",
@@ -947,13 +947,13 @@
       "dealer": 2872
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2002.TW": {
     "price": 19.25,
     "high": 19.25,
     "low": 18.950000762939453,
-    "vol": 33455877,
+    "vol": 33331567,
     "chgPct": 0.79,
     "name": "CHINA STEEL CORP",
     "market": "TW",
@@ -963,13 +963,13 @@
       "dealer": 2872
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2345": {
     "price": 2015.0,
     "high": 2070.0,
     "low": 1960.0,
-    "vol": 3519228,
+    "vol": 3383161,
     "chgPct": 3.07,
     "name": "ACCTON TECHNOLOGY CORP",
     "market": "TW",
@@ -979,13 +979,13 @@
       "dealer": -8
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2345.TW": {
     "price": 2015.0,
     "high": 2070.0,
     "low": 1960.0,
-    "vol": 3519228,
+    "vol": 3383161,
     "chgPct": 3.07,
     "name": "ACCTON TECHNOLOGY CORP",
     "market": "TW",
@@ -995,13 +995,13 @@
       "dealer": -8
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3017": {
     "price": 3380.0,
     "high": 3395.0,
     "low": 3265.0,
-    "vol": 2361128,
+    "vol": 2273472,
     "chgPct": 2.89,
     "name": "ASIA VITAL COMPONENTS CO LTD",
     "market": "TW",
@@ -1011,13 +1011,13 @@
       "dealer": -18
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3017.TW": {
     "price": 3380.0,
     "high": 3395.0,
     "low": 3265.0,
-    "vol": 2361128,
+    "vol": 2273472,
     "chgPct": 2.89,
     "name": "ASIA VITAL COMPONENTS CO LTD",
     "market": "TW",
@@ -1027,13 +1027,13 @@
       "dealer": -18
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2887": {
     "price": 42.4,
     "high": 43.04999923706055,
     "low": 41.54999923706055,
-    "vol": 68976501,
+    "vol": 68473882,
     "chgPct": -0.93,
     "name": "TS FINANCIAL HOLDING CO LTD",
     "market": "TW",
@@ -1043,13 +1043,13 @@
       "dealer": -117
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2887.TW": {
     "price": 42.4,
     "high": 43.04999923706055,
     "low": 41.54999923706055,
-    "vol": 68976501,
+    "vol": 68473882,
     "chgPct": -0.93,
     "name": "TS FINANCIAL HOLDING CO LTD",
     "market": "TW",
@@ -1059,13 +1059,13 @@
       "dealer": -117
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2379": {
     "price": 705.0,
     "high": 733.0,
     "low": 698.0,
-    "vol": 3044363,
+    "vol": 2981231,
     "chgPct": 1.88,
     "name": "REALTEK SEMICONDUCTOR CORP",
     "market": "TW",
@@ -1075,13 +1075,13 @@
       "dealer": -14
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2379.TW": {
     "price": 705.0,
     "high": 733.0,
     "low": 698.0,
-    "vol": 3044363,
+    "vol": 2981231,
     "chgPct": 1.88,
     "name": "REALTEK SEMICONDUCTOR CORP",
     "market": "TW",
@@ -1091,13 +1091,13 @@
       "dealer": -14
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3231": {
     "price": 189.0,
     "high": 191.0,
     "low": 184.0,
-    "vol": 66793165,
+    "vol": 66442518,
     "chgPct": 1.34,
     "name": "WISTRON CORPORATION",
     "market": "TW",
@@ -1107,13 +1107,13 @@
       "dealer": -102
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3231.TW": {
     "price": 189.0,
     "high": 191.0,
     "low": 184.0,
-    "vol": 66793165,
+    "vol": 66442518,
     "chgPct": 1.34,
     "name": "WISTRON CORPORATION",
     "market": "TW",
@@ -1123,13 +1123,13 @@
       "dealer": -102
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2357": {
     "price": 979.0,
     "high": 985.0,
     "low": 963.0,
-    "vol": 1852417,
+    "vol": 1789002,
     "chgPct": 1.14,
     "name": "ASUSTEK COMPUTER INC",
     "market": "TW",
@@ -1139,13 +1139,13 @@
       "dealer": -12
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2357.TW": {
     "price": 979.0,
     "high": 985.0,
     "low": 963.0,
-    "vol": 1852417,
+    "vol": 1789002,
     "chgPct": 1.14,
     "name": "ASUSTEK COMPUTER INC",
     "market": "TW",
@@ -1155,13 +1155,13 @@
       "dealer": -12
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "6669": {
     "price": 2325.0,
     "high": 2425.0,
     "low": 2320.0,
-    "vol": 3890134,
+    "vol": 3450609,
     "chgPct": -0.64,
     "name": "WIWYNN CORPORATION",
     "market": "TW",
@@ -1171,13 +1171,13 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "6669.TW": {
     "price": 2325.0,
     "high": 2425.0,
     "low": 2320.0,
-    "vol": 3890134,
+    "vol": 3450609,
     "chgPct": -0.64,
     "name": "WIWYNN CORPORATION",
     "market": "TW",
@@ -1187,13 +1187,13 @@
       "dealer": 0
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3661": {
     "price": 3905.0,
     "high": 3990.0,
     "low": 3850.0,
-    "vol": 3247729,
+    "vol": 2920437,
     "chgPct": -3.1,
     "name": "ALCHIP TECHNOLOGIES LIMITD",
     "market": "TW",
@@ -1203,13 +1203,13 @@
       "dealer": -16
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3661.TW": {
     "price": 3905.0,
     "high": 3990.0,
     "low": 3850.0,
-    "vol": 3247729,
+    "vol": 2920437,
     "chgPct": -3.1,
     "name": "ALCHIP TECHNOLOGIES LIMITD",
     "market": "TW",
@@ -1219,13 +1219,13 @@
       "dealer": -16
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2409": {
     "price": 30.5,
     "high": 32.20000076293945,
     "low": 30.149999618530273,
-    "vol": 589625406,
+    "vol": 588058493,
     "chgPct": 3.04,
     "name": "AUO CORPORATION",
     "market": "TW",
@@ -1235,13 +1235,13 @@
       "dealer": -949
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2409.TW": {
     "price": 30.5,
     "high": 32.20000076293945,
     "low": 30.149999618530273,
-    "vol": 589625406,
+    "vol": 588058493,
     "chgPct": 3.04,
     "name": "AUO CORPORATION",
     "market": "TW",
@@ -1251,13 +1251,13 @@
       "dealer": -949
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2327": {
     "price": 565.0,
     "high": 585.0,
     "low": 563.0,
-    "vol": 27595377,
+    "vol": 26938860,
     "chgPct": -0.35,
     "name": "YAGEO CORP",
     "market": "TW",
@@ -1267,13 +1267,13 @@
       "dealer": -29
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2327.TW": {
     "price": 565.0,
     "high": 585.0,
     "low": 563.0,
-    "vol": 27595377,
+    "vol": 26938860,
     "chgPct": -0.35,
     "name": "YAGEO CORP",
     "market": "TW",
@@ -1283,13 +1283,13 @@
       "dealer": -29
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1216": {
     "price": 76.0,
     "high": 76.69999694824219,
     "low": 75.5999984741211,
-    "vol": 8530177,
+    "vol": 8482662,
     "chgPct": -0.91,
     "name": "UNI-PRESIDENT ENTERPRISES CORP",
     "market": "TW",
@@ -1299,13 +1299,13 @@
       "dealer": -66
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "1216.TW": {
     "price": 76.0,
     "high": 76.69999694824219,
     "low": 75.5999984741211,
-    "vol": 8530177,
+    "vol": 8482662,
     "chgPct": -0.91,
     "name": "UNI-PRESIDENT ENTERPRISES CORP",
     "market": "TW",
@@ -1315,13 +1315,13 @@
       "dealer": -66
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "9910": {
     "price": 68.6,
     "high": 71.9000015258789,
     "low": 68.5,
-    "vol": 1984127,
+    "vol": 1951306,
     "chgPct": -4.46,
     "name": "FENG TAY ENTERPRISE CO LTD",
     "market": "TW",
@@ -1331,13 +1331,13 @@
       "dealer": -8
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "9910.TW": {
     "price": 68.6,
     "high": 71.9000015258789,
     "low": 68.5,
-    "vol": 1984127,
+    "vol": 1951306,
     "chgPct": -4.46,
     "name": "FENG TAY ENTERPRISE CO LTD",
     "market": "TW",
@@ -1347,13 +1347,13 @@
       "dealer": -8
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5871": {
     "price": 112.0,
     "high": 114.0,
     "low": 112.0,
-    "vol": 7826337,
+    "vol": 7716801,
     "chgPct": -2.61,
     "name": "CHAILEASE HOLDING COMPANY LIMIT",
     "market": "TW",
@@ -1363,13 +1363,13 @@
       "dealer": -4
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5871.TW": {
     "price": 112.0,
     "high": 114.0,
     "low": 112.0,
-    "vol": 7826337,
+    "vol": 7716801,
     "chgPct": -2.61,
     "name": "CHAILEASE HOLDING COMPANY LIMIT",
     "market": "TW",
@@ -1379,13 +1379,13 @@
       "dealer": -4
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3045": {
     "price": 119.5,
     "high": 119.5,
     "low": 117.0,
-    "vol": 8120557,
+    "vol": 8092272,
     "chgPct": 1.27,
     "name": "TAIWAN MOBILE CO",
     "market": "TW",
@@ -1395,13 +1395,13 @@
       "dealer": -138
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3045.TW": {
     "price": 119.5,
     "high": 119.5,
     "low": 117.0,
-    "vol": 8120557,
+    "vol": 8092272,
     "chgPct": 1.27,
     "name": "TAIWAN MOBILE CO",
     "market": "TW",
@@ -1411,13 +1411,13 @@
       "dealer": -138
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "6505": {
     "price": 87.5,
     "high": 87.5,
     "low": 80.0,
-    "vol": 45819329,
+    "vol": 45379144,
     "chgPct": 9.92,
     "name": "FORMOSA PETROCHEMICAL CORPORATI",
     "market": "TW",
@@ -1427,13 +1427,13 @@
       "dealer": 437
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "6505.TW": {
     "price": 87.5,
     "high": 87.5,
     "low": 80.0,
-    "vol": 45819329,
+    "vol": 45379144,
     "chgPct": 9.92,
     "name": "FORMOSA PETROCHEMICAL CORPORATI",
     "market": "TW",
@@ -1443,13 +1443,13 @@
       "dealer": 437
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "4938": {
     "price": 91.1,
     "high": 92.4000015258789,
     "low": 91.0999984741211,
-    "vol": 6477194,
+    "vol": 6455445,
     "chgPct": -0.65,
     "name": "PEGATRON CORPORATION",
     "market": "TW",
@@ -1459,13 +1459,13 @@
       "dealer": 38
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "4938.TW": {
     "price": 91.1,
     "high": 92.4000015258789,
     "low": 91.0999984741211,
-    "vol": 6477194,
+    "vol": 6455445,
     "chgPct": -0.65,
     "name": "PEGATRON CORPORATION",
     "market": "TW",
@@ -1475,13 +1475,13 @@
       "dealer": 38
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3008": {
     "price": 6870.0,
     "high": 6930.0,
     "low": 6550.0,
-    "vol": 1398180,
+    "vol": 1202143,
     "chgPct": 5.69,
     "name": "LARGAN PRECISION CO",
     "market": "TW",
@@ -1491,13 +1491,13 @@
       "dealer": 41
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "3008.TW": {
     "price": 6870.0,
     "high": 6930.0,
     "low": 6550.0,
-    "vol": 1398180,
+    "vol": 1202143,
     "chgPct": 5.69,
     "name": "LARGAN PRECISION CO",
     "market": "TW",
@@ -1507,13 +1507,13 @@
       "dealer": 41
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2395": {
     "price": 653.0,
     "high": 663.0,
     "low": 645.0,
-    "vol": 2192026,
+    "vol": 2105505,
     "chgPct": -0.61,
     "name": "ADVANTECH CO LTD",
     "market": "TW",
@@ -1523,13 +1523,13 @@
       "dealer": -29
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "2395.TW": {
     "price": 653.0,
     "high": 663.0,
     "low": 645.0,
-    "vol": 2192026,
+    "vol": 2105505,
     "chgPct": -0.61,
     "name": "ADVANTECH CO LTD",
     "market": "TW",
@@ -1539,13 +1539,13 @@
       "dealer": -29
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5876": {
     "price": 47.5,
     "high": 48.599998474121094,
     "low": 47.20000076293945,
-    "vol": 6281009,
+    "vol": 6219655,
     "chgPct": -2.56,
     "name": "THE SHANGHAI COMM & SAVINGS BAN",
     "market": "TW",
@@ -1555,13 +1555,13 @@
       "dealer": -59
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "5876.TW": {
     "price": 47.5,
     "high": 48.599998474121094,
     "low": 47.20000076293945,
-    "vol": 6281009,
+    "vol": 6219655,
     "chgPct": -2.56,
     "name": "THE SHANGHAI COMM & SAVINGS BAN",
     "market": "TW",
@@ -1571,506 +1571,506 @@
       "dealer": -59
     },
     "institutional_date": "20260909",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "AAPL": {
-    "price": 312.35,
-    "high": 318.1300048828125,
-    "low": 311.0799865722656,
-    "vol": 24689628,
-    "chgPct": -1.22,
+    "price": 315.725,
+    "high": 319.1499938964844,
+    "low": 309.8999938964844,
+    "vol": 55483474,
+    "chgPct": -0.16,
     "name": "Apple Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "MSFT": {
-    "price": 492.91,
+    "price": 491.57,
     "high": 494.3900146484375,
     "low": 489.79998779296875,
-    "vol": 5604914,
-    "chgPct": -0.21,
+    "vol": 8427726,
+    "chgPct": -0.48,
     "name": "Microsoft Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "GOOGL": {
-    "price": 331.47,
+    "price": 330.52,
     "high": 331.8500061035156,
     "low": 327.8999938964844,
-    "vol": 18997588,
-    "chgPct": -2.04,
+    "vol": 23973729,
+    "chgPct": -2.32,
     "name": "Alphabet Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "GOOG": {
-    "price": 329.08,
-    "high": 329.144287109375,
+    "price": 328.4,
+    "high": 329.3399963378906,
     "low": 325.6300048828125,
-    "vol": 10638401,
-    "chgPct": -1.88,
+    "vol": 13912402,
+    "chgPct": -2.08,
     "name": "Alphabet Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "AMZN": {
-    "price": 252.522,
+    "price": 252.46,
     "high": 254.6199951171875,
     "low": 250.64999389648438,
-    "vol": 17832737,
-    "chgPct": -1.73,
+    "vol": 24456823,
+    "chgPct": -1.76,
     "name": "Amazon.com, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "NVDA": {
-    "price": 224.3,
+    "price": 223.94,
     "high": 226.17999267578125,
-    "low": 223.50999450683594,
-    "vol": 46943731,
-    "chgPct": -0.63,
+    "low": 223.4600067138672,
+    "vol": 63049474,
+    "chgPct": -0.79,
     "name": "NVIDIA Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "META": {
-    "price": 652.445,
+    "price": 653.855,
     "high": 657.8599853515625,
     "low": 638.5601196289062,
-    "vol": 23114158,
-    "chgPct": 6.35,
+    "vol": 30422920,
+    "chgPct": 6.58,
     "name": "Meta Platforms, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "TSLA": {
-    "price": 367.874,
+    "price": 368.04,
     "high": 375.44000244140625,
     "low": 367.25,
-    "vol": 22656014,
-    "chgPct": -0.08,
+    "vol": 28651542,
+    "chgPct": -0.03,
     "name": "Tesla, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "AVGO": {
-    "price": 363.75,
+    "price": 364.355,
     "high": 368.010009765625,
     "low": 359.25,
-    "vol": 11055630,
-    "chgPct": -1.31,
+    "vol": 16888038,
+    "chgPct": -1.14,
     "name": "Broadcom Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "LLY": {
-    "price": 1125.84,
+    "price": 1122.875,
     "high": 1138.699951171875,
-    "low": 1123.9000244140625,
-    "vol": 860286,
-    "chgPct": 0.17,
+    "low": 1119.010009765625,
+    "vol": 1299379,
+    "chgPct": -0.09,
     "name": "Eli Lilly and Company",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "JPM": {
-    "price": 355.28,
-    "high": 356.2799987792969,
+    "price": 354.93,
+    "high": 356.29998779296875,
     "low": 348.69000244140625,
-    "vol": 2355917,
-    "chgPct": 0.5,
+    "vol": 3472551,
+    "chgPct": 0.4,
     "name": "JP Morgan Chase & Co.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "V": {
-    "price": 369.24,
+    "price": 368.19,
     "high": 369.4800109863281,
     "low": 365.8800048828125,
-    "vol": 1876960,
-    "chgPct": 0.16,
+    "vol": 3015416,
+    "chgPct": -0.12,
     "name": "Visa Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "UNH": {
-    "price": 394.72,
+    "price": 393.05,
     "high": 406.5299987792969,
     "low": 378.0801086425781,
-    "vol": 4758434,
-    "chgPct": -1.53,
+    "vol": 5882860,
+    "chgPct": -1.94,
     "name": "UnitedHealth Group Incorporated",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "XOM": {
-    "price": 164.34,
-    "high": 165.0500030517578,
+    "price": 164.26,
+    "high": 165.17999267578125,
     "low": 162.5500030517578,
-    "vol": 6017436,
-    "chgPct": 2.29,
+    "vol": 9686610,
+    "chgPct": 2.24,
     "name": "ExxonMobil Holdings Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "WMT": {
-    "price": 105.95,
+    "price": 105.795,
     "high": 106.1449966430664,
     "low": 105.16000366210938,
-    "vol": 6904108,
-    "chgPct": -0.09,
+    "vol": 9931662,
+    "chgPct": -0.24,
     "name": "Walmart Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "MA": {
-    "price": 570.224,
+    "price": 568.67,
     "high": 570.8400268554688,
     "low": 565.77001953125,
-    "vol": 705295,
-    "chgPct": -0.12,
+    "vol": 1042260,
+    "chgPct": -0.39,
     "name": "Mastercard Incorporated",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "PG": {
-    "price": 142.84,
+    "price": 142.475,
     "high": 144.16000366210938,
-    "low": 142.39999389648438,
-    "vol": 4596226,
-    "chgPct": -1.88,
+    "low": 142.33999633789062,
+    "vol": 6546336,
+    "chgPct": -2.13,
     "name": "Procter & Gamble Company (The)",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "JNJ": {
-    "price": 267.795,
+    "price": 267.29,
     "high": 270.1000061035156,
     "low": 266.7300109863281,
-    "vol": 2144122,
-    "chgPct": -0.49,
+    "vol": 3511580,
+    "chgPct": -0.68,
     "name": "Johnson & Johnson",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "HD": {
-    "price": 310.71,
+    "price": 310.76,
     "high": 313.385009765625,
     "low": 309.8399963378906,
-    "vol": 1521943,
-    "chgPct": -0.95,
+    "vol": 2271100,
+    "chgPct": -0.94,
     "name": "Home Depot, Inc. (The)",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "COST": {
-    "price": 899.631,
+    "price": 902.25,
     "high": 909.2299194335938,
     "low": 898.4299926757812,
-    "vol": 1061431,
-    "chgPct": -1.16,
+    "vol": 1526076,
+    "chgPct": -0.87,
     "name": "Costco Wholesale Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "ORCL": {
-    "price": 163.09,
+    "price": 161.77,
     "high": 165.13999938964844,
     "low": 160.375,
-    "vol": 12483139,
-    "chgPct": 0.35,
+    "vol": 20619995,
+    "chgPct": -0.46,
     "name": "Oracle Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "MRK": {
-    "price": 148.17,
+    "price": 147.58,
     "high": 149.41000366210938,
     "low": 147.19000244140625,
-    "vol": 2566267,
-    "chgPct": -0.2,
+    "vol": 4270317,
+    "chgPct": -0.59,
     "name": "Merck & Company, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "ABBV": {
-    "price": 249.15,
+    "price": 250.53,
     "high": 250.9600067138672,
     "low": 246.8300018310547,
-    "vol": 1207251,
-    "chgPct": 0.15,
+    "vol": 1888745,
+    "chgPct": 0.7,
     "name": "AbbVie Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "CVX": {
-    "price": 213.18,
+    "price": 213.745,
     "high": 215.27999877929688,
     "low": 212.22999572753906,
-    "vol": 4501038,
-    "chgPct": 1.61,
+    "vol": 6460175,
+    "chgPct": 1.88,
     "name": "Chevron Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "CRM": {
-    "price": 247.73,
+    "price": 243.665,
     "high": 254.8000030517578,
-    "low": 246.29049682617188,
-    "vol": 4532654,
-    "chgPct": -0.56,
+    "low": 243.4499969482422,
+    "vol": 7620898,
+    "chgPct": -2.19,
     "name": "Salesforce, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "KO": {
-    "price": 87.855,
+    "price": 87.505,
     "high": 88.3949966430664,
-    "low": 87.70999908447266,
-    "vol": 5145318,
-    "chgPct": -0.57,
+    "low": 87.41000366210938,
+    "vol": 8497028,
+    "chgPct": -0.97,
     "name": "Coca-Cola Company (The)",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "AMD": {
-    "price": 523.42,
+    "price": 520.59,
     "high": 526.7899780273438,
     "low": 506.3599853515625,
-    "vol": 15794220,
-    "chgPct": 3.5,
+    "vol": 19700390,
+    "chgPct": 2.94,
     "name": "Advanced Micro Devices, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "PEP": {
-    "price": 136.515,
+    "price": 136.7,
     "high": 138.1199951171875,
     "low": 136.3300018310547,
-    "vol": 3359792,
-    "chgPct": -1.4,
+    "vol": 4874319,
+    "chgPct": -1.26,
     "name": "Pepsico, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "NFLX": {
-    "price": 76.365,
+    "price": 76.11,
     "high": 76.72000122070312,
-    "low": 76.0999984741211,
-    "vol": 10801978,
-    "chgPct": -0.53,
+    "low": 75.87000274658203,
+    "vol": 17420827,
+    "chgPct": -0.86,
     "name": "Netflix, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "BAC": {
-    "price": 62.79,
+    "price": 62.685,
     "high": 63.189998626708984,
     "low": 61.42499923706055,
-    "vol": 16615975,
-    "chgPct": 0.64,
+    "vol": 23352683,
+    "chgPct": 0.47,
     "name": "Bank of America Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "TMO": {
-    "price": 606.2,
-    "high": 607.6500244140625,
+    "price": 607.32,
+    "high": 609.510009765625,
     "low": 597.3099975585938,
-    "vol": 941732,
-    "chgPct": 0.53,
+    "vol": 1441181,
+    "chgPct": 0.71,
     "name": "Thermo Fisher Scientific Inc",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "ADBE": {
-    "price": 257.275,
+    "price": 254.64,
     "high": 259.42999267578125,
-    "low": 255.27000427246094,
-    "vol": 1548687,
-    "chgPct": 0.01,
+    "low": 254.4600067138672,
+    "vol": 2663886,
+    "chgPct": -1.02,
     "name": "Adobe Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "LIN": {
-    "price": 466.63,
+    "price": 467.09,
     "high": 468.3800048828125,
     "low": 463.3699951171875,
-    "vol": 964752,
-    "chgPct": -0.37,
+    "vol": 1305204,
+    "chgPct": -0.28,
     "name": "Linde plc",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "MCD": {
-    "price": 255.345,
+    "price": 253.69,
     "high": 256.5,
     "low": 253.34579467773438,
-    "vol": 2218602,
-    "chgPct": -0.18,
+    "vol": 3270042,
+    "chgPct": -0.83,
     "name": "McDonald's Corporation",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "CSCO": {
-    "price": 109.695,
+    "price": 109.4,
     "high": 110.41999816894531,
     "low": 109.12999725341797,
-    "vol": 4636264,
-    "chgPct": 0.48,
+    "vol": 6963761,
+    "chgPct": 0.21,
     "name": "Cisco Systems, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "ABT": {
-    "price": 105.61,
+    "price": 105.2,
     "high": 106.85990142822266,
     "low": 104.77999877929688,
-    "vol": 2405059,
-    "chgPct": 0.09,
+    "vol": 4062192,
+    "chgPct": -0.3,
     "name": "Abbott Laboratories",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "WFC": {
-    "price": 89.735,
-    "high": 89.79000091552734,
+    "price": 89.635,
+    "high": 89.94000244140625,
     "low": 87.20010375976562,
-    "vol": 6758171,
-    "chgPct": 2.02,
+    "vol": 10662385,
+    "chgPct": 1.9,
     "name": "Wells Fargo & Company",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "DIS": {
-    "price": 104.57,
-    "high": 104.76000213623047,
+    "price": 104.29,
+    "high": 104.93000030517578,
     "low": 102.98999786376953,
-    "vol": 2610878,
-    "chgPct": -0.47,
+    "vol": 4885727,
+    "chgPct": -0.73,
     "name": "Walt Disney Company (The)",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "ACN": {
-    "price": 176.92,
+    "price": 176.23,
     "high": 180.9683074951172,
-    "low": 176.4499969482422,
-    "vol": 1748976,
-    "chgPct": -1.18,
+    "low": 176.1699981689453,
+    "vol": 2814380,
+    "chgPct": -1.56,
     "name": "Accenture plc",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "IBM": {
-    "price": 236.21,
-    "high": 237.3419952392578,
+    "price": 240.765,
+    "high": 241.5,
     "low": 230.36000061035156,
-    "vol": 2256311,
-    "chgPct": 1.78,
+    "vol": 4798014,
+    "chgPct": 3.74,
     "name": "International Business Machines",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "TXN": {
-    "price": 261.81,
+    "price": 260.68,
     "high": 262.739990234375,
     "low": 256.4700012207031,
-    "vol": 1590931,
-    "chgPct": 1.12,
+    "vol": 2623988,
+    "chgPct": 0.68,
     "name": "Texas Instruments Incorporated",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "INTU": {
-    "price": 315.5,
+    "price": 313.182,
     "high": 321.30499267578125,
-    "low": 313.2099914550781,
-    "vol": 983326,
-    "chgPct": -1.08,
+    "low": 312.80999755859375,
+    "vol": 1583098,
+    "chgPct": -1.8,
     "name": "Intuit Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "VZ": {
-    "price": 49.205,
+    "price": 49.73,
     "high": 50.290000915527344,
     "low": 48.81999969482422,
-    "vol": 12150305,
-    "chgPct": -2.39,
+    "vol": 16351371,
+    "chgPct": -1.35,
     "name": "Verizon Communications Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "NOW": {
-    "price": 131.258,
+    "price": 131.51,
     "high": 134.5998992919922,
     "low": 130.8520050048828,
-    "vol": 5738556,
-    "chgPct": -2.2,
+    "vol": 8289546,
+    "chgPct": -2.01,
     "name": "ServiceNow, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "CAT": {
-    "price": 818.67,
+    "price": 816.6,
     "high": 827.9600219726562,
     "low": 813.5,
-    "vol": 682010,
-    "chgPct": -0.46,
+    "vol": 1097827,
+    "chgPct": -0.71,
     "name": "Caterpillar, Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "AMGN": {
-    "price": 391.385,
+    "price": 392.31,
     "high": 395.54998779296875,
     "low": 389.2799987792969,
-    "vol": 1236287,
-    "chgPct": -0.45,
+    "vol": 2099851,
+    "chgPct": -0.22,
     "name": "Amgen Inc.",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "QCOM": {
-    "price": 175.17,
+    "price": 176.305,
     "high": 180.85580444335938,
     "low": 173.32000732421875,
-    "vol": 7332803,
-    "chgPct": 0.62,
+    "vol": 9481866,
+    "chgPct": 1.27,
     "name": "QUALCOMM Incorporated",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "VOO": {
-    "price": 701.43,
+    "price": 700.97,
     "high": 702.6433715820312,
     "low": 699.4849853515625,
-    "vol": 2571238,
-    "chgPct": -0.37,
+    "vol": 3565343,
+    "chgPct": -0.44,
     "name": "Vanguard S&P 500 ETF",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "QQQ": {
-    "price": 716.54,
+    "price": 716.12,
     "high": 719.7000122070312,
     "low": 714.02001953125,
-    "vol": 16813913,
-    "chgPct": -0.25,
+    "vol": 23242309,
+    "chgPct": -0.31,
     "name": "Invesco QQQ Trust, Series 1",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   },
   "SPY": {
-    "price": 763.05,
+    "price": 762.535,
     "high": 764.4650268554688,
     "low": 760.9400024414062,
-    "vol": 15183903,
-    "chgPct": -0.38,
+    "vol": 23716120,
+    "chgPct": -0.45,
     "name": "State Street SPDR S&P 500 ETF T",
     "market": "US",
-    "updated": "2026-09-09 17:24"
+    "updated": "2026-09-09 19:54"
   }
 }
