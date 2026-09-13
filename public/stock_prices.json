@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "last_updated": "2026-09-12 03:35:01",
+    "last_updated": "2026-09-13 03:41:17",
     "tw_count": 49,
     "us_count": 50,
     "institutional_date": "20260911"
@@ -9,7 +9,7 @@
     "price": 107.7,
     "high": 108.0,
     "low": 106.9000015258789,
-    "vol": 101602480,
+    "vol": 90140839,
     "chgPct": -1.33,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -19,13 +19,13 @@
       "dealer": -3208
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "0050.TW": {
     "price": 107.7,
     "high": 108.0,
     "low": 106.9000015258789,
-    "vol": 101602480,
+    "vol": 90140839,
     "chgPct": -1.33,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -35,13 +35,13 @@
       "dealer": -3208
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "0056": {
     "price": 55.3,
     "high": 55.650001525878906,
     "low": 54.75,
-    "vol": 24423188,
+    "vol": 22757885,
     "chgPct": -0.72,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -51,13 +51,13 @@
       "dealer": -61
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "0056.TW": {
     "price": 55.3,
     "high": 55.650001525878906,
     "low": 54.75,
-    "vol": 24423188,
+    "vol": 22757885,
     "chgPct": -0.72,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -67,13 +67,13 @@
       "dealer": -61
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00878": {
     "price": 34.0,
     "high": 34.119998931884766,
     "low": 33.599998474121094,
-    "vol": 36692667,
+    "vol": 33969400,
     "chgPct": -0.44,
     "name": "CATHAY SECS INV TRUST CO LTD TA",
     "market": "TW",
@@ -83,13 +83,13 @@
       "dealer": 304
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00878.TW": {
     "price": 34.0,
     "high": 34.119998931884766,
     "low": 33.599998474121094,
-    "vol": 36692667,
+    "vol": 33969400,
     "chgPct": -0.44,
     "name": "CATHAY SECS INV TRUST CO LTD TA",
     "market": "TW",
@@ -99,13 +99,13 @@
       "dealer": 304
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00881": {
     "price": 49.96,
     "high": 50.099998474121094,
     "low": 49.599998474121094,
-    "vol": 26307896,
+    "vol": 24630855,
     "chgPct": -1.07,
     "name": "CATHAY SECS INV TRUST CO LTD TA",
     "market": "TW",
@@ -115,13 +115,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00881.TW": {
     "price": 49.96,
     "high": 50.099998474121094,
     "low": 49.599998474121094,
-    "vol": 26307896,
+    "vol": 24630855,
     "chgPct": -1.07,
     "name": "CATHAY SECS INV TRUST CO LTD TA",
     "market": "TW",
@@ -131,13 +131,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "009816": {
     "price": 15.88,
     "high": 15.9399995803833,
     "low": 15.75,
-    "vol": 112342711,
+    "vol": 110737528,
     "chgPct": -0.94,
     "name": "KGI SECURITIES INVT TST CO LTD ",
     "market": "TW",
@@ -147,13 +147,13 @@
       "dealer": -2070
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "009816.TW": {
     "price": 15.88,
     "high": 15.9399995803833,
     "low": 15.75,
-    "vol": 112342711,
+    "vol": 110737528,
     "chgPct": -0.94,
     "name": "KGI SECURITIES INVT TST CO LTD ",
     "market": "TW",
@@ -163,13 +163,13 @@
       "dealer": -2070
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00981A": {
     "price": 29.44,
     "high": 29.549999237060547,
     "low": 29.15999984741211,
-    "vol": 143797327,
+    "vol": 141748708,
     "chgPct": -1.51,
     "name": "UNI-PRESIDENT ASSETS MGMT CORP ",
     "market": "TW",
@@ -179,13 +179,13 @@
       "dealer": -2149
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00981A.TW": {
     "price": 29.44,
     "high": 29.549999237060547,
     "low": 29.15999984741211,
-    "vol": 143797327,
+    "vol": 141748708,
     "chgPct": -1.51,
     "name": "UNI-PRESIDENT ASSETS MGMT CORP ",
     "market": "TW",
@@ -195,13 +195,13 @@
       "dealer": -2149
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00929": {
     "price": 28.62,
     "high": 28.739999771118164,
     "low": 28.510000228881836,
-    "vol": 52686478,
+    "vol": 52035942,
     "chgPct": -1.31,
     "name": "FUH HWA SECURITIES INVESTMENT T",
     "market": "TW",
@@ -211,13 +211,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00929.TW": {
     "price": 28.62,
     "high": 28.739999771118164,
     "low": 28.510000228881836,
-    "vol": 52686478,
+    "vol": 52035942,
     "chgPct": -1.31,
     "name": "FUH HWA SECURITIES INVESTMENT T",
     "market": "TW",
@@ -227,13 +227,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00939": {
     "price": 23.78,
     "high": 23.860000610351562,
     "low": 23.450000762939453,
-    "vol": 1996240,
+    "vol": 1962311,
     "chgPct": 0.17,
     "name": "UNI-PRESIDENT ASSETS MGMT CORP ",
     "market": "TW",
@@ -243,13 +243,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00939.TW": {
     "price": 23.78,
     "high": 23.860000610351562,
     "low": 23.450000762939453,
-    "vol": 1996240,
+    "vol": 1962311,
     "chgPct": 0.17,
     "name": "UNI-PRESIDENT ASSETS MGMT CORP ",
     "market": "TW",
@@ -259,13 +259,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00940": {
     "price": 12.79,
     "high": 12.84000015258789,
     "low": 12.6899995803833,
-    "vol": 8925145,
+    "vol": 8912345,
     "chgPct": -0.47,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -275,13 +275,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00940.TW": {
     "price": 12.79,
     "high": 12.84000015258789,
     "low": 12.6899995803833,
-    "vol": 8925145,
+    "vol": 8912345,
     "chgPct": -0.47,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -291,13 +291,13 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00713": {
     "price": 63.85,
     "high": 64.1500015258789,
     "low": 63.349998474121094,
-    "vol": 5909692,
+    "vol": 5750854,
     "chgPct": 0.31,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -307,13 +307,13 @@
       "dealer": 2
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "00713.TW": {
     "price": 63.85,
     "high": 64.1500015258789,
     "low": 63.349998474121094,
-    "vol": 5909692,
+    "vol": 5750854,
     "chgPct": 0.31,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
@@ -323,7 +323,7 @@
       "dealer": 2
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2330": {
     "price": 2410.0,
@@ -339,7 +339,7 @@
       "dealer": -545
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2330.TW": {
     "price": 2410.0,
@@ -355,7 +355,7 @@
       "dealer": -545
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2454": {
     "price": 4585.0,
@@ -371,7 +371,7 @@
       "dealer": -13
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2454.TW": {
     "price": 4585.0,
@@ -387,7 +387,7 @@
       "dealer": -13
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2317": {
     "price": 248.0,
@@ -403,7 +403,7 @@
       "dealer": 129
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2317.TW": {
     "price": 248.0,
@@ -419,7 +419,7 @@
       "dealer": 129
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2308": {
     "price": 1620.0,
@@ -435,7 +435,7 @@
       "dealer": 72
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2308.TW": {
     "price": 1620.0,
@@ -451,7 +451,7 @@
       "dealer": 72
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3711": {
     "price": 618.0,
@@ -467,7 +467,7 @@
       "dealer": -232
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3711.TW": {
     "price": 618.0,
@@ -483,7 +483,7 @@
       "dealer": -232
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2382": {
     "price": 336.5,
@@ -499,7 +499,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2382.TW": {
     "price": 336.5,
@@ -515,7 +515,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2412": {
     "price": 140.5,
@@ -531,7 +531,7 @@
       "dealer": 21
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2412.TW": {
     "price": 140.5,
@@ -547,7 +547,7 @@
       "dealer": 21
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3037": {
     "price": 977.0,
@@ -563,7 +563,7 @@
       "dealer": -24
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3037.TW": {
     "price": 977.0,
@@ -579,7 +579,7 @@
       "dealer": -24
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2303": {
     "price": 140.5,
@@ -595,7 +595,7 @@
       "dealer": 2588
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2303.TW": {
     "price": 140.5,
@@ -611,7 +611,7 @@
       "dealer": 2588
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2881": {
     "price": 148.5,
@@ -627,7 +627,7 @@
       "dealer": -96
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2881.TW": {
     "price": 148.5,
@@ -643,7 +643,7 @@
       "dealer": -96
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2891": {
     "price": 67.1,
@@ -659,7 +659,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2891.TW": {
     "price": 67.1,
@@ -675,7 +675,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2882": {
     "price": 110.5,
@@ -691,7 +691,7 @@
       "dealer": -66
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2882.TW": {
     "price": 110.5,
@@ -707,7 +707,7 @@
       "dealer": -66
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2884": {
     "price": 46.3,
@@ -723,7 +723,7 @@
       "dealer": -89
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2884.TW": {
     "price": 46.3,
@@ -739,7 +739,7 @@
       "dealer": -89
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2886": {
     "price": 51.7,
@@ -755,7 +755,7 @@
       "dealer": 461
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2886.TW": {
     "price": 51.7,
@@ -771,7 +771,7 @@
       "dealer": 461
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2892": {
     "price": 38.9,
@@ -787,7 +787,7 @@
       "dealer": 465
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2892.TW": {
     "price": 38.9,
@@ -803,7 +803,7 @@
       "dealer": 465
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2880": {
     "price": 45.85,
@@ -819,7 +819,7 @@
       "dealer": 502
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2880.TW": {
     "price": 45.85,
@@ -835,7 +835,7 @@
       "dealer": 502
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5880": {
     "price": 27.2,
@@ -851,7 +851,7 @@
       "dealer": 129
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5880.TW": {
     "price": 27.2,
@@ -867,7 +867,7 @@
       "dealer": 129
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1303": {
     "price": 234.5,
@@ -883,7 +883,7 @@
       "dealer": -465
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1303.TW": {
     "price": 234.5,
@@ -899,7 +899,7 @@
       "dealer": -465
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1301": {
     "price": 64.6,
@@ -915,7 +915,7 @@
       "dealer": 63
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1301.TW": {
     "price": 64.6,
@@ -931,7 +931,7 @@
       "dealer": 63
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2002": {
     "price": 18.9,
@@ -947,7 +947,7 @@
       "dealer": -140
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2002.TW": {
     "price": 18.9,
@@ -963,7 +963,7 @@
       "dealer": -140
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2345": {
     "price": 1885.0,
@@ -979,7 +979,7 @@
       "dealer": -9
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2345.TW": {
     "price": 1885.0,
@@ -995,7 +995,7 @@
       "dealer": -9
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3017": {
     "price": 3370.0,
@@ -1011,7 +1011,7 @@
       "dealer": -31
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3017.TW": {
     "price": 3370.0,
@@ -1027,7 +1027,7 @@
       "dealer": -31
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2887": {
     "price": 42.65,
@@ -1043,7 +1043,7 @@
       "dealer": 118
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2887.TW": {
     "price": 42.65,
@@ -1059,7 +1059,7 @@
       "dealer": 118
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2379": {
     "price": 704.0,
@@ -1075,7 +1075,7 @@
       "dealer": -120
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2379.TW": {
     "price": 704.0,
@@ -1091,7 +1091,7 @@
       "dealer": -120
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3231": {
     "price": 185.5,
@@ -1107,7 +1107,7 @@
       "dealer": -135
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3231.TW": {
     "price": 185.5,
@@ -1123,7 +1123,7 @@
       "dealer": -135
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2357": {
     "price": 924.0,
@@ -1139,7 +1139,7 @@
       "dealer": -241
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2357.TW": {
     "price": 924.0,
@@ -1155,7 +1155,7 @@
       "dealer": -241
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "6669": {
     "price": 2310.0,
@@ -1171,7 +1171,7 @@
       "dealer": 7
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "6669.TW": {
     "price": 2310.0,
@@ -1187,7 +1187,7 @@
       "dealer": 7
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3661": {
     "price": 3650.0,
@@ -1203,7 +1203,7 @@
       "dealer": -7
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3661.TW": {
     "price": 3650.0,
@@ -1219,7 +1219,7 @@
       "dealer": -7
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2409": {
     "price": 30.2,
@@ -1235,7 +1235,7 @@
       "dealer": -4301
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2409.TW": {
     "price": 30.2,
@@ -1251,7 +1251,7 @@
       "dealer": -4301
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2327": {
     "price": 544.0,
@@ -1267,7 +1267,7 @@
       "dealer": -171
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2327.TW": {
     "price": 544.0,
@@ -1283,7 +1283,7 @@
       "dealer": -171
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1216": {
     "price": 75.0,
@@ -1299,7 +1299,7 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "1216.TW": {
     "price": 75.0,
@@ -1315,7 +1315,7 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "9910": {
     "price": 67.8,
@@ -1331,7 +1331,7 @@
       "dealer": -1
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "9910.TW": {
     "price": 67.8,
@@ -1347,7 +1347,7 @@
       "dealer": -1
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5871": {
     "price": 111.5,
@@ -1363,7 +1363,7 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5871.TW": {
     "price": 111.5,
@@ -1379,7 +1379,7 @@
       "dealer": 0
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3045": {
     "price": 121.0,
@@ -1395,7 +1395,7 @@
       "dealer": -180
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3045.TW": {
     "price": 121.0,
@@ -1411,7 +1411,7 @@
       "dealer": -180
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "6505": {
     "price": 83.6,
@@ -1427,7 +1427,7 @@
       "dealer": -152
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "6505.TW": {
     "price": 83.6,
@@ -1443,7 +1443,7 @@
       "dealer": -152
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "4938": {
     "price": 91.0,
@@ -1459,7 +1459,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "4938.TW": {
     "price": 91.0,
@@ -1475,7 +1475,7 @@
       "dealer": 16
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3008": {
     "price": 6660.0,
@@ -1491,7 +1491,7 @@
       "dealer": -30
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "3008.TW": {
     "price": 6660.0,
@@ -1507,7 +1507,7 @@
       "dealer": -30
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2395": {
     "price": 674.0,
@@ -1523,7 +1523,7 @@
       "dealer": -11
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "2395.TW": {
     "price": 674.0,
@@ -1539,7 +1539,7 @@
       "dealer": -11
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5876": {
     "price": 48.65,
@@ -1555,7 +1555,7 @@
       "dealer": 18
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "5876.TW": {
     "price": 48.65,
@@ -1571,7 +1571,7 @@
       "dealer": 18
     },
     "institutional_date": "20260911",
-    "updated": "2026-09-12 03:35"
+    "updated": "2026-09-13 03:41"
   },
   "AAPL": {
     "price": 332.27,
@@ -1581,7 +1581,7 @@
     "chgPct": 1.75,
     "name": "Apple Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "MSFT": {
     "price": 495.63,
@@ -1591,7 +1591,7 @@
     "chgPct": 0.65,
     "name": "Microsoft Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "GOOGL": {
     "price": 338.5,
@@ -1601,7 +1601,7 @@
     "chgPct": 1.77,
     "name": "Alphabet Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "GOOG": {
     "price": 335.45,
@@ -1611,7 +1611,7 @@
     "chgPct": 1.53,
     "name": "Alphabet Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "AMZN": {
     "price": 256.78,
@@ -1621,7 +1621,7 @@
     "chgPct": 1.94,
     "name": "Amazon.com, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "NVDA": {
     "price": 218.29,
@@ -1631,7 +1631,7 @@
     "chgPct": -0.03,
     "name": "NVIDIA Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "META": {
     "price": 648.03,
@@ -1641,7 +1641,7 @@
     "chgPct": 0.57,
     "name": "Meta Platforms, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "TSLA": {
     "price": 365.44,
@@ -1651,7 +1651,7 @@
     "chgPct": 0.52,
     "name": "Tesla, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "AVGO": {
     "price": 361.99,
@@ -1661,7 +1661,7 @@
     "chgPct": 0.32,
     "name": "Broadcom Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "LLY": {
     "price": 1115.7,
@@ -1671,7 +1671,7 @@
     "chgPct": -0.65,
     "name": "Eli Lilly and Company",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "JPM": {
     "price": 356.23,
@@ -1681,7 +1681,7 @@
     "chgPct": 0.76,
     "name": "JP Morgan Chase & Co.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "V": {
     "price": 370.45,
@@ -1691,7 +1691,7 @@
     "chgPct": 0.88,
     "name": "Visa Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "UNH": {
     "price": 379.09,
@@ -1701,7 +1701,7 @@
     "chgPct": -2.37,
     "name": "UnitedHealth Group Incorporated",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "XOM": {
     "price": 165.99,
@@ -1711,7 +1711,7 @@
     "chgPct": 0.46,
     "name": "ExxonMobil Holdings Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "WMT": {
     "price": 107.15,
@@ -1721,7 +1721,7 @@
     "chgPct": 1.34,
     "name": "Walmart Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "MA": {
     "price": 569.19,
@@ -1731,7 +1731,7 @@
     "chgPct": 0.68,
     "name": "Mastercard Incorporated",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "PG": {
     "price": 145.27,
@@ -1741,7 +1741,7 @@
     "chgPct": 1.61,
     "name": "Procter & Gamble Company (The)",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "JNJ": {
     "price": 265.58,
@@ -1751,7 +1751,7 @@
     "chgPct": -0.29,
     "name": "Johnson & Johnson",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "HD": {
     "price": 308.74,
@@ -1761,7 +1761,7 @@
     "chgPct": 1.0,
     "name": "Home Depot, Inc. (The)",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "COST": {
     "price": 904.77,
@@ -1771,7 +1771,7 @@
     "chgPct": 0.26,
     "name": "Costco Wholesale Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "ORCL": {
     "price": 150.28,
@@ -1781,7 +1781,7 @@
     "chgPct": -1.74,
     "name": "Oracle Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "MRK": {
     "price": 143.93,
@@ -1791,7 +1791,7 @@
     "chgPct": -0.54,
     "name": "Merck & Company, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "ABBV": {
     "price": 257.12,
@@ -1801,7 +1801,7 @@
     "chgPct": 0.83,
     "name": "AbbVie Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "CVX": {
     "price": 214.06,
@@ -1811,7 +1811,7 @@
     "chgPct": 0.61,
     "name": "Chevron Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "CRM": {
     "price": 247.72,
@@ -1821,7 +1821,7 @@
     "chgPct": 1.94,
     "name": "Salesforce, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "KO": {
     "price": 88.29,
@@ -1831,7 +1831,7 @@
     "chgPct": 0.52,
     "name": "Coca-Cola Company (The)",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "AMD": {
     "price": 516.13,
@@ -1841,7 +1841,7 @@
     "chgPct": 2.49,
     "name": "Advanced Micro Devices, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "PEP": {
     "price": 136.32,
@@ -1851,7 +1851,7 @@
     "chgPct": -0.24,
     "name": "Pepsico, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "NFLX": {
     "price": 77.4,
@@ -1861,7 +1861,7 @@
     "chgPct": 1.83,
     "name": "Netflix, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "BAC": {
     "price": 62.69,
@@ -1871,7 +1871,7 @@
     "chgPct": 0.21,
     "name": "Bank of America Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "TMO": {
     "price": 609.82,
@@ -1881,7 +1881,7 @@
     "chgPct": 1.1,
     "name": "Thermo Fisher Scientific Inc",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "ADBE": {
     "price": 252.23,
@@ -1891,7 +1891,7 @@
     "chgPct": 1.37,
     "name": "Adobe Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "LIN": {
     "price": 466.22,
@@ -1901,7 +1901,7 @@
     "chgPct": 1.0,
     "name": "Linde plc",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "MCD": {
     "price": 252.53,
@@ -1911,7 +1911,7 @@
     "chgPct": -0.21,
     "name": "McDonald's Corporation",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "CSCO": {
     "price": 112.13,
@@ -1921,7 +1921,7 @@
     "chgPct": 4.37,
     "name": "Cisco Systems, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "ABT": {
     "price": 101.95,
@@ -1931,7 +1931,7 @@
     "chgPct": -1.36,
     "name": "Abbott Laboratories",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "WFC": {
     "price": 90.29,
@@ -1941,7 +1941,7 @@
     "chgPct": 0.94,
     "name": "Wells Fargo & Company",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "DIS": {
     "price": 106.55,
@@ -1951,7 +1951,7 @@
     "chgPct": 0.69,
     "name": "Walt Disney Company (The)",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "ACN": {
     "price": 183.9,
@@ -1961,7 +1961,7 @@
     "chgPct": 3.37,
     "name": "Accenture plc",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "IBM": {
     "price": 243.29,
@@ -1971,7 +1971,7 @@
     "chgPct": 3.96,
     "name": "International Business Machines",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "TXN": {
     "price": 268.7,
@@ -1981,7 +1981,7 @@
     "chgPct": 3.82,
     "name": "Texas Instruments Incorporated",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "INTU": {
     "price": 321.57,
@@ -1991,7 +1991,7 @@
     "chgPct": 2.81,
     "name": "Intuit Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "VZ": {
     "price": 50.61,
@@ -2001,7 +2001,7 @@
     "chgPct": 1.28,
     "name": "Verizon Communications Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "NOW": {
     "price": 132.53,
@@ -2011,7 +2011,7 @@
     "chgPct": 1.04,
     "name": "ServiceNow, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "CAT": {
     "price": 818.57,
@@ -2021,7 +2021,7 @@
     "chgPct": 1.69,
     "name": "Caterpillar, Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "AMGN": {
     "price": 377.35,
@@ -2031,7 +2031,7 @@
     "chgPct": -1.34,
     "name": "Amgen Inc.",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "QCOM": {
     "price": 181.97,
@@ -2041,7 +2041,7 @@
     "chgPct": 2.88,
     "name": "QUALCOMM Incorporated",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "VOO": {
     "price": 702.56,
@@ -2051,7 +2051,7 @@
     "chgPct": 0.85,
     "name": "Vanguard S&P 500 ETF",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "QQQ": {
     "price": 714.88,
@@ -2061,7 +2061,7 @@
     "chgPct": 0.87,
     "name": "Invesco QQQ Trust, Series 1",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   },
   "SPY": {
     "price": 764.29,
@@ -2071,6 +2071,6 @@
     "chgPct": 0.85,
     "name": "State Street SPDR S&P 500 ETF T",
     "market": "US",
-    "updated": "2026-09-12 03:36"
+    "updated": "2026-09-13 03:42"
   }
 }
