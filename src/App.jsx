@@ -1289,9 +1289,14 @@ export default function App() {
     }
   }, [stocks, fetchPrice, upd]);
 
-  /* ── 自動記帳 ── */
+  /* ── 自動記帳 ──
+     一定要等雲端資料載入/合併完成（authLoading 變 false）才能跑，不然會有時間差 bug：
+     App 一開就先用本機資料自動記一筆訂閱帳，但如果你有登入雲端同步，緊接著雲端資料非同步載入完成後
+     會直接整包蓋掉本機資料（覆蓋成登入前、還沒記這筆帳的舊版本），剛記好的訂閱帳就會憑空消失。
+     改成等 authLoading 確定結束（不管是有登入、雲端資料蓋完，還是根本沒登入）才開始跑自動記帳，
+     這樣記的帳就是根據「最終底定」的資料，不會被蓋掉。 */
   useEffect(() => {
-    if (!d || !d.subs) return;
+    if (!d || !d.subs || authLoading) return;
     const getDueDates = (item, lastDate) => {
       const dates = [];
       const today = new Date(TODAY + "T00:00:00");
@@ -1392,9 +1397,11 @@ export default function App() {
     });
     if (recogTxns.length > 0) upd("txns", p => [...p, ...recogTxns]);
     if (poolUpdates.length > 0) upd("expensePools", p => (p || []).map(x => { const u = poolUpdates.find(y => y.id === x.id); return u ? { ...x, recognized:u.recognized } : x; }));
-  }, []);
+  }, [authLoading]);
 
   useEffect(() => { if (stocks.length > 0) fetchAllPrices(stocks); }, [stocks.length]);
+  /* 每次切換到投資頁，都順手重新抓一次最新報價，不用每次都記得自己按更新報價按鈕 */
+  useEffect(() => { if (tab === "invest" && stocks.length > 0) fetchAllPrices(stocks); }, [tab]);
 
   /* ── 一次性遷移：把舊的認列/分攤紀錄回溯補上 poolId 等欄位，讓刪除時能正確退回分攤池 ── */
   useEffect(() => {
