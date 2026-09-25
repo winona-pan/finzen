@@ -10,6 +10,7 @@ FinZen 股價 + 法人資料自動更新腳本
 import json
 import time
 import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 # GitHub Actions 執行伺服器預設用 UTC，跟台灣時間差 8 小時；所有存進 JSON 給使用者看的時間都要用這個，
@@ -23,12 +24,18 @@ def now_tw():
 # 但涵蓋到絕大多數常見的大型持股；美股：市值前50大左右的公司。
 # 之所以用這種「廣泛覆蓋」而不是只放少少幾支，是因為這是排程在後端穩定執行、不受瀏覽器/代理伺服器限制的路線，
 # 涵蓋越廣，你實際持有的股票就越不用依賴瀏覽器端不穩定的即時查詢備援。
-TW_STOCKS = ["0050", "0056", "00878", 
-             "2330", "2881", "2882", "6442",
-             "2891", 
-             "2345", "2368"]
+TW_STOCKS = ["0050", "0056", "00878", "00881", "009816", "00981A", "00929", "00939", "00940", "00713",
+             "2330", "2454", "2317", "2308", "3711", "2382", "2412", "3037", "2303", "2881",
+             "2891", "2882", "2884", "2886", "2892", "2880", "5880", "1303", "1301", "2002",
+             "2345", "3017", "2887", "2379", "3231", "2357", "6669", "3661", "2409", "2327",
+             "1216", "9910", "5871", "3045", "6505", "4938", "3008", "2395", "5876"]
 US_STOCKS = ["AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AVGO", "LLY",
-             "TSM", "VOO", "QQQ", "SPY"]
+             "JPM", "V", "UNH", "XOM", "WMT", "MA", "PG", "JNJ", "HD", "COST",
+             "ORCL", "MRK", "ABBV", "CVX", "CRM", "KO", "AMD", "PEP", "NFLX", "BAC",
+             "TMO", "ADBE", "LIN", "MCD", "CSCO", "ABT", "WFC", "DIS", "ACN", "IBM",
+             "TXN", "INTU", "VZ", "NOW", "CAT", "AMGN", "QCOM", "VOO", "QQQ", "SPY"]
+# 大盤指數（用來跟你的投資組合報酬率比較）：台灣加權指數、費城半導體指數、S&P 500
+INDEXES = {"^TWII": "台灣加權指數", "^SOX": "費城半導體指數", "^GSPC": "S&P 500"}
 # ─────────────────────────────────────────────────────────
 
 def req(url, timeout=12):
@@ -46,7 +53,7 @@ def fetch_yahoo(symbols_str):
     out = {}
     symbols = [s for s in symbols_str.split(",") if s]
     for sym in symbols:
-        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
+        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym, safe='')}"
                f"?interval=1d&range=1d")
         raw = req(url)
         if not raw:
@@ -127,7 +134,7 @@ def fetch_institutional(date_str):
 
 def fetch_chart_series(sym, interval, range_):
     """抓單一標的的走勢圖資料（日線或分鐘線皆可），回傳 [{t, c, v}] 陣列（時間戳、收盤價、成交量）"""
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval={interval}&range={range_}"
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym, safe='')}?interval={interval}&range={range_}"
     raw = req(url)
     if not raw:
         raw = req(url.replace("query1", "query2"))
@@ -168,7 +175,7 @@ def fetch_history():
         existing = {}
 
     history = {}
-    all_syms = [(f"{s}.TW", s) for s in TW_STOCKS] + [(s, s) for s in US_STOCKS]
+    all_syms = [(f"{s}.TW", s) for s in TW_STOCKS] + [(s, s) for s in US_STOCKS] + [(s, s) for s in INDEXES.keys()]
     print(f"📊 抓取走勢圖歷史資料（{len(all_syms)} 檔，daily + intraday）...")
     for yahoo_sym, key in all_syms:
         daily = fetch_chart_series(yahoo_sym, "1d", "1y")
@@ -255,6 +262,24 @@ def main():
             print(f"  ✅ {sym} {q['name']}: ${q['price']} {chg}")
         else:
             print(f"  ❌ {sym}: 抓取失敗")
+
+    # ── 大盤指數處理（用來跟投資組合比較的基準）──
+    print(f"📊 抓取大盤指數 ({len(INDEXES)} 檔)...")
+    idx_res = fetch_yahoo(",".join(INDEXES.keys()))
+    for sym, label in INDEXES.items():
+        q = idx_res.get(sym)
+        if q and q.get("price"):
+            entry = {
+                **q,
+                "name": label,
+                "market": "INDEX",
+                "updated": now_tw().strftime("%Y-%m-%d %H:%M"),
+            }
+            prices[sym] = entry
+            chg = f"({q['chgPct']:+.2f}%)" if q.get("chgPct") is not None else ""
+            print(f"  ✅ {sym} {label}: {q['price']} {chg}")
+        else:
+            print(f"  ❌ {sym} {label}: 抓取失敗")
 
     # ── 寫入 JSON ──
     prices["_meta"] = {
