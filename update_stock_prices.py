@@ -161,7 +161,7 @@ def fetch_chart_series(sym, interval, range_):
         return None
 
 def fetch_history():
-    """幫每檔追蹤股票抓走勢圖用的歷史資料（日線1年 + 5天分鐘線），存進 stock_history.json，
+    """幫每檔追蹤股票抓走勢圖用的歷史資料（日線5年 + 5天分鐘線），存進 stock_history.json，
     讓走勢圖也能直接讀這份後端穩定產生的資料，不用再依賴瀏覽器那幾個不穩定的免費代理伺服器。
     歷史資料不需要每15分鐘更新（daily bar 收盤前都不會變），所以比照匯率的做法，一天只真的抓一次。"""
     today = now_tw().strftime("%Y-%m-%d")
@@ -178,7 +178,7 @@ def fetch_history():
     all_syms = [(f"{s}.TW", s) for s in TW_STOCKS] + [(s, s) for s in US_STOCKS] + [(s, s) for s in INDEXES.keys()]
     print(f"📊 抓取走勢圖歷史資料（{len(all_syms)} 檔，daily + intraday）...")
     for yahoo_sym, key in all_syms:
-        daily = fetch_chart_series(yahoo_sym, "1d", "1y")
+        daily = fetch_chart_series(yahoo_sym, "1d", "5y")
         time.sleep(0.3)
         intraday = fetch_chart_series(yahoo_sym, "15m", "5d")
         time.sleep(0.3)
