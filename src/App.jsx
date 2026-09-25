@@ -410,50 +410,24 @@ function SwipeRow({ children, onDelete, onEdit, onClick }) {
 }
 
 /* ── StockPriceChart：股價區間走勢圖，附 1日/5日/1月/3月/6月/1年 切換 ── */
-function StockPriceChart({ ticker, market, fetchStockRange }) {
-  const [range, setRange] = useState("1mo");
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const reqId = useRef(0);
-  const load = useCallback(async (r) => {
-    const myId = ++reqId.current;
-    setLoading(true); setFailed(false);
-    const res = await fetchStockRange(ticker, market, r);
-    if (myId !== reqId.current) return; // 舊請求，已經被更新的請求取代，忽略結果
-    setData(res);
-    setFailed(res.length <= 1);
-    setLoading(false);
-  }, [ticker, market, fetchStockRange]);
-  useEffect(() => { load(range); }, [range, ticker]);
-  const first = data[0]?.close, last = data[data.length - 1]?.close;
-  const chgPct = (first && last) ? ((last - first) / first * 100) : null;
-  const color = chgPct == null ? C.muted : chgPct >= 0 ? C.income : C.expense;
+/* ── 股價走勢圖：直接嵌入 TradingView 官方免費小工具，不用再自己抓資料、不用再靠不穩定的代理伺服器——
+   人家自己的即時資料、自己的圖表引擎，功能（技術指標、畫線工具、多種圖表型態）比我們自己刻的完整非常多 ── */
+function StockPriceChart({ ticker, market, theme = "dark" }) {
+  const tvSymbol = market === "TW" ? `TWSE:${ticker}` : ticker.toUpperCase();
+  const tvTheme = theme === "dark" ? "dark" : "light"; // 我們的主題有好幾種配色皮膚，TradingView 只吃 light/dark 兩種，除了 dark 以外都當 light 處理
+  const src = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}` +
+    `&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0` +
+    `&toolbarbg=f1f3f6&studies=%5B%5D&theme=${tvTheme}&style=1&timezone=Asia%2FTaipei` +
+    `&withdateranges=1&hideideas=1&locale=zh_TW`;
   return (
-    <div>
-      <div style={{ display:"flex", gap:4, marginBottom:10, overflowX:"auto" }}>
-        {RANGE_OPTS_STATIC.map(o => <button key={o.key} onClick={() => setRange(o.key)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:range===o.key?C.accent:C.card, color:range===o.key?"#fff":C.muted, border:"none", cursor:"pointer" }}>{o.label}</button>)}
-      </div>
-      {loading ? (
-        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
-      ) : data.length > 1 ? (
-        <div>
-          <div style={{ fontWeight:900, fontSize:16, color, marginBottom:6 }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
-          <ResponsiveContainer width="100%" height={124}>
-            <LineChart data={data} margin={{ top:5, right:5, bottom:14, left:0 }}>
-              <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(data.length/5)} dy={4} />
-              <YAxis hide domain={["auto","auto"]} />
-              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[Number(v).toFixed(2),"價格"]} />
-              <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div style={{ height:120, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, color:C.muted, fontSize:12 }}>
-          <span>這個區間讀取失敗，可能是暫時連線問題</span>
-          <button onClick={() => load(range)} style={{ padding:"4px 12px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:12, cursor:"pointer" }}>🔄 重試</button>
-        </div>
-      )}
+    <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}` }}>
+      <iframe
+        key={tvSymbol}
+        src={src}
+        title={`${tvSymbol} 走勢圖`}
+        style={{ width:"100%", height:360, border:"none", display:"block" }}
+        loading="lazy"
+      />
     </div>
   );
 }
@@ -1405,6 +1379,7 @@ export default function App() {
 
   /* ── 一次性遷移：把舊的認列/分攤紀錄回溯補上 poolId 等欄位，讓刪除時能正確退回分攤池 ── */
   useEffect(() => {
+    if (authLoading) return; // 同樣的雲端同步時間差問題，要等資料底定才能動它
     const needsMigration = txns.some(t => (t.tags === "#認列" || t.tags === "#分攤認列" || t.tags === "#認列調整") && t.poolId == null);
     if (!needsMigration) return;
     const patched = txns.map(t => {
@@ -1431,10 +1406,11 @@ export default function App() {
       return t;
     });
     if (patched.some((t, i) => t !== txns[i])) upd("txns", () => patched);
-  }, [txns, pools, expensePools, upd]);
+  }, [txns, pools, expensePools, upd, authLoading]);
 
   /* ── 一次性遷移：舊版目標優先級(0一般/1優先/2最優先，數字越大越優先)轉換成新制(1-10，數字越小越優先)，並補上預設 goalType ── */
   useEffect(() => {
+    if (authLoading) return; // 同樣的雲端同步時間差問題，要等資料底定才能動它
     const needsMigration = goals.some(g => g.priorityMigrated !== true);
     if (!needsMigration) return;
     const remap = { 0:10, 1:5, 2:1 };
@@ -1445,17 +1421,18 @@ export default function App() {
       priorityMigrated: true,
     });
     upd("goals", () => patched);
-  }, [goals, upd]);
+  }, [goals, upd, authLoading]);
 
   /* ── 一次性清理：訂閱本尊已經被刪掉、但年繳分攤池沒有一起清掉的孤兒紀錄（舊版刪除訂閱時沒連動清理造成的），
      這種孤兒池的 totalAmt/recognized 常常是壞掉的（例如 totalAmt 被改成 0 但 recognized 還留著），會讓「年繳分攤中」總額算錯 ── */
   useEffect(() => {
+    if (authLoading) return; // 同樣的雲端同步時間差問題，要等資料底定才能動它
     const subIds = new Set(subs.map(s => s.id));
     const orphans = expensePools.filter(p => p.subId && !subIds.has(p.subId));
     if (orphans.length === 0) return;
     const orphanIds = new Set(orphans.map(p => p.id));
     upd("expensePools", p => (p||[]).filter(x => !orphanIds.has(x.id)));
-  }, [subs, expensePools, upd]);
+  }, [subs, expensePools, upd, authLoading]);
 
   /* ── 財務核心計算邏輯 ── */
   const visA = useMemo(() => accs.filter(a => a.type !== "credit" && a.vis), [accs]);
@@ -1603,6 +1580,20 @@ export default function App() {
   /* ── 抓取單一標的每日收盤價（近一年，日線）── */
   const fetchDailyHistory = useCallback(async (ticker, market) => {
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
+    // 先試後端排程產生的資料，涵蓋到的股票不需要再靠瀏覽器即時去問 Yahoo
+    try {
+      const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+      const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const data = await res.json();
+        const key = market === "TW" ? ticker : ticker.toUpperCase();
+        const daily = data[key]?.daily;
+        if (daily && daily.length) {
+          return daily.map(x => ({ date: new Date(x.t * 1000).toISOString().slice(0, 10), close:x.c }));
+        }
+      }
+    } catch {}
+    // 靜態資料沒涵蓋到，才退回瀏覽器即時查詢＋代理伺服器
     const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y`;
     const proxies = [
       (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -1636,6 +1627,40 @@ export default function App() {
   const fetchStockRange = useCallback(async (ticker, market, rangeKey) => {
     const opt = RANGE_OPTS.find(o => o.key === rangeKey) || RANGE_OPTS[2];
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
+    const isIntraday = opt.interval.endsWith("m");
+    const fmt = (t) => isIntraday
+      ? new Date(t * 1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" })
+      : new Date(t * 1000).toISOString().slice(5, 10);
+
+    // 先試後端排程產生的走勢圖資料（穩定，不受瀏覽器端代理伺服器限制），
+    // 涵蓋到的股票（追蹤清單裡的）不需要再靠瀏覽器即時去問 Yahoo
+    try {
+      const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+      const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const data = await res.json();
+        const key = market === "TW" ? ticker : ticker.toUpperCase();
+        const entry = data[key];
+        if (entry) {
+          const series = isIntraday ? entry.intraday : entry.daily;
+          if (series && series.length) {
+            let sliced = series;
+            if (rangeKey === "1d") {
+              // intraday 存了近5天分鐘線，1日只取最後一個交易日那天的部分
+              const lastDay = new Date(series[series.length - 1].t * 1000).toDateString();
+              sliced = series.filter(x => new Date(x.t * 1000).toDateString() === lastDay);
+            } else if (["1mo","3mo","6mo"].includes(rangeKey)) {
+              const days = { "1mo":31, "3mo":93, "6mo":186 }[rangeKey];
+              const cutoff = Date.now()/1000 - days*86400;
+              sliced = series.filter(x => x.t >= cutoff);
+            }
+            if (sliced.length) return sliced.map(x => ({ t:x.t, label:fmt(x.t), close:x.c }));
+          }
+        }
+      }
+    } catch {}
+
+    // 靜態資料沒涵蓋到（不在追蹤清單裡的股票），才退回瀏覽器即時查詢＋代理伺服器
     const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=${opt.interval}&range=${opt.range}`;
     const proxies = [
       (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -1651,12 +1676,7 @@ export default function App() {
         const result = d?.chart?.result?.[0];
         const ts = result?.timestamp, closes = result?.indicators?.quote?.[0]?.close;
         if (!ts || !closes) continue;
-        const isIntraday = opt.interval.endsWith("m");
-        return ts.map((t, i) => ({
-          t,
-          label: isIntraday ? new Date(t * 1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(t * 1000).toISOString().slice(5, 10),
-          close: closes[i],
-        })).filter(x => x.close != null);
+        return ts.map((t, i) => ({ t, label:fmt(t), close:closes[i] })).filter(x => x.close != null);
       } catch { continue; }
     }
     return [];
