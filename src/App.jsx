@@ -435,8 +435,32 @@ function StockPriceChart({ ticker, market, theme = "dark" }) {
   return <TWStockChart ticker={ticker} />;
 }
 
+/* ── K線蠟燭圖自訂繪製：Recharts 沒有內建 K 線，用 Bar 的 shape 屬性手動畫（影線 + 實體），
+   dataKey 給 [low, high] 這個範圍，Recharts 會算好對應的 y/height，我們再用 payload 裡的開高低收畫出精確位置 ── */
+function CandleShape(props) {
+  const { x, y, width, height, payload } = props;
+  const { o, h, l, c } = payload;
+  if (o == null || h == null || l == null || c == null || h === l) return null;
+  const isUp = c >= o;
+  const color = isUp ? C.income : C.expense;
+  const scale = height / (h - l);
+  const yFor = (val) => y + (h - val) * scale;
+  const bodyTop = yFor(Math.max(o, c));
+  const bodyBottom = yFor(Math.min(o, c));
+  const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+  const cx = x + width / 2;
+  const bodyWidth = Math.max(2, width * 0.6);
+  return (
+    <g>
+      <line x1={cx} y1={y} x2={cx} y2={y + height} stroke={color} strokeWidth={1} />
+      <rect x={cx - bodyWidth / 2} y={bodyTop} width={bodyWidth} height={bodyHeight} fill={color} />
+    </g>
+  );
+}
+
 function TWStockChart({ ticker }) {
   const [range, setRange] = useState("3mo");
+  const [kline, setKline] = useState(false);
   const [raw, setRaw] = useState(null); // null=讀取中；{daily:[], intraday:[]}=已載入
   useEffect(() => {
     let cancelled = false;
@@ -462,13 +486,15 @@ function TWStockChart({ ticker }) {
   const isIntraday = range === "1d" || range === "5d";
   const source = raw ? (isIntraday ? (raw.intraday || []) : (raw.daily || [])) : [];
 
-  // 季線（60日均線）只在日線模式下算，而且要用「完整」的日線資料算，不能只用篩選後的區間算，
+  // 均線只在日線模式下算，而且要用「完整」的日線資料算，不能只用篩選後的區間算，
   // 不然區間一開始那幾天的均線會不準（前面沒有足夠天數可以平均）
   const dailyWithMa = !isIntraday ? source.map((x, i) => {
-    const windowArr = source.slice(Math.max(0, i - 59), i + 1);
-    const ma60 = windowArr.length >= 60 ? windowArr.reduce((s, y) => s + y.c, 0) / windowArr.length : null;
-    return { t:x.t, c:x.c, v:x.v||0, ma60 };
-  }) : source.map(x => ({ t:x.t, c:x.c, v:x.v||0, ma60:null }));
+    const w5 = source.slice(Math.max(0, i - 4), i + 1);
+    const w60 = source.slice(Math.max(0, i - 59), i + 1);
+    const ma5 = w5.length >= 5 ? w5.reduce((s, y) => s + y.c, 0) / w5.length : null;
+    const ma60 = w60.length >= 60 ? w60.reduce((s, y) => s + y.c, 0) / w60.length : null;
+    return { t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5, ma60 };
+  }) : source.map(x => ({ t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5:null, ma60:null }));
 
   let windowed = dailyWithMa;
   if (range === "1d") {
@@ -484,9 +510,12 @@ function TWStockChart({ ticker }) {
   const first = windowed[0]?.c;
   const sliced = windowed.map(x => ({
     label: isIntraday ? new Date(x.t*1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(x.t*1000).toISOString().slice(5,10),
+    o:x.o, h:x.h, l:x.l, c:x.c,
     close: x.c,
+    range: [x.l, x.h],
     pct: first ? Number((((x.c - first) / first) * 100).toFixed(2)) : 0,
     vol: x.v,
+    ma5: x.ma5 != null ? Number(x.ma5.toFixed(2)) : null,
     ma60: x.ma60 != null ? Number(x.ma60.toFixed(2)) : null,
   }));
   const last = sliced[sliced.length-1]?.close;
@@ -500,14 +529,18 @@ function TWStockChart({ ticker }) {
     <div>
       <div style={{ display:"flex", gap:4, marginBottom:10, overflowX:"auto" }}>
         {opts.map(o => <button key={o.key} onClick={() => setRange(o.key)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:range===o.key?C.accent:C.card, color:range===o.key?"#fff":C.muted, border:"none", cursor:"pointer" }}>{o.label}</button>)}
+        <button onClick={() => setKline(p => !p)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:kline?C.warn:C.card, color:kline?"#fff":C.muted, border:"none", cursor:"pointer" }}>K線</button>
       </div>
       {raw === null ? (
         <div style={{ height:150, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
       ) : sliced.length > 1 ? (
         <div>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
             <div style={{ fontWeight:900, fontSize:16, color }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
-            {hasMa && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />季線(60日)</div>}
+            {hasMa && <>
+              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.accentL }}><span style={{ width:10, height:2, background:C.accentL, display:"inline-block" }} />MA5</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />季線(60日)</div>
+            </>}
           </div>
           <ResponsiveContainer width="100%" height={150}>
             <ComposedChart data={sliced} margin={{ top:5, right:0, bottom:4, left:0 }}>
@@ -520,12 +553,19 @@ function TWStockChart({ ticker }) {
               <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(sliced.length/5)} dy={4} />
               <YAxis yAxisId="price" hide domain={["auto","auto"]} />
               <YAxis yAxisId="pct" orientation="right" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v>0?"+":""}${v}%`} width={40} />
-              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name)=>{
+              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name,entry)=>{
                 if (name==="close") return [Number(v).toFixed(2), "價格"];
+                if (name==="ma5") return [Number(v).toFixed(2), "MA5"];
                 if (name==="ma60") return [Number(v).toFixed(2), "季線"];
+                if (name==="range") { const p = entry?.payload; return [p ? `開${p.o} 高${p.h} 低${p.l} 收${p.c}` : "", "K線"]; }
                 return [v, name];
               }} />
-              <Area yAxisId="price" type="monotone" dataKey="close" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} />
+              {kline ? (
+                <Bar yAxisId="price" dataKey="range" shape={CandleShape} />
+              ) : (
+                <Area yAxisId="price" type="monotone" dataKey="close" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} />
+              )}
+              {hasMa && <Line yAxisId="price" type="linear" dataKey="ma5" stroke={C.accentL} strokeWidth={1.2} dot={false} connectNulls />}
               {hasMa && <Line yAxisId="price" type="linear" dataKey="ma60" stroke={C.warn} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />}
               <Line yAxisId="pct" type="monotone" dataKey="pct" stroke="transparent" dot={false} />
             </ComposedChart>
