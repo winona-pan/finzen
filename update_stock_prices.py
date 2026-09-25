@@ -133,7 +133,7 @@ def fetch_institutional(date_str):
         return {}, date_str
 
 def fetch_chart_series(sym, interval, range_):
-    """抓單一標的的走勢圖資料（日線或分鐘線皆可），回傳 [{t, c, v}] 陣列（時間戳、收盤價、成交量）"""
+    """抓單一標的的走勢圖資料（日線或分鐘線皆可），回傳 [{t, o, h, l, c, v}] 陣列（時間戳、開高低收、成交量）"""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym, safe='')}?interval={interval}&range={range_}"
     raw = req(url)
     if not raw:
@@ -148,14 +148,20 @@ def fetch_chart_series(sym, interval, range_):
         r = result[0]
         timestamps = r.get("timestamp") or []
         quote = r.get("indicators", {}).get("quote", [{}])[0]
+        opens = quote.get("open") or []
+        highs = quote.get("high") or []
+        lows = quote.get("low") or []
         closes = quote.get("close") or []
         volumes = quote.get("volume") or []
         out = []
         for i, (t, c) in enumerate(zip(timestamps, closes)):
             if c is None:
                 continue
+            o = opens[i] if i < len(opens) and opens[i] is not None else c
+            h = highs[i] if i < len(highs) and highs[i] is not None else c
+            l = lows[i] if i < len(lows) and lows[i] is not None else c
             v = volumes[i] if i < len(volumes) and volumes[i] is not None else 0
-            out.append({"t": t, "c": round(c, 4), "v": v})
+            out.append({"t": t, "o": round(o, 4), "h": round(h, 4), "l": round(l, 4), "c": round(c, 4), "v": v})
         return out if out else None
     except Exception:
         return None
