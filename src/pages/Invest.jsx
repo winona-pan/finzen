@@ -538,7 +538,7 @@ export default function InvestPage({
                       {expandedWatch === w.id && (
                         <div style={{ padding:14, paddingTop:0 }}>
                           <div style={{ paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-                            <StockPriceChart ticker={w.ticker} market={w.market} fetchStockRange={fetchStockRange} />
+                            <StockPriceChart ticker={w.ticker} market={w.market} theme={theme} />
                           </div>
                         </div>
                       )}
