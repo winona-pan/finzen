@@ -1,16 +1,70 @@
 import { useState, useRef, useEffect } from "react";
 
+/* ── 簡易 Markdown 渲染：AI 回覆常常會帶 **粗體**、#### 標題、* 項目符號、--- 分隔線這些格式，
+   原本只是原封不動當純文字顯示，語法符號會直接顯示出來很醜。沒有另外裝 markdown 套件（避免多一個依賴），
+   自己寫一個輕量版的，涵蓋常見的這幾種就好，不用做到完整規格 ── */
+function parseInline(text, C) {
+  // 處理單行內的 **粗體**，回傳一個 React 節點陣列
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i} style={{ color:C.text }}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+function SimpleMarkdown({ text, C }) {
+  const lines = text.split("\n");
+  const blocks = [];
+  let listBuf = [];
+  const flushList = () => {
+    if (listBuf.length) { blocks.push(<ul key={`ul${blocks.length}`} style={{ margin:"4px 0", paddingLeft:18 }}>{listBuf}</ul>); listBuf = []; }
+  };
+  lines.forEach((line, i) => {
+    const trimmed = line.trim();
+    if (trimmed === "") { flushList(); return; }
+    if (/^---+$/.test(trimmed)) { flushList(); blocks.push(<hr key={i} style={{ border:"none", borderTop:`1px solid ${C.border}`, margin:"8px 0" }} />); return; }
+    const heading = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      flushList();
+      const level = heading[1].length;
+      const size = level <= 2 ? 15 : level === 3 ? 14 : 13;
+      blocks.push(<div key={i} style={{ fontWeight:900, fontSize:size, color:C.text, marginTop:8, marginBottom:4 }}>{parseInline(heading[2], C)}</div>);
+      return;
+    }
+    const bullet = trimmed.match(/^[*-]\s+(.*)$/);
+    if (bullet) {
+      listBuf.push(<li key={i} style={{ marginBottom:3 }}>{parseInline(bullet[1], C)}</li>);
+      return;
+    }
+    flushList();
+    blocks.push(<div key={i}>{parseInline(line, C)}</div>);
+  });
+  flushList();
+  return <div>{blocks}</div>;
+}
+
 /* ── AI 理財顧問：獨立一頁，跟目標、訂閱一樣是底部導覽切換的頁面，不是彈窗；
    用 Firebase AI Logic（Gemini）回答問題，會自動帶入目前的財務快照當背景資料；
    「查新聞」開關打開時，會改用有連上 Google 搜尋的模型，適合問股價漲跌、財經新聞這種即時性問題 ── */
 export default function AdvisorPage({
   tab, setTab, C, iSt, Btn, tr,
-  aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory,
+  aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
 }) {
   const [draft, setDraft] = useState("");
   const [grounded, setGrounded] = useState(false);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+
+  /* 免費額度有「每分鐘限制」，緊接著上一句馬上問下一句容易撞到；這裡每秒更新一次倒數秒數，
+     時間到之前把送出鎖住，畫面上直接顯示還要等幾秒，不用讓你自己猜 */
+  useEffect(() => {
+    const tick = () => setCooldownLeft(Math.max(0, Math.ceil((advisorCooldownUntil - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [advisorCooldownUntil]);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ block:"end" });
@@ -31,7 +85,7 @@ export default function AdvisorPage({
 
   const submit = () => {
     const text = draft.trim();
-    if (!text || advisorLoading) return;
+    if (!text || advisorLoading || cooldownLeft > 0) return;
     setDraft("");
     sendAdvisorMessage(text, grounded);
   };
@@ -80,10 +134,10 @@ export default function AdvisorPage({
             {advisorHistory.map((m, i) => (
               <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
                 <div style={{ maxWidth:"85%" }}>
-                  <div style={{ padding:"10px 14px", borderRadius:14, fontSize:13, lineHeight:1.6, whiteSpace:"pre-wrap",
+                  <div style={{ padding:"10px 14px", borderRadius:14, fontSize:13, lineHeight:1.6, whiteSpace: m.role==="user" ? "pre-wrap" : "normal",
                     background:m.role==="user"?C.accent:C.card, color:m.role==="user"?"#fff":C.text,
                     border:m.role==="user"?"none":`1px solid ${C.border}` }}>
-                    {m.text}
+                    {m.role==="user" ? m.text : <SimpleMarkdown text={m.text} C={C} />}
                   </div>
                   {m.sources && m.sources.length > 0 && (
                     <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:4 }}>
@@ -116,10 +170,11 @@ export default function AdvisorPage({
           <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
             <textarea ref={textareaRef} value={draft} onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-              placeholder={grounded ? tr("問股價、新聞相關的問題…") : tr("問點什麼…")} disabled={advisorLoading} rows={1}
+              placeholder={grounded ? tr("問股價、新聞相關的問題…") : tr("問點什麼…")} disabled={advisorLoading || cooldownLeft > 0} rows={1}
               style={{ ...iSt, flex:1, resize:"none", minHeight:40, maxHeight:120, overflowY:"auto", lineHeight:1.5, fontFamily:"inherit" }} />
-            <Btn onClick={submit} disabled={advisorLoading || !draft.trim()}>{tr("送出")}</Btn>
+            <Btn onClick={submit} disabled={advisorLoading || !draft.trim() || cooldownLeft > 0}>{cooldownLeft > 0 ? `${cooldownLeft}s` : tr("送出")}</Btn>
           </div>
+          {cooldownLeft > 0 && <div style={{ fontSize:11, color:C.muted, marginTop:6, textAlign:"center" }}>⏳ {tr("免費額度每分鐘有限制，緊接著上一句馬上問容易失敗，還要等")} {cooldownLeft} {tr("秒才能再問")}</div>}
         </div>
       )}
     </div>

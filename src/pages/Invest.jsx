@@ -16,8 +16,7 @@ export default function InvestPage({
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta,
-  dividendEst, loadingDiv, fetchDividendEstimate,
-  dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, StockPriceChart,
+  StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
@@ -86,8 +85,6 @@ export default function InvestPage({
                 </Card>
               )}
 
-              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
-              <BenchmarkCard C={C} tr={tr} stocks={stocks} stTotMv={stTotMv} stTotCost={stTotCost} fmt={fmt} Card={Card} />
 
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
                 <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
@@ -351,6 +348,7 @@ export default function InvestPage({
           
           {invTab === "perf" && (
             <div>
+              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
               {/* 勝率 / 賺賠比 */}
               <Card style={{ padding:16, marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>{tr("勝率與賺賠比")}</div>
@@ -428,49 +426,6 @@ export default function InvestPage({
                     </div>
                   </div>
                 ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"14px 0" }}>{loadingBenchmark?tr("讀取中…"):tr("點右上角「重新整理」讀取比較資料")}</div>}
-              </Card>
-
-              {/* 股息估算 */}
-              <Card style={{ padding:16 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>股息估算（近一年已發放）</div>
-                  <button onClick={fetchDividendEstimate} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingDiv?"讀取中…":"重新整理"}</button>
-                </div>
-                {dividendEst.length > 0 ? (
-                  <div>
-                    <div style={{ fontWeight:900, fontSize:18, color:C.income, marginBottom:8 }}>{fmt(Math.round(dividendEst.reduce((s,x)=>s+x.annualDiv,0)))} / 年</div>
-                    {dividendEst.map(x => <div key={x.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"4px 0", color:C.textSub }}><span>{x.ticker}</span><span>{fmt(Math.round(x.annualDiv))}</span></div>)}
-                    <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊依過去 12 個月實際配息估算，非未來預測</div>
-                  </div>
-                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{loadingDiv?"讀取中…":"點「重新整理」讀取股息資料"}</div>}
-              </Card>
-
-              {/* 股利公告（TWSE官方，非估算）*/}
-              <Card style={{ padding:16, marginTop:14 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div>
-                    <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>股利公告</div>
-                    <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>證交所官方資料，僅上市（TW）公司，公司公告後才查得到</div>
-                  </div>
-                  <button onClick={fetchDividendAnnounce} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer", flexShrink:0 }}>{loadingDivAnn?"讀取中…":"重新整理"}</button>
-                </div>
-                {!divAnnFetched ? (
-                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{loadingDivAnn?"讀取中…":"點「重新整理」查詢"}</div>
-                ) : dividendAnnounce.length === 0 ? (
-                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>沒有上市持股，或查無資料</div>
-                ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {dividendAnnounce.map(x => (
-                      <div key={x.ticker} style={{ padding:"10px 12px", borderRadius:10, background:x.announced?`${C.income}10`:C.card, border:`1px solid ${x.announced?C.income+"33":C.border}` }}>
-                        <div style={{ display:"flex", justifyContent:"space-between" }}>
-                          <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{x.ticker} {x.name}</span>
-                          {x.announced ? <span style={{ fontWeight:900, fontSize:13, color:C.income }}>{fmt(Math.round(x.estIncome))}</span> : <span style={{ fontSize:11, color:C.muted }}>尚未公告</span>}
-                        </div>
-                        {x.announced && <div style={{ fontSize:11, color:C.textSub, marginTop:3 }}>{x.year}年度・每股 {x.cashDivPerShare} 元・{x.distDate || "分派日未定"}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </Card>
 
               <div style={{ fontSize:11, color:C.muted, margin:"18px 0 10px", lineHeight:1.6 }}>
@@ -644,71 +599,6 @@ export default function InvestPage({
 
 /* ── 自選股新增小表單 ── */
 /* ── 大盤指數列：台灣加權指數／費半指數／S&P 500，讓你一眼看到大盤現在的位置 ── */
-/* ── 大盤對比：用你最早一筆交易的日期當基準，比較「大盤加權指數」跟「你的投資組合」從那天到現在的報酬率 ──
-   投組報酬率用「目前市值 vs 累積投入成本」算，是簡化版本，不是嚴格的時間加權報酬率，但跟 Google Sheet 範本
-   邏輯一致、資料完全來自你現有的交易紀錄，不用額外輸入 */
-function BenchmarkCard({ C, tr, stocks, stTotMv, stTotCost, fmt, Card }) {
-  const [taiex, setTaiex] = useState(null); // null=讀取中；{}=沒資料
-
-  const earliestDate = (() => {
-    let min = null;
-    stocks.forEach(s => (s.trades||[]).forEach(t => { if (t.date && (!min || t.date < min)) min = t.date; }));
-    return min;
-  })();
-
-  useEffect(() => {
-    if (!earliestDate) { setTaiex({}); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
-        const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        const daily = data["^TWII"]?.daily || [];
-        if (!daily.length) { if (!cancelled) setTaiex({}); return; }
-        const baseTs = new Date(earliestDate).getTime() / 1000;
-        // 找基準日「當天或之後最接近」的收盤值（那天如果剛好沒開盤，就用往後第一個交易日）
-        const startPoint = daily.find(x => x.t >= baseTs) || daily[0];
-        const endPoint = daily[daily.length - 1];
-        if (!cancelled) setTaiex({ start:startPoint.c, end:endPoint.c });
-      } catch { if (!cancelled) setTaiex({}); }
-    })();
-    return () => { cancelled = true; };
-  }, [earliestDate]);
-
-  if (!earliestDate || taiex === null) return null;
-  if (taiex.start == null) return null; // 沒有大盤資料可比較，不顯示這張卡片，不硬湊假資料
-
-  const taiexPct = ((taiex.end - taiex.start) / taiex.start) * 100;
-  const portPct = stTotCost > 0 ? ((stTotMv - stTotCost) / stTotCost) * 100 : null;
-  if (portPct == null) return null; // 還沒有市值資料（市價還沒載入或沒有持股）
-
-  const alpha = portPct - taiexPct;
-  const alphaColor = alpha >= 0 ? C.income : C.expense;
-
-  return (
-    <Card style={{ padding:16, marginBottom:16 }}>
-      <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10 }}>📊 大盤加權指數對比（自 {earliestDate} 起）</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <div>
-          <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>台灣加權指數</div>
-          <div style={{ fontWeight:900, fontSize:15, color: taiexPct>=0?C.income:C.expense }}>{taiexPct>=0?"+":""}{taiexPct.toFixed(2)}%</div>
-        </div>
-        <div>
-          <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>我的投資組合</div>
-          <div style={{ fontWeight:900, fontSize:15, color: portPct>=0?C.income:C.expense }}>{portPct>=0?"+":""}{portPct.toFixed(2)}%</div>
-        </div>
-      </div>
-      <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span style={{ fontSize:11, color:C.textSub }}>超額報酬（Alpha）</span>
-        <span style={{ fontWeight:900, fontSize:14, color:alphaColor }}>{alpha>=0?"領先大盤 +":"落後大盤 "}{Math.abs(alpha).toFixed(2)}%</span>
-      </div>
-      <div style={{ fontSize:9, color:C.muted, marginTop:8, lineHeight:1.5 }}>投組報酬率是用「目前市值 vs 累積投入成本」簡化計算，不是嚴格的時間加權報酬率；只統計目前還持有的部位，已出清的交易不計入。</div>
-    </Card>
-  );
-}
-
 function IndexBar({ C, tr, StockPriceChart, theme }) {
   const [idx, setIdx] = useState(null); // null=讀取中
   const [expanded, setExpanded] = useState(null);
