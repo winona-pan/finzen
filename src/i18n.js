@@ -484,4 +484,6 @@ const D = {
   "股數、均成本、投資總成本這三個，填任兩個就會自動幫你算出第三個。": { en:"Fill in any two of shares, average cost, and total cost — the third one is calculated automatically." },
   "賣出價格（每股）": { en:"Sell price (per share)" },
   "直接改這裡只會更新總成本，股數/單價不會跟著變": { en:"Editing this directly only updates the total cost — shares and price per share stay as-is" },
+  "免費額度每分鐘有限制，緊接著上一句馬上問容易失敗，還要等": { en:"The free tier has a per-minute limit — asking right after the last reply tends to fail. Please wait" },
+  "秒才能再問": { en:"more second(s) before asking again" },
 };

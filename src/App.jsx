@@ -1928,92 +1928,6 @@ export default function App() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
   }, [stSum]);
 
-  /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
-  const [dividendEst, setDividendEst] = useState([]);
-  const [loadingDiv, setLoadingDiv] = useState(false);
-  const fetchDividendEstimate = useCallback(async () => {
-    const held = stSum.filter(s => s.totalSh > 0);
-    if (!held.length) { setDividendEst([]); return; }
-    setLoadingDiv(true);
-    try {
-      const results = await Promise.all(held.map(async s => {
-        const sym = s.market === "TW" ? `${s.ticker}.TW` : s.ticker;
-        const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y&events=div`;
-        const proxies = [
-          (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-          (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-        ];
-        for (const makeProxy of proxies) {
-          try {
-            const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
-            if (!r.ok) continue;
-            const raw = await r.text();
-            let d2; try { const j = JSON.parse(raw); d2 = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
-            const divs = d2?.chart?.result?.[0]?.events?.dividends;
-            if (!divs) return { ...s, lastDiv:0, annualDiv:0 };
-            const vals = Object.values(divs).map(x => x.amount).filter(Boolean);
-            if (!vals.length) return { ...s, lastDiv:0, annualDiv:0 };
-            const lastDiv = vals[vals.length - 1];
-            const annualDiv = vals.reduce((sum, v) => sum + v, 0);
-            return { ...s, lastDiv, annualDiv: annualDiv * s.totalSh };
-          } catch { continue; }
-        }
-        return { ...s, lastDiv:0, annualDiv:0 };
-      }));
-      setDividendEst(results.filter(x => x.annualDiv > 0));
-    } catch { setDividendEst([]); }
-    finally { setLoadingDiv(false); }
-  }, [stSum]);
-
-  /* ── 股利公告（TWSE OpenAPI 官方資料，非估算）── */
-  const [dividendAnnounce, setDividendAnnounce] = useState([]);
-  const [loadingDivAnn, setLoadingDivAnn] = useState(false);
-  const [divAnnFetched, setDivAnnFetched] = useState(false);
-  const fetchDividendAnnounce = useCallback(async () => {
-    const held = stSum.filter(s => s.totalSh > 0 && s.market === "TW");
-    if (!held.length) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
-    setLoadingDivAnn(true);
-    const apiUrl = "https://openapi.twse.com.tw/v1/opendata/t187ap45_L";
-    const attempts = [
-      () => apiUrl,
-      () => `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,
-      () => `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
-    ];
-    try {
-      let list = null;
-      for (const makeUrl of attempts) {
-        try {
-          const r = await fetch(makeUrl(), { signal:AbortSignal.timeout(10000) });
-          if (!r.ok) continue;
-          const raw = await r.text();
-          try {
-            const j = JSON.parse(raw);
-            list = Array.isArray(j) ? j : (j.contents ? JSON.parse(j.contents) : null);
-          } catch { continue; }
-          if (Array.isArray(list)) break;
-        } catch { continue; }
-      }
-      if (!list) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
-      const tickers = new Set(held.map(s => s.ticker));
-      const matched = list.filter(row => tickers.has(row["公司代號"]));
-      const results = held.map(s => {
-        const row = matched.find(r => r["公司代號"] === s.ticker);
-        if (!row) return { ticker:s.ticker, name:s.name, announced:false };
-        const cashDiv = +row["盈餘分配之現金股利(元/股)"] || +row["現金股利(元/股)"] || 0;
-        return {
-          ticker:s.ticker, name:s.name, announced:true,
-          year: row["股利所屬年度"] || "",
-          distDate: row["董事會（擬議）股利分派日"] || row["股東會日期"] || "",
-          cashDivPerShare: cashDiv,
-          estIncome: cashDiv * s.totalSh,
-        };
-      });
-      setDividendAnnounce(results);
-      setDivAnnFetched(true);
-    } catch { setDividendAnnounce([]); setDivAnnFetched(true); }
-    finally { setLoadingDivAnn(false); }
-  }, [stSum]);
   const emotionReview = useMemo(() => {
     const map = {};
     EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
@@ -2283,7 +2197,7 @@ export default function App() {
       if (g.isDone) return { ...g, alloc:0 };
       // 有設定「定期定額」的話優先用那個當建議金額，除非這次有手動覆寫
       const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : (g.recurringAmount > 0 ? g.recurringAmount : g.needed);
-      const alloc = Math.max(0, Math.min(want, remaining));
+      const alloc = Math.round(Math.max(0, Math.min(want, remaining)) / 100) * 100; // 存錢金額抓百位數，不要細到個位數
       remaining -= alloc;
       return { ...g, alloc };
     });
@@ -2293,13 +2207,13 @@ export default function App() {
       .map(mapGoal).sort((a,b) => a.priority - b.priority);
     const wishlistAllocs = activeWishlist.map(g => {
       const want = overrides.goalOverrides?.[g.id] != null ? overrides.goalOverrides[g.id] : Math.max(0, g.target - g.cur);
-      const alloc = Math.max(0, Math.min(want, remaining));
+      const alloc = Math.round(Math.max(0, Math.min(want, remaining)) / 100) * 100; // 同樣抓百位數
       remaining -= alloc;
       return { ...g, alloc };
     });
 
     // Step 5【存錢/緊急預備金】：所有目標滿足後剩下的全部
-    const reserveAmt = Math.max(0, remaining);
+    const reserveAmt = Math.round(Math.max(0, remaining) / 100) * 100;
 
     return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, wishlistAllocs, reserveAmt };
   }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns, goalRecurringAmount]);
@@ -2564,6 +2478,11 @@ export default function App() {
   }, []);
   const [advisorLoading, setAdvisorLoading] = useState(false);
   const [advisorError, setAdvisorError] = useState(null);
+  /* 免費方案除了「一天大概20次」，還有「每分鐘能問幾次」更嚴格的限制——確認過，緊接著上一句馬上問下一句很容易撞到，
+     等個一兩分鐘再問就沒事。與其讓它默默失敗，這裡記錄「下一次最早可以問的時間」，介面上可以顯示倒數、把送出鎖住，
+     不用再靠使用者自己猜要等多久 */
+  const [advisorCooldownUntil, setAdvisorCooldownUntil] = useState(0);
+  const ADVISOR_COOLDOWN_MS = 45000;
   const sendAdvisorMessage = useCallback(async (text, grounded) => {
     const userMsg = { role:"user", text };
     const nextHistory = [...advisorHistory, userMsg];
@@ -2573,11 +2492,13 @@ export default function App() {
     try {
       const { text: reply, sources } = await askAdvisor(nextHistory, advisorContext, grounded);
       setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
+      setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
     } catch (e) {
       const raw = e.message || "";
       let friendly;
       if (/429|quota|exceed/i.test(raw)) {
-        friendly = "今天（或這分鐘）問太多次了，碰到免費額度上限。免費方案大概一天只有20次左右，過一段時間再試，或明天再問；如果常常碰到，可以考慮在 Firebase 開通付費方案（Blaze），費用是照實際用量算，個人使用通常很便宜。";
+        friendly = "問太快了，撞到免費額度「每分鐘限制」，稍等一下下面的倒數結束再問；如果一天內常常撞到，可能是撞到「每天總量」上限（大概20次左右），過一段時間或明天再試，也可以考慮在 Firebase 開通付費方案（Blaze），費用是照實際用量算，個人使用通常很便宜。";
+        setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
       } else if (/404|not found|no longer available/i.test(raw)) {
         friendly = "AI 模型設定可能過期了（Google 常常會更新/淘汰模型名稱），先跟開發者反應一下，需要更新程式裡的模型名稱。";
       } else {
@@ -2688,8 +2609,6 @@ export default function App() {
     tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
     watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
     dailyPnlHeatmap, sectorPie, updateStockMeta,
-    dividendEst, loadingDiv, fetchDividendEstimate,
-    dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
     useMvForAssets, setUseMvForAssets, toggleMv, poolThisMo, fetchAllPrices, ALL_CURS, theme,
     collapsed, toggleSection, setNT, nT, T0, descHistoryByCat, descHistory, tagsHistory,
@@ -2712,7 +2631,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     budget502030, createEmergencyFund,
-    aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory,
+    aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,
