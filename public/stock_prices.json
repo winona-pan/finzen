@@ -1,8 +1,154 @@
 {
   "_meta": {
-    "last_updated": "2026-07-05 03:33:36",
-    "tw_count": 11,
-    "us_count": 10,
-    "institutional_date": "20260702"
+    "last_updated": "2026-09-25 19:30:36",
+    "tw_count": 3,
+    "us_count": 2,
+    "institutional_date": "20260924"
+  },
+  "0050": {
+    "price": 112.4,
+    "high": 112.44999694824219,
+    "low": 111.75,
+    "vol": 69996067,
+    "chgPct": -0.04,
+    "name": "YUANTA SECURITIES INV TRUST CO ",
+    "market": "TW",
+    "institutional": {
+      "foreign": 10477,
+      "trust": 4728,
+      "dealer": 4211
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "0050.TW": {
+    "price": 112.4,
+    "high": 112.44999694824219,
+    "low": 111.75,
+    "vol": 69996067,
+    "chgPct": -0.04,
+    "name": "YUANTA SECURITIES INV TRUST CO ",
+    "market": "TW",
+    "institutional": {
+      "foreign": 10477,
+      "trust": 4728,
+      "dealer": 4211
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "2330": {
+    "price": 2475.0,
+    "high": 2490.0,
+    "low": 2470.0,
+    "vol": 13043734,
+    "chgPct": -1.0,
+    "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
+    "market": "TW",
+    "institutional": {
+      "foreign": 243,
+      "trust": 185,
+      "dealer": 176
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "2330.TW": {
+    "price": 2475.0,
+    "high": 2490.0,
+    "low": 2470.0,
+    "vol": 13043734,
+    "chgPct": -1.0,
+    "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
+    "market": "TW",
+    "institutional": {
+      "foreign": 243,
+      "trust": 185,
+      "dealer": 176
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "009816": {
+    "price": 16.57,
+    "high": 16.579999923706055,
+    "low": 16.489999771118164,
+    "vol": 75214137,
+    "chgPct": -0.18,
+    "name": "KGI SECURITIES INVT TST CO LTD ",
+    "market": "TW",
+    "institutional": {
+      "foreign": -33613,
+      "trust": 0,
+      "dealer": 0
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "009816.TW": {
+    "price": 16.57,
+    "high": 16.579999923706055,
+    "low": 16.489999771118164,
+    "vol": 75214137,
+    "chgPct": -0.18,
+    "name": "KGI SECURITIES INVT TST CO LTD ",
+    "market": "TW",
+    "institutional": {
+      "foreign": -33613,
+      "trust": 0,
+      "dealer": 0
+    },
+    "institutional_date": "20260924",
+    "updated": "2026-09-25 19:30"
+  },
+  "VOO": {
+    "price": 706.99,
+    "high": 708.5900268554688,
+    "low": 703.3499755859375,
+    "vol": 9406900,
+    "chgPct": -0.09,
+    "name": "Vanguard S&P 500 ETF",
+    "market": "US",
+    "updated": "2026-09-25 19:30"
+  },
+  "QQQ": {
+    "price": 741.1,
+    "high": 742.6599731445312,
+    "low": 734.6199951171875,
+    "vol": 28866800,
+    "chgPct": -0.01,
+    "name": "Invesco QQQ Trust, Series 1",
+    "market": "US",
+    "updated": "2026-09-25 19:30"
+  },
+  "^TWII": {
+    "price": 48024.6,
+    "high": 48117.5390625,
+    "low": 47754.71875,
+    "vol": 3540900,
+    "chgPct": -0.28,
+    "name": "台灣加權指數",
+    "market": "INDEX",
+    "updated": "2026-09-25 19:30"
+  },
+  "^SOX": {
+    "price": 12492.536,
+    "high": 12517.919921875,
+    "low": 12258.3896484375,
+    "vol": 0,
+    "chgPct": -0.33,
+    "name": "費城半導體指數",
+    "market": "INDEX",
+    "updated": "2026-09-25 19:30"
+  },
+  "^GSPC": {
+    "price": 7704.13,
+    "high": 7719.009765625,
+    "low": 7662.56982421875,
+    "vol": 5316390000,
+    "chgPct": -0.02,
+    "name": "S&P 500",
+    "market": "INDEX",
+    "updated": "2026-09-25 19:30"
   }
 }
