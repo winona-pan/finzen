@@ -280,7 +280,7 @@ export default function StockModals({
 
             <Card style={{ padding:14, marginBottom:12 }}>
               <div style={{ fontSize:11, fontWeight:900, color:C.muted, marginBottom:8, letterSpacing:"0.08em" }}>{tr("股價走勢")}</div>
-              <StockPriceChart ticker={st.ticker} market={st.market} fetchStockRange={fetchStockRange} />
+              <StockPriceChart ticker={st.ticker} market={st.market} theme={theme} />
             </Card>
 
             <div style={{ fontSize:11, fontWeight:900, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:8 }}>{tr("持股資料")}</div>

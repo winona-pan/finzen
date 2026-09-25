@@ -118,10 +118,10 @@ export default function OtherModals({
                 <div>
                   <div style={{ display:"flex", gap:6 }}>
                     <input type="number" min="0" value={nG.recurringShares||""} placeholder={tr("每月約幾股")} onChange={e => setNG(p => ({ ...p, recurringShares: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
-                    <select value={nG.shareTicker||""} onChange={e => setNG(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                      <option value="">— {tr("選股票")} —</option>
-                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <input type="text" list="goalShareTickers" value={nG.shareTicker||""} placeholder={tr("輸入股票代號，如 0050")} onChange={e => setNG(p => ({ ...p, shareTicker:e.target.value.toUpperCase() }))} style={{ ...iSt, flex:1 }} />
+                    <datalist id="goalShareTickers">
+                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t} />)}
+                    </datalist>
                   </div>
                   <input type="number" min="0" value={nG.sharePriceOverride||""} placeholder={tr("自訂股價（選填，不填就用目前報價/買進均價）")} onChange={e => setNG(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
                 </div>
@@ -236,10 +236,10 @@ export default function OtherModals({
               {editGoal.recurringMode === "shares" ? (
                 <div>
                   <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-                    <select value={editGoal.shareTicker||""} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value }))} style={{ ...iSt, flex:1 }}>
-                      <option value="">— {tr("選股票")} —</option>
-                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <input type="text" list="editGoalShareTickers" value={editGoal.shareTicker||""} placeholder={tr("輸入股票代號，如 0050")} onChange={e => setEditGoal(p => ({ ...p, shareTicker:e.target.value.toUpperCase() }))} style={{ ...iSt, flex:1 }} />
+                    <datalist id="editGoalShareTickers">
+                      {[...new Set(stocks.map(s=>s.ticker))].map(t => <option key={t} value={t} />)}
+                    </datalist>
                     <input type="number" min="0" value={editGoal.sharePriceOverride||""} placeholder={tr("自訂股價（選填）")} onChange={e => setEditGoal(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, flex:1 }} />
                   </div>
                   <div style={{ fontSize:10, color:C.muted, marginBottom:6, lineHeight:1.6 }}>

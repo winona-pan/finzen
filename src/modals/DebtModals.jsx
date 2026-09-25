@@ -23,6 +23,7 @@ export default function DebtModals({
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE,
+  buckets, chargeFromAccField, accFieldLabel,
   // 共用 UI atoms
   Sheet, Inp, Sl, Fld, CalcInp, Btn, TP, tr
 }) {
@@ -135,10 +136,14 @@ export default function DebtModals({
               <option value="">— 選擇帳戶（選填）—</option>
               {accs.filter(a => isReceivable ? (a.type!=="credit"&&a.type!=="investment") : a.type!=="investment")
                 .map(a => <option key={a.id} value={a.name}>{a.icon||AT[a.type]||""} {a.name} ({fmt(a.bal, a.cur)})</option>)}
+              {buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}
             </Sl>
             <div style={{ display:"flex", gap:8, marginTop:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
                 if (!thisPay || thisPay <= 0) return;
+                const settleIsBucket = settleAcc && settleAcc.startsWith("bucket:");
+                const settleBucket = settleIsBucket ? buckets.find(b => b.id === settleAcc.slice(7)) : null;
+                const settleParentAcc = settleBucket ? accs.find(a => a.id === settleBucket.accId) : accs.find(a => a.name === settleAcc);
                 const doSettle = () => {
                   if (isInstall) {
                     upd("debts", p => p.map(x => x.id===d.id ? {...x, installPaid:newPaidCount, installPaidAmt:paidSoFar+thisPay, settled:isLast} : x));
@@ -146,8 +151,16 @@ export default function DebtModals({
                     upd("debts", p => p.map(x => x.id===d.id ? {...x, settled:true} : x));
                   }
                   if (settleAcc && thisPay) {
-                    if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
-                    else upd("accs", p => p.map(a => a.name===settleAcc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+thisPay} : {...a, bal:a.bal-thisPay}) : a));
+                    if (settleIsBucket) {
+                      upd("buckets", p => (p||[]).map(b => b.id===settleBucket?.id ? {...b, allocated: isReceivable ? b.allocated+thisPay : Math.max(0,b.allocated-thisPay)} : b));
+                      if (settleParentAcc) {
+                        if (isReceivable) upd("accs", p => p.map(a => a.id===settleParentAcc.id ? {...a, bal:a.bal+thisPay} : a));
+                        else upd("accs", p => p.map(a => a.id===settleParentAcc.id ? (a.type==="credit" ? {...a, payable:(a.payable||0)+thisPay} : {...a, bal:a.bal-thisPay}) : a));
+                      }
+                    } else {
+                      if (isReceivable) upd("accs", p => p.map(a => a.name===settleAcc ? {...a, bal:a.bal+thisPay} : a));
+                      else upd("accs", p => p.map(a => a.name===settleAcc ? (a.type==="credit" ? {...a, payable:(a.payable||0)+thisPay} : {...a, bal:a.bal-thisPay}) : a));
+                    }
                   }
                   const desc = `${isInstall?(isReceivable?`分期收款 ${newPaidCount}/${d.installTotal}`:`分期付款 ${newPaidCount}/${d.installTotal}`):(isReceivable?"應收款結清":"應付款結清")}：${d.person} ${d.desc||""}`;
                   upd("txns", p => [...p, {
@@ -164,7 +177,7 @@ export default function DebtModals({
                   setSettleDebt(null); setSettleAcc(""); setSettleCustomAmt(null); close();
                 };
                 if (settleAcc) {
-                  confirm(`${tr("確定")}${isReceivable?tr("收款"):tr("付款")} ${fmt(thisPay)}？${settleAcc} ${tr("帳戶餘額會")}${isReceivable?tr("增加"):tr("減少")}${tr("這筆金額")}`, doSettle, isReceivable?tr("確認收款"):tr("確認付款"));
+                  confirm(`${tr("確定")}${isReceivable?tr("收款"):tr("付款")} ${fmt(thisPay)}？${accFieldLabel(settleAcc)} ${tr("帳戶餘額會")}${isReceivable?tr("增加"):tr("減少")}${tr("這筆金額")}`, doSettle, isReceivable?tr("確認收款"):tr("確認付款"));
                 } else {
                   doSettle();
                 }
