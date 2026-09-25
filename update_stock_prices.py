@@ -10,7 +10,13 @@ FinZen 股價 + 法人資料自動更新腳本
 import json
 import time
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# GitHub Actions 執行伺服器預設用 UTC，跟台灣時間差 8 小時；所有存進 JSON 給使用者看的時間都要用這個，
+# 不要直接用 datetime.now()（那個會是 UTC，顯示出來會讓人覺得「怎麼都是凌晨」）
+TW_TZ = timezone(timedelta(hours=8))
+def now_tw():
+    return datetime.now(TW_TZ)
 
 # ── 設定你要追蹤的股票代號 ──────────────────────────────
 # 台股：涵蓋台灣50（市值前50大）目前主要成分股，季度會有汰弱留強、不會完全跟指數同步，
@@ -123,8 +129,66 @@ def fetch_institutional(date_str):
         print(f"    法人資料解析失敗: {e}")
         return {}, date_str
 
+def fetch_chart_series(sym, interval, range_):
+    """抓單一標的的走勢圖資料（日線或分鐘線皆可），回傳 [{date/time, close}] 陣列"""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval={interval}&range={range_}"
+    raw = req(url)
+    if not raw:
+        raw = req(url.replace("query1", "query2"))
+    if not raw:
+        return None
+    try:
+        d = json.loads(raw)
+        result = d.get("chart", {}).get("result")
+        if not result:
+            return None
+        r = result[0]
+        timestamps = r.get("timestamp") or []
+        closes = r.get("indicators", {}).get("quote", [{}])[0].get("close") or []
+        out = []
+        for t, c in zip(timestamps, closes):
+            if c is None:
+                continue
+            out.append({"t": t, "c": round(c, 4)})
+        return out if out else None
+    except Exception:
+        return None
+
+def fetch_history():
+    """幫每檔追蹤股票抓走勢圖用的歷史資料（日線1年 + 5天分鐘線），存進 stock_history.json，
+    讓走勢圖也能直接讀這份後端穩定產生的資料，不用再依賴瀏覽器那幾個不穩定的免費代理伺服器。
+    歷史資料不需要每15分鐘更新（daily bar 收盤前都不會變），所以比照匯率的做法，一天只真的抓一次。"""
+    today = now_tw().strftime("%Y-%m-%d")
+    try:
+        with open("public/stock_history.json", "r", encoding="utf-8") as f:
+            existing = json.load(f)
+        if existing.get("_meta", {}).get("last_updated", "").startswith(today):
+            print(f"  ⏭️ 走勢圖資料今天（{today}）已經更新過了，跳過")
+            return
+    except Exception:
+        existing = {}
+
+    history = {}
+    all_syms = [(f"{s}.TW", s) for s in TW_STOCKS] + [(s, s) for s in US_STOCKS]
+    print(f"📊 抓取走勢圖歷史資料（{len(all_syms)} 檔，daily + intraday）...")
+    for yahoo_sym, key in all_syms:
+        daily = fetch_chart_series(yahoo_sym, "1d", "1y")
+        time.sleep(0.3)
+        intraday = fetch_chart_series(yahoo_sym, "15m", "5d")
+        time.sleep(0.3)
+        if daily or intraday:
+            history[key] = {"daily": daily or [], "intraday": intraday or []}
+            print(f"  ✅ {key}: daily {len(daily or [])} 筆, intraday {len(intraday or [])} 筆")
+        else:
+            print(f"  ❌ {key}: 走勢圖資料抓取失敗")
+
+    history["_meta"] = {"last_updated": now_tw().strftime("%Y-%m-%d %H:%M:%S")}
+    with open("public/stock_history.json", "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+    print(f"  ✅ 走勢圖資料更新完成（{len(history)-1} 檔）")
+
 def main():
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now_tw().strftime("%Y-%m-%d %H:%M:%S")
     print(f"🕐 開始更新 {now_str}")
     prices = {}
 
@@ -136,12 +200,12 @@ def main():
 
     # ── 抓取三大法人資料 ──
     print("🏛  抓取三大法人資料...")
-    today = datetime.now().strftime("%Y%m%d")
+    today = now_tw().strftime("%Y%m%d")
     inst_data, inst_date = fetch_institutional(today)
     if not inst_data:
         # 如果還沒收盤公布，往回推 1-3 天尋找最近一交易日
         for i in range(1, 4):
-            check_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
+            check_date = (now_tw() - timedelta(days=i)).strftime("%Y%m%d")
             inst_data, inst_date = fetch_institutional(check_date)
             if inst_data:
                 print(f"    ⚠ 使用最近交易日({inst_date})法人籌碼，共 {len(inst_data)} 支")
@@ -166,7 +230,7 @@ def main():
                 "market": "TW",
                 "institutional": inst,
                 "institutional_date": inst_date,
-                "updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "updated": now_tw().strftime("%Y-%m-%d %H:%M"),
             }
             prices[sym] = entry
             prices[f"{sym}.TW"] = entry
@@ -185,7 +249,7 @@ def main():
             entry = {
                 **q,
                 "market": "US",
-                "updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "updated": now_tw().strftime("%Y-%m-%d %H:%M"),
             }
             prices[sym] = entry
             chg = f"({q['chgPct']:+.2f}%)" if q.get("chgPct") is not None else ""
@@ -209,7 +273,7 @@ def main():
 def fetch_rates():
     """抓取匯率（對 TWD），存入 rates.json；一天只真的抓一次，避免現在改成15分鐘跑一次之後，
     對免費匯率 API 一天打將近100次那麼頻繁（匯率本來就不需要抓那麼勤）"""
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_tw().strftime("%Y-%m-%d")
     try:
         with open("public/rates.json", "r", encoding="utf-8") as f:
             existing = json.load(f)
@@ -237,7 +301,7 @@ def fetch_rates():
             for cur in TWD_CURS:
                 if cur in r and r[cur]:
                     rates[cur] = round(1 / r[cur], 6)
-            rates["_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            rates["_updated"] = now_tw().strftime("%Y-%m-%d %H:%M")
             with open("public/rates.json", "w", encoding="utf-8") as f:
                 json.dump(rates, f, ensure_ascii=False, indent=2)
             print(f"  ✅ 匯率更新完成（{len(rates)-1} 種貨幣）")
@@ -250,3 +314,4 @@ if __name__ == "__main__":
     main()
     print("\n💱 更新匯率...")
     fetch_rates()
+    fetch_history()
