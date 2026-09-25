@@ -412,22 +412,75 @@ function SwipeRow({ children, onDelete, onEdit, onClick }) {
 /* ── StockPriceChart：股價區間走勢圖，附 1日/5日/1月/3月/6月/1年 切換 ── */
 /* ── 股價走勢圖：直接嵌入 TradingView 官方免費小工具，不用再自己抓資料、不用再靠不穩定的代理伺服器——
    人家自己的即時資料、自己的圖表引擎，功能（技術指標、畫線工具、多種圖表型態）比我們自己刻的完整非常多 ── */
+/* ── 股價走勢圖：美股用 TradingView 官方免費小工具（資料完整、功能豐富）；
+   台股改回讀我們自己後端排程產生的 stock_history.json 自己畫——
+   查證過，TradingView 的「免費嵌入式小工具」不支援台灣證交所資料（即使該股票在 tradingview.com 網站本身查得到），
+   這是他們資料授權的限制，不是代號打錯，所以台股沒辦法用同一招 ── */
 function StockPriceChart({ ticker, market, theme = "dark" }) {
-  const tvSymbol = market === "TW" ? `TWSE:${ticker}` : ticker.toUpperCase();
-  const tvTheme = theme === "dark" ? "dark" : "light"; // 我們的主題有好幾種配色皮膚，TradingView 只吃 light/dark 兩種，除了 dark 以外都當 light 處理
-  const src = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}` +
-    `&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0` +
-    `&toolbarbg=f1f3f6&studies=%5B%5D&theme=${tvTheme}&style=1&timezone=Asia%2FTaipei` +
-    `&withdateranges=1&hideideas=1&locale=zh_TW`;
+  if (market !== "TW") {
+    const tvSymbol = ticker.toUpperCase();
+    const tvTheme = theme === "dark" ? "dark" : "light";
+    const src = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}` +
+      `&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0` +
+      `&toolbarbg=f1f3f6&studies=%5B%5D&theme=${tvTheme}&style=1&timezone=Asia%2FTaipei` +
+      `&withdateranges=1&hideideas=1&locale=zh_TW`;
+    return (
+      <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}` }}>
+        <iframe key={tvSymbol} src={src} title={`${tvSymbol} 走勢圖`} style={{ width:"100%", height:360, border:"none", display:"block" }} loading="lazy" />
+      </div>
+    );
+  }
+  return <TWStockChart ticker={ticker} />;
+}
+
+function TWStockChart({ ticker }) {
+  const [range, setRange] = useState("3mo");
+  const [series, setSeries] = useState(null); // null=讀取中, []=沒資料
+  useEffect(() => {
+    let cancelled = false;
+    setSeries(null);
+    (async () => {
+      try {
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+        const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (!cancelled) setSeries(data[ticker]?.daily || []);
+      } catch { if (!cancelled) setSeries([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  const opts = [{ key:"1mo", label:"1月", days:31 }, { key:"3mo", label:"3月", days:93 }, { key:"6mo", label:"6月", days:186 }, { key:"1y", label:"1年", days:366 }];
+  const cutoffDays = opts.find(o => o.key === range)?.days || 93;
+  const sliced = (series || []).filter(x => x.t >= Date.now()/1000 - cutoffDays*86400).map(x => ({ label: new Date(x.t*1000).toISOString().slice(5,10), close:x.c }));
+  const first = sliced[0]?.close, last = sliced[sliced.length-1]?.close;
+  const chgPct = (first && last) ? ((last-first)/first*100) : null;
+  const color = chgPct == null ? C.muted : chgPct >= 0 ? C.income : C.expense;
+
   return (
-    <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}` }}>
-      <iframe
-        key={tvSymbol}
-        src={src}
-        title={`${tvSymbol} 走勢圖`}
-        style={{ width:"100%", height:360, border:"none", display:"block" }}
-        loading="lazy"
-      />
+    <div>
+      <div style={{ display:"flex", gap:4, marginBottom:10 }}>
+        {opts.map(o => <button key={o.key} onClick={() => setRange(o.key)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:range===o.key?C.accent:C.card, color:range===o.key?"#fff":C.muted, border:"none", cursor:"pointer" }}>{o.label}</button>)}
+      </div>
+      {series === null ? (
+        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
+      ) : sliced.length > 1 ? (
+        <div>
+          <div style={{ fontWeight:900, fontSize:16, color, marginBottom:6 }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
+          <ResponsiveContainer width="100%" height={124}>
+            <LineChart data={sliced} margin={{ top:5, right:5, bottom:14, left:0 }}>
+              <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(sliced.length/5)} dy={4} />
+              <YAxis hide domain={["auto","auto"]} />
+              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[Number(v).toFixed(2),"價格"]} />
+              <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ fontSize:10, color:C.muted, marginTop:6, textAlign:"right" }}>資料來源：後端排程（非即時）</div>
+        </div>
+      ) : (
+        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>這支股票目前沒有走勢圖資料（可能不在追蹤清單裡）</div>
+      )}
     </div>
   );
 }
