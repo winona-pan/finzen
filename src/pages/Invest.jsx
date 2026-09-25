@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function InvestPage({ 
@@ -17,7 +17,7 @@ export default function InvestPage({
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta,
   dividendEst, loadingDiv, fetchDividendEstimate,
-  dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, StockPriceChart, fetchStockRange,
+  dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
   setNAcc, setPayF, setSelSub, setSelBill, setSelPolicy, setSelTxn,
@@ -86,8 +86,10 @@ export default function InvestPage({
                 </Card>
               )}
 
+              <IndexBar C={C} tr={tr} />
+
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
-                <button onClick={async () => { setLoadingHoldings(true); try { await fetchAllPrices(); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
+                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
               </div>
 
               <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
@@ -232,6 +234,7 @@ export default function InvestPage({
                           const dispMv   = hasPrice ? st.mv : st.totalCost;
                           const pnl      = hasPrice ? st.upnl : 0;
                           const pnlPct   = st.totalCost > 0 && hasPrice ? (pnl / st.totalCost * 100) : 0;
+                          const stCur    = st.market === "US" ? "USD" : "TWD"; // 美股原幣顯示美元，不要一律當台幣
                           return (
                             <SwipeRow key={st.id} onDelete={() => confirm(`${tr("確定刪除")} ${st.ticker}？`, () => upd("stocks", p => p.filter(s => s.id !== st.id)))} onEdit={() => { setSelStock(st); setModal("stockDetail"); }} onClick={() => { setSelStock(st); setModal("stockDetail"); }}>
                               <div style={{ padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined }}>
@@ -242,18 +245,18 @@ export default function InvestPage({
                                     <Bdg color={st.market === "US" ? C.accent : C.teal}>{st.market}</Bdg>
                                   </div>
                                   <div style={{ textAlign:"right", flexShrink:0 }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
-                                    <div style={{ fontWeight:900, fontSize:14, color:C.text, ...maskStyle }}>{fmt(dispMv)}</div>
+                                    <div style={{ fontWeight:900, fontSize:14, color:C.text, ...maskStyle }}>{fmt(dispMv, stCur)}</div>
                                     {hasPrice ? (
                                       <div style={{ fontSize:11, color:pnlColor(pnl, C), fontWeight:700, ...maskStyle }}>
-                                        {pnl > 0 ? "▲ +" : pnl < 0 ? "▼ " : ""}{fmt(Math.abs(pnl))} ({pnlPct > 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+                                        {pnl > 0 ? "▲ +" : pnl < 0 ? "▼ " : ""}{fmt(Math.abs(pnl), stCur)} ({pnlPct > 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
                                         {st.stopLossPct && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ marginLeft:4, color:C.danger, fontWeight:900 }}>🔴 達停損</span>}
                                       </div>
                                     ) : <div style={{ fontSize:11, color:C.muted }}>載入市價中…</div>}
                                   </div>
                                 </div>
                                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, ...maskStyle }}>
-                                  <span>{st.totalSh}股 · 均 {fmt(Math.round(st.avgCost || 0))}/股</span>
-                                  {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmtPrice(st.curPrice)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost)}</span>}
+                                  <span>{st.totalSh}股 · 均 {fmt(Math.round(st.avgCost || 0), stCur)}/股</span>
+                                  {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmtPrice(st.curPrice, stCur)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost, stCur)}</span>}
                                 </div>
                               </div>
                             </SwipeRow>
@@ -289,7 +292,7 @@ export default function InvestPage({
 
               {(() => {
                 const allTrades = [];
-                stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name })));
+                stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name, market:s.market })));
                 allTrades.sort((a,b) => b.date.localeCompare(a.date));
                 if (!allTrades.length) return null;
                 const allTMonths = [...new Set(allTrades.map(t => t.date.slice(0,7)))].sort().reverse();
@@ -311,10 +314,10 @@ export default function InvestPage({
                         <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                           <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
                           <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmtPrice(t.price)}</div>
+                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmtPrice(t.price, t.market === "US" ? "USD" : "TWD")}</div>
                             <div style={{ fontSize:10, color:C.muted }}>{t.date}</div>
                           </div>
-                          <div style={{ fontWeight:900, fontSize:12, color:C.text, flexShrink:0 }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
+                          <div style={{ fontWeight:900, fontSize:12, color:C.text, flexShrink:0 }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), t.market === "US" ? "USD" : "TWD")}</div>
                         </div>
                       ))}
                     </div>
@@ -515,7 +518,7 @@ export default function InvestPage({
             <div>
               <WatchStockAdder addWatchStock={addWatchStock} refreshWatchStocks={refreshWatchStocks} C={C} iSt={iSt} tr={tr} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
-                <button onClick={refreshWatchStocks} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
+                <button onClick={() => { refreshWatchStocks(); fetchAllPrices(); }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
               </div>
               {watchStocks.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>{tr("還沒有自選股，上面加一支想追蹤的股票吧")}</div>
@@ -530,7 +533,7 @@ export default function InvestPage({
                             <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmtPrice(w.curPrice) : "—"}</div>
+                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmtPrice(w.curPrice, w.market === "US" ? "USD" : "TWD") : "—"}</div>
                             {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
                           </div>
                         </div>
@@ -639,6 +642,47 @@ export default function InvestPage({
 }
 
 /* ── 自選股新增小表單 ── */
+/* ── 大盤指數列：台灣加權指數／費半指數／S&P 500，讓你一眼看到大盤現在的位置 ── */
+function IndexBar({ C, tr }) {
+  const [idx, setIdx] = useState(null); // null=讀取中
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+        const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const syms = [
+          { key:"^TWII", label:"加權指數" },
+          { key:"^SOX", label:"費半指數" },
+          { key:"^GSPC", label:"S&P 500" },
+        ];
+        const rows = syms.map(s => ({ ...s, price:data[s.key]?.price, chgPct:data[s.key]?.chgPct })).filter(r => r.price != null);
+        if (!cancelled) setIdx(rows);
+      } catch { if (!cancelled) setIdx([]); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (idx === null || idx.length === 0) return null;
+  return (
+    <div style={{ display:"flex", gap:8, marginBottom:10, overflowX:"auto" }}>
+      {idx.map(r => {
+        const up = (r.chgPct||0) >= 0;
+        const color = up ? C.income : C.expense;
+        return (
+          <div key={r.key} style={{ flex:"0 0 auto", padding:"8px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, minWidth:100 }}>
+            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{r.label}</div>
+            <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{Number(r.price).toLocaleString("en", { maximumFractionDigits:2 })}</div>
+            <div style={{ fontSize:11, fontWeight:700, color }}>{up?"▲ +":"▼ "}{Math.abs(r.chgPct).toFixed(2)}%</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function WatchStockAdder({ addWatchStock, refreshWatchStocks, C, iSt, tr }) {
   const [ticker, setTicker] = useState("");
   const [name, setName] = useState("");
