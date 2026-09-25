@@ -28,10 +28,7 @@ TW_STOCKS = ["0050", "0056", "00878",
              "2891", 
              "2345", "2368"]
 US_STOCKS = ["AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AVGO", "LLY",
-             "JPM", "V", "UNH", "XOM", "WMT", "MA", "PG", "JNJ", "HD", "COST",
-             "ORCL", "MRK", "ABBV", "CVX", "CRM", "KO", "AMD", "PEP", "NFLX", "BAC",
-             "TMO", "ADBE", "LIN", "MCD", "CSCO", "ABT", "WFC", "DIS", "ACN", "IBM",
-             "TXN", "INTU", "VZ", "NOW", "CAT", "AMGN", "QCOM", "VOO", "QQQ", "SPY"]
+             "TSM", "VOO", "QQQ", "SPY"]
 # ─────────────────────────────────────────────────────────
 
 def req(url, timeout=12):
