@@ -457,6 +457,7 @@ function TWStockChart({ ticker }) {
     { key:"1d", label:"1日" }, { key:"5d", label:"5日" },
     { key:"1mo", label:"1月", days:31 }, { key:"3mo", label:"3月", days:93 },
     { key:"6mo", label:"6月", days:186 }, { key:"1y", label:"1年", days:366 },
+    { key:"2y", label:"2年", days:731 }, { key:"5y", label:"5年", days:1827 },
   ];
   const isIntraday = range === "1d" || range === "5d";
   const source = raw ? (isIntraday ? (raw.intraday || []) : (raw.daily || [])) : [];
