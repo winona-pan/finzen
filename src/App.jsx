@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
 
@@ -103,10 +103,12 @@ function fmt(n, cur = "TWD") {
   if (["JPY","KRW","VND"].includes(cur)) return `${s}${Math.round(n).toLocaleString()}`;
   return `${s}${Number(n).toLocaleString("en", { maximumFractionDigits: 2 })}`;
 }
-/* ── 個股每股單價專用格式化：固定顯示到小數點第二位（市價/均成本/成交價都適用）── */
-function fmtPrice(n) {
+/* ── 個股每股單價專用格式化：固定顯示到小數點第二位（市價/均成本/成交價都適用）；
+   cur 預設 TWD，美股要記得傳 "USD" 進來，不然會一直顯示 NT$ 誤導成台幣 ── */
+function fmtPrice(n, cur = "TWD") {
   if (n == null || isNaN(n)) return "—";
-  return `NT$${Number(n).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const s = CUR_SYM[cur] || cur;
+  return `${s}${Number(n).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /* ── Constants ── */
@@ -422,7 +424,7 @@ function StockPriceChart({ ticker, market, theme = "dark" }) {
     const tvTheme = theme === "dark" ? "dark" : "light";
     const src = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}` +
       `&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0` +
-      `&toolbarbg=f1f3f6&studies=%5B%5D&theme=${tvTheme}&style=1&timezone=Asia%2FTaipei` +
+      `&toolbarbg=f1f3f6&studies=%5B%22MASimple%40tv-basicstudies%22%5D&theme=${tvTheme}&style=1&timezone=Asia%2FTaipei` +
       `&withdateranges=1&hideideas=1&locale=zh_TW`;
     return (
       <div style={{ borderRadius:12, overflow:"hidden", border:`1px solid ${C.border}` }}>
@@ -435,51 +437,109 @@ function StockPriceChart({ ticker, market, theme = "dark" }) {
 
 function TWStockChart({ ticker }) {
   const [range, setRange] = useState("3mo");
-  const [series, setSeries] = useState(null); // null=讀取中, []=沒資料
+  const [raw, setRaw] = useState(null); // null=讀取中；{daily:[], intraday:[]}=已載入
   useEffect(() => {
     let cancelled = false;
-    setSeries(null);
+    setRaw(null);
     (async () => {
       try {
         const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
         const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
         if (!res.ok) throw new Error();
         const data = await res.json();
-        if (!cancelled) setSeries(data[ticker]?.daily || []);
-      } catch { if (!cancelled) setSeries([]); }
+        if (!cancelled) setRaw(data[ticker] || { daily:[], intraday:[] });
+      } catch { if (!cancelled) setRaw({ daily:[], intraday:[] }); }
     })();
     return () => { cancelled = true; };
   }, [ticker]);
 
-  const opts = [{ key:"1mo", label:"1月", days:31 }, { key:"3mo", label:"3月", days:93 }, { key:"6mo", label:"6月", days:186 }, { key:"1y", label:"1年", days:366 }];
-  const cutoffDays = opts.find(o => o.key === range)?.days || 93;
-  const sliced = (series || []).filter(x => x.t >= Date.now()/1000 - cutoffDays*86400).map(x => ({ label: new Date(x.t*1000).toISOString().slice(5,10), close:x.c }));
-  const first = sliced[0]?.close, last = sliced[sliced.length-1]?.close;
+  const opts = [
+    { key:"1d", label:"1日" }, { key:"5d", label:"5日" },
+    { key:"1mo", label:"1月", days:31 }, { key:"3mo", label:"3月", days:93 },
+    { key:"6mo", label:"6月", days:186 }, { key:"1y", label:"1年", days:366 },
+  ];
+  const isIntraday = range === "1d" || range === "5d";
+  const source = raw ? (isIntraday ? (raw.intraday || []) : (raw.daily || [])) : [];
+
+  // 季線（60日均線）只在日線模式下算，而且要用「完整」的日線資料算，不能只用篩選後的區間算，
+  // 不然區間一開始那幾天的均線會不準（前面沒有足夠天數可以平均）
+  const dailyWithMa = !isIntraday ? source.map((x, i) => {
+    const windowArr = source.slice(Math.max(0, i - 59), i + 1);
+    const ma60 = windowArr.length >= 60 ? windowArr.reduce((s, y) => s + y.c, 0) / windowArr.length : null;
+    return { t:x.t, c:x.c, v:x.v||0, ma60 };
+  }) : source.map(x => ({ t:x.t, c:x.c, v:x.v||0, ma60:null }));
+
+  let windowed = dailyWithMa;
+  if (range === "1d") {
+    // intraday 存了近5天分鐘線，1日只取最後一個交易日那天的部分
+    const lastDay = dailyWithMa.length ? new Date(dailyWithMa[dailyWithMa.length-1].t * 1000).toDateString() : null;
+    windowed = dailyWithMa.filter(x => new Date(x.t * 1000).toDateString() === lastDay);
+  } else if (range !== "5d") {
+    const days = opts.find(o => o.key === range)?.days || 93;
+    const cutoff = Date.now()/1000 - days*86400;
+    windowed = dailyWithMa.filter(x => x.t >= cutoff);
+  }
+
+  const first = windowed[0]?.c;
+  const sliced = windowed.map(x => ({
+    label: isIntraday ? new Date(x.t*1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(x.t*1000).toISOString().slice(5,10),
+    close: x.c,
+    pct: first ? Number((((x.c - first) / first) * 100).toFixed(2)) : 0,
+    vol: x.v,
+    ma60: x.ma60 != null ? Number(x.ma60.toFixed(2)) : null,
+  }));
+  const last = sliced[sliced.length-1]?.close;
   const chgPct = (first && last) ? ((last-first)/first*100) : null;
   const color = chgPct == null ? C.muted : chgPct >= 0 ? C.income : C.expense;
+  const hasMa = sliced.some(x => x.ma60 != null);
+  const hasVol = sliced.some(x => x.vol > 0);
+  const gradId = `twGrad_${ticker}_${range}`;
 
   return (
     <div>
-      <div style={{ display:"flex", gap:4, marginBottom:10 }}>
+      <div style={{ display:"flex", gap:4, marginBottom:10, overflowX:"auto" }}>
         {opts.map(o => <button key={o.key} onClick={() => setRange(o.key)} style={{ flex:"0 0 auto", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:range===o.key?C.accent:C.card, color:range===o.key?"#fff":C.muted, border:"none", cursor:"pointer" }}>{o.label}</button>)}
       </div>
-      {series === null ? (
-        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
+      {raw === null ? (
+        <div style={{ height:150, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>讀取中…</div>
       ) : sliced.length > 1 ? (
         <div>
-          <div style={{ fontWeight:900, fontSize:16, color, marginBottom:6 }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
-          <ResponsiveContainer width="100%" height={124}>
-            <LineChart data={sliced} margin={{ top:5, right:5, bottom:14, left:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+            <div style={{ fontWeight:900, fontSize:16, color }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
+            {hasMa && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />季線(60日)</div>}
+          </div>
+          <ResponsiveContainer width="100%" height={150}>
+            <ComposedChart data={sliced} margin={{ top:5, right:0, bottom:4, left:0 }}>
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.45} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
               <XAxis dataKey="label" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(sliced.length/5)} dy={4} />
-              <YAxis hide domain={["auto","auto"]} />
-              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={v=>[Number(v).toFixed(2),"價格"]} />
-              <Line type="linear" dataKey="close" stroke={color} strokeWidth={2} dot={false} />
-            </LineChart>
+              <YAxis yAxisId="price" hide domain={["auto","auto"]} />
+              <YAxis yAxisId="pct" orientation="right" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v>0?"+":""}${v}%`} width={40} />
+              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name)=>{
+                if (name==="close") return [Number(v).toFixed(2), "價格"];
+                if (name==="ma60") return [Number(v).toFixed(2), "季線"];
+                return [v, name];
+              }} />
+              <Area yAxisId="price" type="monotone" dataKey="close" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} />
+              {hasMa && <Line yAxisId="price" type="linear" dataKey="ma60" stroke={C.warn} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />}
+              <Line yAxisId="pct" type="monotone" dataKey="pct" stroke="transparent" dot={false} />
+            </ComposedChart>
           </ResponsiveContainer>
+          {hasVol && (
+            <ResponsiveContainer width="100%" height={40}>
+              <BarChart data={sliced} margin={{ top:0, right:0, bottom:0, left:0 }}>
+                <Bar dataKey="vol" fill={C.textSub} opacity={0.5} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
           <div style={{ fontSize:10, color:C.muted, marginTop:6, textAlign:"right" }}>資料來源：後端排程（非即時）</div>
         </div>
       ) : (
-        <div style={{ height:120, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>這支股票目前沒有走勢圖資料（可能不在追蹤清單裡）</div>
+        <div style={{ height:150, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, fontSize:12 }}>這支股票目前沒有走勢圖資料（可能不在追蹤清單裡）</div>
       )}
     </div>
   );
@@ -1428,7 +1488,7 @@ export default function App() {
 
   useEffect(() => { if (stocks.length > 0) fetchAllPrices(stocks); }, [stocks.length]);
   /* 每次切換到投資頁，都順手重新抓一次最新報價，不用每次都記得自己按更新報價按鈕 */
-  useEffect(() => { if (tab === "invest" && stocks.length > 0) fetchAllPrices(stocks); }, [tab]);
+  useEffect(() => { if (tab === "invest") { if (stocks.length > 0) fetchAllPrices(stocks); if (watchStocks.length > 0) refreshWatchStocks(); } }, [tab]);
 
   /* ── 一次性遷移：把舊的認列/分攤紀錄回溯補上 poolId 等欄位，讓刪除時能正確退回分攤池 ── */
   useEffect(() => {
@@ -1668,72 +1728,6 @@ export default function App() {
     return [];
   }, []);
 
-  /* ── 通用股價區間查詢：1日/5日/1月/3月/6月/1年 ── */
-  const RANGE_OPTS = [
-    { key:"1d", label:"1日", range:"1d", interval:"5m" },
-    { key:"5d", label:"5日", range:"5d", interval:"15m" },
-    { key:"1mo", label:"1月", range:"1mo", interval:"1d" },
-    { key:"3mo", label:"3月", range:"3mo", interval:"1d" },
-    { key:"6mo", label:"6月", range:"6mo", interval:"1d" },
-    { key:"1y", label:"1年", range:"1y", interval:"1d" },
-  ];
-  const fetchStockRange = useCallback(async (ticker, market, rangeKey) => {
-    const opt = RANGE_OPTS.find(o => o.key === rangeKey) || RANGE_OPTS[2];
-    const sym = market === "TW" ? `${ticker}.TW` : ticker;
-    const isIntraday = opt.interval.endsWith("m");
-    const fmt = (t) => isIntraday
-      ? new Date(t * 1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" })
-      : new Date(t * 1000).toISOString().slice(5, 10);
-
-    // 先試後端排程產生的走勢圖資料（穩定，不受瀏覽器端代理伺服器限制），
-    // 涵蓋到的股票（追蹤清單裡的）不需要再靠瀏覽器即時去問 Yahoo
-    try {
-      const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
-      const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
-      if (res.ok) {
-        const data = await res.json();
-        const key = market === "TW" ? ticker : ticker.toUpperCase();
-        const entry = data[key];
-        if (entry) {
-          const series = isIntraday ? entry.intraday : entry.daily;
-          if (series && series.length) {
-            let sliced = series;
-            if (rangeKey === "1d") {
-              // intraday 存了近5天分鐘線，1日只取最後一個交易日那天的部分
-              const lastDay = new Date(series[series.length - 1].t * 1000).toDateString();
-              sliced = series.filter(x => new Date(x.t * 1000).toDateString() === lastDay);
-            } else if (["1mo","3mo","6mo"].includes(rangeKey)) {
-              const days = { "1mo":31, "3mo":93, "6mo":186 }[rangeKey];
-              const cutoff = Date.now()/1000 - days*86400;
-              sliced = series.filter(x => x.t >= cutoff);
-            }
-            if (sliced.length) return sliced.map(x => ({ t:x.t, label:fmt(x.t), close:x.c }));
-          }
-        }
-      }
-    } catch {}
-
-    // 靜態資料沒涵蓋到（不在追蹤清單裡的股票），才退回瀏覽器即時查詢＋代理伺服器
-    const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=${opt.interval}&range=${opt.range}`;
-    const proxies = [
-      (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    ];
-    for (const makeProxy of proxies) {
-      try {
-        const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
-        if (!r.ok) continue;
-        const raw = await r.text();
-        let d; try { const j = JSON.parse(raw); d = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
-        const result = d?.chart?.result?.[0];
-        const ts = result?.timestamp, closes = result?.indicators?.quote?.[0]?.close;
-        if (!ts || !closes) continue;
-        return ts.map((t, i) => ({ t, label:fmt(t), close:closes[i] })).filter(x => x.close != null);
-      } catch { continue; }
-    }
-    return [];
-  }, []);
   const fetchDailyGrowth = useCallback(async () => {
     const held = stocks.filter(s => (s.trades?.some(t => t.type === "buy")) || s.manualShares);
     if (!held.length) { setDailyGrowth([]); return []; }
@@ -2678,7 +2672,7 @@ export default function App() {
     buckets, addBucket, updateBucket, deleteBucket, moveBucket, transferBucket, doAccountTransfer, doTransfer, chargeFromAccField, accFieldLabel, growthBucket, setGrowthBucket, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal,
     moDate, setMoDate, searchQ, setSearchQ,
     // 共用 UI atoms 元件
-    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart, fetchStockRange,
+    Sheet, Inp, Sl, Fld, CalcInp, AutoInput, DatePicker, CatPicker, EmojiPicker, guessEmoji, StockPriceChart,
     InfoBtn, ConfirmDialog, Card, SH, Bdg, Btn, TP, SwipeRow
   };
 
