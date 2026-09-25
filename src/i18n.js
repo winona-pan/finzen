@@ -481,4 +481,7 @@ const D = {
   "小技巧：帳戶餘額調整時填說明，之後看細項才知道為何調整": { en:"Tip: fill in a note when adjusting an account balance, so you'll know why later when reviewing the details" },
   "小技巧：想暫時不要這個月的規劃出現在生活區安全水位/年度預測，去目標頁的分流引擎設定卡片設「計畫起始月份」": { en:"Tip: to temporarily exclude this month's plan from the living budget safety card/yearly forecast, set a \"Plan Start Month\" in the allocation engine settings card on the Goals page" },
   "輸入股票代號，如 0050": { en:"Enter a ticker, e.g. 0050" },
+  "股數、均成本、投資總成本這三個，填任兩個就會自動幫你算出第三個。": { en:"Fill in any two of shares, average cost, and total cost — the third one is calculated automatically." },
+  "賣出價格（每股）": { en:"Sell price (per share)" },
+  "直接改這裡只會更新總成本，股數/單價不會跟著變": { en:"Editing this directly only updates the total cost — shares and price per share stay as-is" },
 };

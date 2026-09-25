@@ -484,40 +484,47 @@ function TWStockChart({ ticker }) {
     { key:"2y", label:"2年", days:731 }, { key:"5y", label:"5年", days:1827 },
   ];
   const isIntraday = range === "1d" || range === "5d";
-  const source = raw ? (isIntraday ? (raw.intraday || []) : (raw.daily || [])) : [];
 
-  // 均線只在日線模式下算，而且要用「完整」的日線資料算，不能只用篩選後的區間算，
-  // 不然區間一開始那幾天的均線會不準（前面沒有足夠天數可以平均）
-  const dailyWithMa = !isIntraday ? source.map((x, i) => {
-    const w5 = source.slice(Math.max(0, i - 4), i + 1);
-    const w60 = source.slice(Math.max(0, i - 59), i + 1);
-    const ma5 = w5.length >= 5 ? w5.reduce((s, y) => s + y.c, 0) / w5.length : null;
-    const ma60 = w60.length >= 60 ? w60.reduce((s, y) => s + y.c, 0) / w60.length : null;
-    return { t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5, ma60 };
-  }) : source.map(x => ({ t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5:null, ma60:null }));
+  // 均線只算一次、快取起來——用滑動窗口加總（每筆只加一次、減一次），不是每個點都重新整段加總，
+  // 這樣 5 年資料（上千筆）也是瞬間算完，不會因為切換週期/K線就整個重算一輪、卡在那裡
+  const dailyWithMa = useMemo(() => {
+    const src = raw?.daily || [];
+    let sum5 = 0, sum60 = 0;
+    return src.map((x, i) => {
+      sum5 += x.c; if (i >= 5) sum5 -= src[i-5].c;
+      sum60 += x.c; if (i >= 60) sum60 -= src[i-60].c;
+      const ma5 = i >= 4 ? sum5 / 5 : null;
+      const ma60 = i >= 59 ? sum60 / 60 : null;
+      return { t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5, ma60 };
+    });
+  }, [raw]);
+  const intradayPlain = useMemo(() => (raw?.intraday || []).map(x => ({ t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5:null, ma60:null })), [raw]);
 
-  let windowed = dailyWithMa;
-  if (range === "1d") {
-    // intraday 存了近5天分鐘線，1日只取最後一個交易日那天的部分
-    const lastDay = dailyWithMa.length ? new Date(dailyWithMa[dailyWithMa.length-1].t * 1000).toDateString() : null;
-    windowed = dailyWithMa.filter(x => new Date(x.t * 1000).toDateString() === lastDay);
-  } else if (range !== "5d") {
-    const days = opts.find(o => o.key === range)?.days || 93;
-    const cutoff = Date.now()/1000 - days*86400;
-    windowed = dailyWithMa.filter(x => x.t >= cutoff);
-  }
-
-  const first = windowed[0]?.c;
-  const sliced = windowed.map(x => ({
-    label: isIntraday ? new Date(x.t*1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(x.t*1000).toISOString().slice(5,10),
-    o:x.o, h:x.h, l:x.l, c:x.c,
-    close: x.c,
-    range: [x.l, x.h],
-    pct: first ? Number((((x.c - first) / first) * 100).toFixed(2)) : 0,
-    vol: x.v,
-    ma5: x.ma5 != null ? Number(x.ma5.toFixed(2)) : null,
-    ma60: x.ma60 != null ? Number(x.ma60.toFixed(2)) : null,
-  }));
+  const sliced = useMemo(() => {
+    const source = isIntraday ? intradayPlain : dailyWithMa;
+    let windowed = source;
+    if (range === "1d") {
+      // intraday 存了近5天分鐘線，1日只取最後一個交易日那天的部分
+      const lastDay = source.length ? new Date(source[source.length-1].t * 1000).toDateString() : null;
+      windowed = source.filter(x => new Date(x.t * 1000).toDateString() === lastDay);
+    } else if (range !== "5d") {
+      const days = opts.find(o => o.key === range)?.days || 93;
+      const cutoff = Date.now()/1000 - days*86400;
+      windowed = source.filter(x => x.t >= cutoff);
+    }
+    const first = windowed[0]?.c;
+    return windowed.map(x => ({
+      label: isIntraday ? new Date(x.t*1000).toLocaleTimeString("zh-TW", { hour:"2-digit", minute:"2-digit" }) : new Date(x.t*1000).toISOString().slice(5,10),
+      o:x.o, h:x.h, l:x.l, c:x.c,
+      close: x.c,
+      range: [x.l, x.h],
+      pct: first ? Number((((x.c - first) / first) * 100).toFixed(2)) : 0,
+      vol: x.v,
+      ma5: x.ma5 != null ? Number(x.ma5.toFixed(2)) : null,
+      ma60: x.ma60 != null ? Number(x.ma60.toFixed(2)) : null,
+    }));
+  }, [dailyWithMa, intradayPlain, isIntraday, range]);
+  const first = sliced[0]?.close;
   const last = sliced[sliced.length-1]?.close;
   const chgPct = (first && last) ? ((last-first)/first*100) : null;
   const color = chgPct == null ? C.muted : chgPct >= 0 ? C.income : C.expense;
@@ -916,7 +923,7 @@ export default function App() {
   const [nAcc, setNAcc] = useState(NA0);
   const BF0 = { acc:"",ticker:"",name:"",market:"TW",shares:"",avgCost:"",totalCost:"",fee:"0",curPrice:"",fromAcc:"",emotion:"",buyReason:"" };
   const [buyF, setBuyF] = useState(BF0);
-  const [sellF, setSellF] = useState({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
+  const [sellF, setSellF] = useState({ stockId:"",shares:"",price:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" });
   const [payF, setPayF] = useState({ creditId:"",fromId:"",amt:"",date:TODAY,note:"" });
   const [initF, setInitF] = useState({});
   const G0 = { name:"", target:"", deadline:"", emoji:"🎯", accIds:[], bucketIds:[], useMv:null, includeDebts:false, priority:5, goalType:"sinking" };
@@ -1322,7 +1329,7 @@ export default function App() {
     if (sellF.pnl && +sellF.pnl !== 0) {
       upd("txns", p => [...p, { id:linkedPnlTxnId, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票", noBalanceEffect:true }]);
     }
-    setSellF({ stockId:"",shares:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
+    setSellF({ stockId:"",shares:"",price:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
   }, [sellF, stocks, upd, updMulti]);
 
   /* ── 刪除交易紀錄：連動退回帳戶餘額（買進退回成本、賣出扣掉收回的錢），並清掉對應的轉帳/損益紀錄 ── */
