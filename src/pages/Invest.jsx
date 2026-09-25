@@ -86,7 +86,7 @@ export default function InvestPage({
                 </Card>
               )}
 
-              <IndexBar C={C} tr={tr} />
+              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
 
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
                 <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
@@ -643,8 +643,9 @@ export default function InvestPage({
 
 /* ── 自選股新增小表單 ── */
 /* ── 大盤指數列：台灣加權指數／費半指數／S&P 500，讓你一眼看到大盤現在的位置 ── */
-function IndexBar({ C, tr }) {
+function IndexBar({ C, tr, StockPriceChart, theme }) {
   const [idx, setIdx] = useState(null); // null=讀取中
+  const [expanded, setExpanded] = useState(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -667,18 +668,27 @@ function IndexBar({ C, tr }) {
 
   if (idx === null || idx.length === 0) return null;
   return (
-    <div style={{ display:"flex", gap:8, marginBottom:10, overflowX:"auto" }}>
-      {idx.map(r => {
-        const up = (r.chgPct||0) >= 0;
-        const color = up ? C.income : C.expense;
-        return (
-          <div key={r.key} style={{ flex:"0 0 auto", padding:"8px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}`, minWidth:100 }}>
-            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{r.label}</div>
-            <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{Number(r.price).toLocaleString("en", { maximumFractionDigits:2 })}</div>
-            <div style={{ fontSize:11, fontWeight:700, color }}>{up?"▲ +":"▼ "}{Math.abs(r.chgPct).toFixed(2)}%</div>
-          </div>
-        );
-      })}
+    <div style={{ marginBottom:10 }}>
+      <div style={{ display:"flex", gap:8, overflowX:"auto" }}>
+        {idx.map(r => {
+          const up = (r.chgPct||0) >= 0;
+          const color = up ? C.income : C.expense;
+          const isOpen = expanded === r.key;
+          return (
+            <div key={r.key} onClick={() => setExpanded(p => p===r.key?null:r.key)} style={{ flex:"0 0 auto", padding:"8px 12px", borderRadius:10, background:isOpen?`${C.accent}18`:C.card, border:`1px solid ${isOpen?C.accent:C.border}`, minWidth:100, cursor:"pointer" }}>
+              <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{r.label}</div>
+              <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{Number(r.price).toLocaleString("en", { maximumFractionDigits:2 })}</div>
+              <div style={{ fontSize:11, fontWeight:700, color }}>{up?"▲ +":"▼ "}{Math.abs(r.chgPct).toFixed(2)}%</div>
+            </div>
+          );
+        })}
+      </div>
+      {expanded && (
+        <div style={{ marginTop:8, padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+          {/* 指數不分台股/美股市場別，市場參數固定傳 "TW" 是為了走我們自己畫的圖表（讀 stock_history.json），不是真的代表這是台股 */}
+          <StockPriceChart ticker={expanded} market="TW" theme={theme} />
+        </div>
+      )}
     </div>
   );
 }
