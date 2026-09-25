@@ -22,7 +22,7 @@ export default function StockModals({
   nD, setND, addDebt, editDebt, setEditDebt,
   settleDebt, setSettleDebt, settleAcc, setSettleAcc,
   settleCustomAmt, setSettleCustomAmt, selTxn, setSelTxn,
-  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview, updateStockMeta, StockPriceChart, fetchStockRange,
+  saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce, EMOTIONS, emotionReview, updateStockMeta, StockPriceChart,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS,
   // 接收全域共用 UI Atoms 元件
   Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, SwipeRow, tr, hideAmounts
@@ -36,7 +36,7 @@ export default function StockModals({
   const [peek, setPeek] = useState(false);
   const doPeek = () => { setPeek(true); setTimeout(() => setPeek(false), 3000); };
   const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
-  const [tradeDraft, setTradeDraft] = useState({ shares:"", price:"" });
+  const [tradeDraft, setTradeDraft] = useState({ shares:"", price:"", totalCost:"" });
   const [tradeMonth, setTradeMonth] = useState(null);
   useEffect(() => { setTradeMonth(null); }, [selStock?.id]);
 
@@ -94,10 +94,16 @@ export default function StockModals({
             <Inp label={tr("均成本（每股）")} type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value, totalCost:p.shares?String(Math.round(+p.shares*+e.target.value+(+p.fee||0))):p.totalCost }))} />
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <CalcInp label={tr("投資總成本（自動算好，一樣可以改）")} value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v, avgCost:p.shares&&+p.shares>0?String(((+v-(+p.fee||0))/+p.shares).toFixed(2)):p.avgCost }))} />
+            <CalcInp label={tr("投資總成本（自動算好，一樣可以改）")} value={buyF.totalCost} onChange={v => setBuyF(p => {
+              // 股數、均成本、總成本這三個，填任兩個就自動幫你補第三個：
+              // 已經有股數 → 反推均成本；沒有股數但有均成本 → 反推股數
+              if (p.shares && +p.shares > 0) return { ...p, totalCost:v, avgCost:String(((+v-(+p.fee||0))/+p.shares).toFixed(2)) };
+              if (p.avgCost && +p.avgCost > 0) return { ...p, totalCost:v, shares:String(Math.round((+v-(+p.fee||0))/+p.avgCost)) };
+              return { ...p, totalCost:v };
+            })} />
             <Inp label={tr("手續費")} type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value, totalCost:(p.shares&&p.avgCost)?String(Math.round(+p.shares*+p.avgCost+(+e.target.value||0))):p.totalCost }))} />
           </div>
-          <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("投資總成本會自動幫你算（股數×均成本＋手續費），你也可以直接改這個數字，均成本會反推更新。")}</div>
+          <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("股數、均成本、投資總成本這三個，填任兩個就會自動幫你算出第三個。")}</div>
           <Sl label={tr("從哪個帳戶扣款（選填）")} value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— {tr("不扣款")} —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
           {goals.some(g => g.recurringMode==="shares" && g.shareTicker===buyF.ticker) && (
             <Sl label={tr("這筆算入哪個目標的定期定額？（選填）")} value={buyF.goalId||""} onChange={e => setBuyF(p => ({ ...p, goalId:e.target.value }))}>
@@ -138,6 +144,7 @@ export default function StockModals({
         {modal === "sellStock" && (() => {
           const st = stSum.find(s => s.id === sellF.stockId);
           if (!st) return null;
+          const stCur = st.market === "US" ? "USD" : "TWD"; // 美股原幣顯示美元，不要一律當台幣
           return <Sheet title={tr("賣出股票")} onClose={close}>
             <Fld label={tr("選擇持股")}>
               <select value={sellF.stockId} onChange={e => {
@@ -151,10 +158,25 @@ export default function StockModals({
             </Fld>
             <div style={{ padding:10, borderRadius:10, marginBottom:8, background:C.card, fontSize:12 }}>
               <div style={{ fontWeight:900, fontSize:13, color:C.text, marginBottom:2 }}>{st.ticker} {st.name}</div>
-              <div style={{ color:C.textSub }}>{tr("持股")} <strong style={{ color:C.accentL }}>{st.totalSh}{tr("股")}</strong> · {tr("均成本")} {fmtPrice(st.avgCost||0)}{st.curPrice>0?` · ${tr("現價")} ${fmtPrice(st.curPrice)}`:""}</div>
+              <div style={{ color:C.textSub }}>{tr("持股")} <strong style={{ color:C.accentL }}>{st.totalSh}{tr("股")}</strong> · {tr("均成本")} {fmtPrice(st.avgCost||0, stCur)}{st.curPrice>0?` · ${tr("現價")} ${fmtPrice(st.curPrice, stCur)}`:""}</div>
             </div>
-            <Inp label={tr("賣出股數")} type="number" placeholder={String(st.totalSh)} value={sellF.shares} onChange={e => setSellF(p => ({ ...p, shares:e.target.value }))} />
-            <CalcInp label={tr("賣出總金額")} value={sellF.totalProceeds} onChange={v => setSellF(p => ({ ...p, totalProceeds:v }))} />
+            <Inp label={tr("賣出股數")} type="number" placeholder={String(st.totalSh)} value={sellF.shares} onChange={e => setSellF(p => {
+              const shares = e.target.value;
+              if (p.price && +p.price > 0) return { ...p, shares, totalProceeds:String(Math.round(+shares*+p.price)) };
+              if (p.totalProceeds && +p.totalProceeds > 0 && +shares > 0) return { ...p, shares, price:String((+p.totalProceeds/+shares).toFixed(2)) };
+              return { ...p, shares };
+            })} />
+            <Inp label={tr("賣出價格（每股）")} type="number" placeholder={st.curPrice?String(st.curPrice):"0"} value={sellF.price} onChange={e => setSellF(p => {
+              const price = e.target.value;
+              if (p.shares && +p.shares > 0) return { ...p, price, totalProceeds:String(Math.round(+p.shares*+price)) };
+              return { ...p, price };
+            })} />
+            <CalcInp label={tr("賣出總金額")} value={sellF.totalProceeds} onChange={v => setSellF(p => {
+              // 股數、單價、總金額這三個，填任兩個就自動幫你補第三個
+              if (p.shares && +p.shares > 0) return { ...p, totalProceeds:v, price:String((+v/+p.shares).toFixed(2)) };
+              if (p.price && +p.price > 0) return { ...p, totalProceeds:v, shares:String(Math.round(+v/+p.price)) };
+              return { ...p, totalProceeds:v };
+            })} />
             <Inp label={tr("手續費（選填）")} type="number" placeholder="0" value={sellF.fee||""} onChange={e => setSellF(p => ({ ...p, fee:e.target.value }))} />
             {sellF.shares && <div style={{ marginBottom:12, padding:10, borderRadius:10, background:`${C.accent}10`, fontSize:12, color:C.textSub }}>
               {tr("賣出後剩餘")}：<strong style={{ color:C.accentL }}>{Math.max(0, st.totalSh - +sellF.shares)}{tr("股")}</strong>
@@ -197,10 +219,23 @@ export default function StockModals({
             <option value="US">美股 US</option>
           </Sl>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <Inp label="目前持股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => ({ ...p, shares:e.target.value }))} />
-            <Inp label="平均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => ({ ...p, avgCost:e.target.value }))} />
+            <Inp label="目前持股數" type="number" placeholder="1000" value={buyF.shares} onChange={e => setBuyF(p => {
+              const shares = e.target.value;
+              if (p.avgCost && +p.avgCost > 0) return { ...p, shares, totalCost:String(Math.round(+shares*+p.avgCost)) };
+              return { ...p, shares };
+            })} />
+            <Inp label="平均成本（每股）" type="number" placeholder="63" value={buyF.avgCost} onChange={e => setBuyF(p => {
+              const avgCost = e.target.value;
+              if (p.shares && +p.shares > 0) return { ...p, avgCost, totalCost:String(Math.round(+p.shares*+avgCost)) };
+              return { ...p, avgCost };
+            })} />
           </div>
-          <CalcInp label="投資總成本（選填）" value={buyF.totalCost} onChange={v => setBuyF(p => ({ ...p, totalCost:v }))} />
+          <CalcInp label="投資總成本（選填）" value={buyF.totalCost} onChange={v => setBuyF(p => {
+            // 股數、均成本、總成本這三個，填任兩個就自動幫你補第三個
+            if (p.shares && +p.shares > 0) return { ...p, totalCost:v, avgCost:String((+v/+p.shares).toFixed(2)) };
+            if (p.avgCost && +p.avgCost > 0) return { ...p, totalCost:v, shares:String(Math.round(+v/+p.avgCost)) };
+            return { ...p, totalCost:v };
+          })} />
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => {
               if (!buyF.ticker || !buyF.shares) return;
@@ -239,6 +274,7 @@ export default function StockModals({
           const hasPrice = st.curPrice > 0;
           const pnl = hasPrice ? st.upnl : 0;
           const pnlPct = st.totalCost > 0 && hasPrice ? (pnl / st.totalCost * 100) : 0;
+          const stCur = st.market === "US" ? "USD" : "TWD"; // 美股原幣顯示美元，不要一律當台幣
           const extra = st._extra || {};
           const inst = extra.institutional || {};
           const hasInst = inst.foreign !== undefined || inst.trust !== undefined;
@@ -246,17 +282,17 @@ export default function StockModals({
             <Card style={{ padding:16, marginBottom:12, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:hasPrice?10:0, cursor:hideAmounts?"pointer":"default" }}>
                 <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>{tr("市值")}</div>
-                  <div style={{ fontWeight:900, fontSize:15, color:C.accentL, ...maskStyle }}>{hasPrice ? fmt(st.mv) : <span style={{ color:C.muted, fontSize:12 }}>{tr("載入中…")}</span>}</div></div>
+                  <div style={{ fontWeight:900, fontSize:15, color:C.accentL, ...maskStyle }}>{hasPrice ? fmt(st.mv, stCur) : <span style={{ color:C.muted, fontSize:12 }}>{tr("載入中…")}</span>}</div></div>
                 <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>{tr("投入成本")}</div>
-                  <div style={{ fontWeight:700, fontSize:15, color:C.text, ...maskStyle }}>{fmt(st.totalCost)}</div></div>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text, ...maskStyle }}>{fmt(st.totalCost, stCur)}</div></div>
                 <div><div style={{ fontSize:10, color:C.textSub, marginBottom:3 }}>{tr("持股")}</div>
                   <div style={{ fontWeight:700, fontSize:15, color:C.text }}>{st.totalSh} {tr("股")}</div></div>
               </div>
               {hasPrice && <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:`1px solid ${C.border}`, cursor:hideAmounts?"pointer":"default" }}>
                 <div>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("現價")}</div>
-                  <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmtPrice(st.curPrice)}/{tr("股")}</div>
-                  <div style={{ fontSize:10, color:C.muted }}>{tr("均")} {fmt(Math.round(st.avgCost||0))}/{tr("股")}</div>
+                  <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmtPrice(st.curPrice, stCur)}/{tr("股")}</div>
+                  <div style={{ fontSize:10, color:C.muted }}>{tr("均")} {fmt(Math.round(st.avgCost||0), stCur)}/{tr("股")}</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("未實現損益")}</div>
@@ -306,7 +342,7 @@ export default function StockModals({
                 {st.stopLossPct && <button onClick={() => upd("stocks", p => p.map(s => s.id===st.id ? {...s, stopLossPct:null} : s))} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>}
               </div>
               {st.stopLossPct && <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
-                {tr("停損線")}：{tr("均成本")} {fmtPrice(st.avgCost||0)} × (1−{st.stopLossPct}%) ≈ {fmtPrice((st.avgCost||0)*(1-st.stopLossPct/100))} /{tr("股")}
+                {tr("停損線")}：{tr("均成本")} {fmtPrice(st.avgCost||0, stCur)} × (1−{st.stopLossPct}%) ≈ {fmtPrice((st.avgCost||0)*(1-st.stopLossPct/100), stCur)} /{tr("股")}
                 {hasPrice && pnlPct <= -Math.abs(st.stopLossPct) && <span style={{ color:C.danger, fontWeight:900 }}> ⚠️ {tr("已達停損！")}</span>}
               </div>}
             </div>
@@ -349,19 +385,37 @@ export default function StockModals({
                       <div style={{ display:"flex", gap:8, marginBottom:6 }}>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("股數")}</div>
-                          <input type="number" value={tradeDraft.shares} onChange={e => setTradeDraft(d => ({ ...d, shares:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} />
+                          <input type="number" value={tradeDraft.shares} onChange={e => setTradeDraft(d => {
+                            const shares = e.target.value;
+                            if (d.price && +d.price > 0) return { ...d, shares, totalCost:String(Math.round(+shares*+d.price+(t.fee||0))) };
+                            return { ...d, shares };
+                          })} style={{ ...iSt, padding:"6px 8px" }} />
                         </div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("單價")}</div>
-                          <input type="number" value={tradeDraft.price} onChange={e => setTradeDraft(d => ({ ...d, price:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} />
+                          <input type="number" value={tradeDraft.price} onChange={e => setTradeDraft(d => {
+                            const price = e.target.value;
+                            if (d.shares && +d.shares > 0) return { ...d, price, totalCost:String(Math.round(+d.shares*+price+(t.fee||0))) };
+                            return { ...d, price };
+                          })} style={{ ...iSt, padding:"6px 8px" }} />
                         </div>
                       </div>
+                      {t.type === "buy" && <div style={{ marginBottom:6 }}>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("總成本")}</div>
+                        <input type="number" value={tradeDraft.totalCost} onChange={e => setTradeDraft(d => {
+                          // 只改總成本的話，股數/單價保持原樣不動——這個是刻意讓你可以單獨修正總成本用的，不會連動改掉其他欄位
+                          const totalCost = e.target.value;
+                          if (d.shares && +d.shares > 0) return { ...d, totalCost, price:String((((+totalCost)-(t.fee||0))/+d.shares).toFixed(2)) };
+                          return { ...d, totalCost };
+                        })} style={{ ...iSt, padding:"6px 8px" }} />
+                        <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>{tr("直接改這裡只會更新總成本，股數/單價不會跟著變")}</div>
+                      </div>}
                       <div style={{ display:"flex", gap:6 }}>
                         <button onClick={() => {
-                          const newShares = +tradeDraft.shares||0, newPrice = +tradeDraft.price||0;
-                          if (newShares === t.shares && newPrice === t.price) { setEditingTrade(null); return; }
+                          const newShares = +tradeDraft.shares||0, newPrice = +tradeDraft.price||0, newTotalCost = +tradeDraft.totalCost||0;
+                          if (newShares === t.shares && newPrice === t.price && (t.type!=="buy" || newTotalCost === (t.totalCost||0))) { setEditingTrade(null); return; }
                           confirm(`${tr("確定修改這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？會影響這檔股票的總股數/成本/總資產顯示")}`, () => {
-                            upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newPrice*newShares+(x.fee||0) : x.totalCost } : x) } : s));
+                            upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newTotalCost : x.totalCost } : x) } : s));
                             setEditingTrade(null);
                           }, "確認編輯");
                         }} style={{ flex:1, padding:8, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("完成")}</button>
@@ -369,15 +423,15 @@ export default function StockModals({
                       </div>
                     </div>
                   ) : (
-                    <SwipeRow onDelete={() => confirm(t.linkedTxnId ? `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？帳戶餘額會一併退回")}` : `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？（這筆是舊資料，沒有連動帳戶，不會自動退回帳戶餘額）")}`, () => deleteTrade(st.id, t.id))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price) }); }}>
+                    <SwipeRow onDelete={() => confirm(t.linkedTxnId ? `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？帳戶餘額會一併退回")}` : `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？（這筆是舊資料，沒有連動帳戶，不會自動退回帳戶餘額）")}`, () => deleteTrade(st.id, t.id))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price), totalCost:String(t.totalCost || Math.round(t.shares*t.price+(t.fee||0))) }); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?tr("買"):tr("賣")}</div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} {tr("股")} ＠ {fmtPrice(t.price)}</div>
+                          <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} {tr("股")} ＠ {fmtPrice(t.price, stCur)}</div>
                           <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>
-                          <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))))}</div>
+                          <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), stCur)}</div>
                           {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl))}</div>}
                         </div>
                         <span style={{ color:C.muted, fontSize:12 }}>✏️</span>
