@@ -289,7 +289,43 @@ export default function InvestPage({
                   </div>
                 );
               })}
-              {stSum.length === 0 && <div style={{ padding:"40px 0", textAlign:"center", color:C.muted }}><div style={{ fontSize:38, marginBottom:8 }}>📊</div>尚無持股，點右上角「＋買入」</div>}
+              {Object.keys(stByAcc).length === 0 && <div style={{ padding:"40px 0", textAlign:"center", color:C.muted }}><div style={{ fontSize:38, marginBottom:8 }}>📊</div>尚無持股，點右上角「＋買入」</div>}
+
+              {(() => {
+                const closed = stSum.filter(s => s.totalSh <= 0 && (s.trades?.length > 0 || s.manualShares != null));
+                if (!closed.length) return null;
+                return (
+                  <div style={{ marginBottom:16 }}>
+                    <button onClick={() => toggleSection("inv_closed")} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", background:"none", border:"none", cursor:"pointer", padding:"4px 0", marginBottom:collapsed["inv_closed"]?0:6 }}>
+                      <span style={{ fontWeight:900, fontSize:13, color:C.muted }}>🗂️ {tr("已出清")}（{closed.length}）</span>
+                      <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["inv_closed"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
+                    </button>
+                    {!collapsed["inv_closed"] && (
+                      <Card style={{ overflow:"hidden" }}>
+                        {closed.map((st, i) => {
+                          const stCur = st.market === "US" ? "USD" : "TWD";
+                          const sells = (st.trades||[]).filter(t => t.type === "sell");
+                          const realized = sells.reduce((s,t) => s + (t.pnl||0), 0);
+                          return (
+                            <div key={st.id} onClick={() => { setSelStock(st); setModal("stockDetail"); }} style={{ padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                              <div>
+                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                  <span style={{ fontWeight:700, fontSize:13, color:C.textSub }}>{st.ticker}</span>
+                                  <span style={{ fontSize:12, color:C.muted }}>{st.name}</span>
+                                  <Bdg color={C.muted}>{st.market}</Bdg>
+                                </div>
+                                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("已出清")}，{sells.length} {tr("次賣出")}</div>
+                              </div>
+                              {sells.length > 0 && <div style={{ fontWeight:900, fontSize:13, color:pnlColor(realized, C) }}>{realized>=0?"+":""}{fmt(Math.round(realized), stCur)}</div>}
+                            </div>
+                          );
+                        })}
+                      </Card>
+                    )}
+                    <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>＊資料都還在，只是不算目前持股——點進去可以看完整交易歷史，或到「交易記錄」分頁查</div>
+                  </div>
+                );
+              })()}
 
               {sectorPie.length > 1 && (
                 <Card style={{ padding:16, marginBottom:16 }}>
