@@ -13,7 +13,7 @@ export default function InvestPage({
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
   invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA, EMOTIONS, emotionReview,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
-  tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
+  tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta,
   StockPriceChart,
@@ -34,6 +34,7 @@ export default function InvestPage({
   const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
   const [expandedWatch, setExpandedWatch] = useState(null);
   const [allTradeMonth, setAllTradeMonth] = useState(null);
+  const [logFilter, setLogFilter] = useState("all");
 
   return (
     <>
@@ -48,44 +49,11 @@ export default function InvestPage({
           </div>
           
           <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-            {[{ v:"holdings", l:tr("持股") }, { v:"perf", l:tr("績效") }, { v:"watch", l:tr("自選股") }, { v:"news", l:tr("新聞") }, { v:"learn", l:tr("學習") }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:"0 0 auto", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer", whiteSpace:"nowrap" }}>{t.l}</button>)}
+            {[{ v:"dashboard", l:tr("總覽") }, { v:"holdings", l:tr("持股") }, { v:"log", l:tr("交易記錄") }, { v:"perf", l:tr("績效") }, { v:"watch", l:tr("自選股") }, { v:"news", l:tr("新聞") }, { v:"learn", l:tr("學習") }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:"0 0 auto", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer", whiteSpace:"nowrap" }}>{t.l}</button>)}
           </div>
           
-          {invTab === "holdings" && (
+          {invTab === "dashboard" && (
             <div>
-              {recentTradeCount > TRADE_FREQ_WARN && (
-                <Card style={{ padding:14, marginBottom:14, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
-                  <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:4 }}>⚠️ {tr("交易有點頻繁")}</div>
-                  <div style={{ fontSize:12, color:C.textSub, lineHeight:1.5 }}>{tr("近 7 天你已經買賣了")} {recentTradeCount} {tr("次，留意一下是不是進出太密集、有點失去紀律。")}</div>
-                </Card>
-              )}
-
-              {watchlist.length > 0 && (
-                <Card style={{ padding:16, marginBottom:16 }}>
-                  <div style={{ fontSize:13, fontWeight:900, color:C.text, marginBottom:10 }}>🧊 {tr("冷靜清單")}</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {watchlist.map(w => {
-                      const elapsed = Date.now() - w.addedAt;
-                      const ready = elapsed >= COOLDOWN_MS;
-                      const remainMin = Math.ceil((COOLDOWN_MS - elapsed) / 60000);
-                      const remainH = Math.floor(remainMin / 60), remainM = remainMin % 60;
-                      return (
-                        <div key={w.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{w.ticker} {w.name}</div>
-                            {w.note && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{w.note}</div>}
-                            <div style={{ fontSize:11, color:ready?C.income:C.muted, marginTop:2, fontWeight:ready?700:400 }}>{ready ? `✅ ${tr("冷靜期已過，可以下單了")}` : `${tr("還要等")} ${remainH > 0 ? `${remainH}${tr("小時")}` : ""}${remainM}${tr("分鐘")}`}</div>
-                          </div>
-                          {ready && <button onClick={() => { setBuyF(p => ({ ...p, ticker:w.ticker, name:w.name, market:w.market, acc:w.acc || p.acc })); removeFromWatchlist(w.id); setModal("buyStock"); }} style={{ padding:"6px 12px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{tr("前往買入")}</button>}
-                          <button onClick={() => removeFromWatchlist(w.id)} style={{ padding:"6px 8px", borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:"pointer", flexShrink:0 }}>{tr("移除")}</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              )}
-
-
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
                 <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
               </div>
@@ -97,11 +65,11 @@ export default function InvestPage({
                     <div style={{ fontWeight:900, fontSize:20, color:C.accentL, ...maskStyle }}>{fmt(stTotMv > 0 ? stTotMv : stTotCost)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("持股")} {new Set(stSum.filter(s=>s.totalSh>0).map(s=>`${s.ticker}_${s.market}`)).size} {tr("檔")}</div>
-                    <div style={{ fontWeight:700, fontSize:14, color:C.muted, ...maskStyle }}>{tr("成本")} {fmt(stTotCost)}</div>
+                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("即時現金")}</div>
+                    <div style={{ fontWeight:900, fontSize:20, color:C.teal, ...maskStyle }}>{fmt(cashBal)}</div>
                   </div>
                 </div>
-                
+
                 {stTotMv > 0 && stTotCost > 0 && (
                   <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}`, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
                     <div>
@@ -118,19 +86,23 @@ export default function InvestPage({
                     </div>
                   </div>
                 )}
-                
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
+
+                <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}` }}>
                   <div>
-                    <span style={{ fontSize:12, color:C.accentL }}>{tr("總資產計入未實現損益")}</span>
-                    {useMvForAssets && <div style={{ fontSize:10, color:stTotMv>0?C.teal:C.muted, marginTop:2 }}>{stTotMv>0 ? `${tr("市值")} ${fmt(stTotMv)}` : `⏳ ${tr("等待市價載入…")}`}</div>}
+                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("已實現損益")}</div>
+                    <div style={{ fontWeight:900, fontSize:16, color:pnlColor(totalRealizedPnl, C), ...maskStyle }}>
+                      {tradeStats.totalSells > 0 ? `${totalRealizedPnl >= 0 ? "▲ +" : "▼ "}${fmt(Math.abs(Math.round(totalRealizedPnl)))}` : "—"}
+                    </div>
                   </div>
-                  <button onClick={toggleMv} style={{ width:44, height:24, borderRadius:12, background:useMvForAssets?C.income:C.muted, border:"none", cursor:"pointer", position:"relative", flexShrink:0 }}>
-                    <span style={{ position:"absolute", top:2, left:useMvForAssets?22:2, width:20, height:20, borderRadius:10, background:"#fff", transition:"left .2s", display:"block" }} />
-                  </button>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("總資產淨值")}</div>
+                    <div style={{ fontWeight:900, fontSize:16, color:C.text, ...maskStyle }}>{fmt(netWorth != null ? netWorth : totAssets)}</div>
+                  </div>
                 </div>
               </Card>
-              
+
               <Card style={{ padding:20, marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>{tr("投組佔比")}</div>
                 <div style={{ display:"flex", gap:6, marginBottom:12 }}>
                   {[{ v:"alloc", l:tr("資產配置") }, { v:"hold", l:tr("持股比例") }, { v:"growth", l:tr("投資成長") }].map(o => <button key={o.v} onClick={() => setInvPie(o.v)} style={{ flex:1, padding:"6px", borderRadius:10, fontSize:12, fontWeight:700, background:invPie === o.v ? `${C.accent}30` : C.card, color:invPie === o.v ? C.accentL : C.muted, border:`1px solid ${invPie === o.v ? C.accent : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
                 </div>
@@ -186,7 +158,7 @@ export default function InvestPage({
                   )
                   : <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart></ResponsiveContainer>
                 }
-                
+
                 {invPie !== "growth" && (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10, justifyContent:"center" }}>
                     {(invPie === "alloc" ? allocPie : holdPie).map((item, i) => {
@@ -203,7 +175,59 @@ export default function InvestPage({
                   </div>
                 )}
               </Card>
-              
+            </div>
+          )}
+
+          {invTab === "holdings" && (
+            <div>
+              {recentTradeCount > TRADE_FREQ_WARN && (
+                <Card style={{ padding:14, marginBottom:14, background:`${C.warn}15`, border:`1px solid ${C.warn}55` }}>
+                  <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:4 }}>⚠️ {tr("交易有點頻繁")}</div>
+                  <div style={{ fontSize:12, color:C.textSub, lineHeight:1.5 }}>{tr("近 7 天你已經買賣了")} {recentTradeCount} {tr("次，留意一下是不是進出太密集、有點失去紀律。")}</div>
+                </Card>
+              )}
+
+              {watchlist.length > 0 && (
+                <Card style={{ padding:16, marginBottom:16 }}>
+                  <div style={{ fontSize:13, fontWeight:900, color:C.text, marginBottom:10 }}>🧊 {tr("冷靜清單")}</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {watchlist.map(w => {
+                      const elapsed = Date.now() - w.addedAt;
+                      const ready = elapsed >= COOLDOWN_MS;
+                      const remainMin = Math.ceil((COOLDOWN_MS - elapsed) / 60000);
+                      const remainH = Math.floor(remainMin / 60), remainM = remainMin % 60;
+                      return (
+                        <div key={w.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{w.ticker} {w.name}</div>
+                            {w.note && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{w.note}</div>}
+                            <div style={{ fontSize:11, color:ready?C.income:C.muted, marginTop:2, fontWeight:ready?700:400 }}>{ready ? `✅ ${tr("冷靜期已過，可以下單了")}` : `${tr("還要等")} ${remainH > 0 ? `${remainH}${tr("小時")}` : ""}${remainM}${tr("分鐘")}`}</div>
+                          </div>
+                          {ready && <button onClick={() => { setBuyF(p => ({ ...p, ticker:w.ticker, name:w.name, market:w.market, acc:w.acc || p.acc })); removeFromWatchlist(w.id); setModal("buyStock"); }} style={{ padding:"6px 12px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{tr("前往買入")}</button>}
+                          <button onClick={() => removeFromWatchlist(w.id)} style={{ padding:"6px 8px", borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, cursor:"pointer", flexShrink:0 }}>{tr("移除")}</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
+
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:12, color:C.muted }}>{tr("持股")} {new Set(stSum.filter(s=>s.totalSh>0).map(s=>`${s.ticker}_${s.market}`)).size} {tr("檔")} · {tr("市值")} {fmt(stTotMv > 0 ? stTotMv : stTotCost)}</div>
+                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
+              </div>
+
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, marginBottom:16 }}>
+                <div>
+                  <span style={{ fontSize:12, color:C.accentL }}>{tr("總資產計入未實現損益")}</span>
+                  {useMvForAssets && <div style={{ fontSize:10, color:stTotMv>0?C.teal:C.muted, marginTop:2 }}>{stTotMv>0 ? `${tr("市值")} ${fmt(stTotMv)}` : `⏳ ${tr("等待市價載入…")}`}</div>}
+                </div>
+                <button onClick={toggleMv} style={{ width:44, height:24, borderRadius:12, background:useMvForAssets?C.income:C.muted, border:"none", cursor:"pointer", position:"relative", flexShrink:0 }}>
+                  <span style={{ position:"absolute", top:2, left:useMvForAssets?22:2, width:20, height:20, borderRadius:10, background:"#fff", transition:"left .2s", display:"block" }} />
+                </button>
+              </div>
+
               {Object.entries(stByAcc).map(([accN, stks]) => {
                 const accMv   = stks.reduce((s, x) => s + (x.mv > 0 ? x.mv : x.totalCost), 0);
                 const accCost = stks.reduce((s, x) => s + x.totalCost, 0);
@@ -288,42 +312,6 @@ export default function InvestPage({
                 </Card>
               )}
 
-              {(() => {
-                const allTrades = [];
-                stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name, market:s.market })));
-                allTrades.sort((a,b) => b.date.localeCompare(a.date));
-                if (!allTrades.length) return null;
-                const allTMonths = [...new Set(allTrades.map(t => t.date.slice(0,7)))].sort().reverse();
-                const curAllYm = allTradeMonth || allTMonths[0];
-                const curAllTrades = allTrades.filter(t => t.date.slice(0,7) === curAllYm);
-                const curAllIdx = allTMonths.indexOf(curAllYm);
-                return (
-                  <Card style={{ padding:16, marginBottom:16 }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                      <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>全部交易紀錄（共 {allTrades.length} 筆）</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx+1])} disabled={curAllIdx>=allTMonths.length-1} style={{ background:"none", border:"none", cursor:curAllIdx>=allTMonths.length-1?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx>=allTMonths.length-1?0.3:1 }}>‹</button>
-                        <span style={{ fontSize:12, fontWeight:700, color:C.text, minWidth:50, textAlign:"center" }}>{curAllYm.slice(0,4)}/{curAllYm.slice(5,7)}</span>
-                        <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx-1])} disabled={curAllIdx<=0} style={{ background:"none", border:"none", cursor:curAllIdx<=0?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx<=0?0.3:1 }}>›</button>
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:320, overflowY:"auto" }}>
-                      {curAllTrades.map((t, i) => (
-                        <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
-                          <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmtPrice(t.price, t.market === "US" ? "USD" : "TWD")}</div>
-                            <div style={{ fontSize:10, color:C.muted }}>{t.date}</div>
-                          </div>
-                          <div style={{ fontWeight:900, fontSize:12, color:C.text, flexShrink:0 }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), t.market === "US" ? "USD" : "TWD")}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊點進個股詳細頁可以編輯或刪除單筆紀錄</div>
-                  </Card>
-                );
-              })()}
-
               {Object.keys(dailyPnlHeatmap).length > 0 && (
                 <Card style={{ padding:16 }}>
                   <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
@@ -346,127 +334,63 @@ export default function InvestPage({
             </div>
           )}
           
+          {invTab === "log" && (() => {
+            const allTrades = [];
+            stocks.forEach(s => (s.trades||[]).forEach(t => allTrades.push({ ...t, ticker:s.ticker, name:s.name, market:s.market })));
+            allTrades.sort((a,b) => b.date.localeCompare(a.date));
+            const filtered = allTrades.filter(t => logFilter === "all" ? true : t.type === logFilter);
+            const allTMonths = [...new Set(filtered.map(t => t.date.slice(0,7)))].sort().reverse();
+            const curAllYm = allTradeMonth && allTMonths.includes(allTradeMonth) ? allTradeMonth : allTMonths[0];
+            const curAllTrades = filtered.filter(t => t.date.slice(0,7) === curAllYm);
+            const curAllIdx = allTMonths.indexOf(curAllYm);
+            return (
+              <div>
+                <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+                  {[{ v:"all", l:tr("全部") }, { v:"buy", l:tr("買入") }, { v:"sell", l:tr("賣出") }].map(o => <button key={o.v} onClick={() => setLogFilter(o.v)} style={{ flex:1, padding:"7px", borderRadius:10, fontSize:12, fontWeight:700, background:logFilter === o.v ? `${C.accent}30` : C.card, color:logFilter === o.v ? C.accentL : C.muted, border:`1px solid ${logFilter === o.v ? C.accent : C.border}`, cursor:"pointer" }}>{o.l}</button>)}
+                </div>
+                {!allTrades.length ? (
+                  <div style={{ textAlign:"center", padding:"40px 0", color:C.muted }}><div style={{ fontSize:38, marginBottom:8 }}>📒</div>{tr("尚無交易紀錄")}</div>
+                ) : (
+                  <Card style={{ padding:16 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>{tr("交易記錄")}（共 {filtered.length} 筆）</div>
+                      {allTMonths.length > 0 && (
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx+1])} disabled={curAllIdx>=allTMonths.length-1} style={{ background:"none", border:"none", cursor:curAllIdx>=allTMonths.length-1?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx>=allTMonths.length-1?0.3:1 }}>‹</button>
+                          <span style={{ fontSize:12, fontWeight:700, color:C.text, minWidth:50, textAlign:"center" }}>{curAllYm?.slice(0,4)}/{curAllYm?.slice(5,7)}</span>
+                          <button onClick={() => setAllTradeMonth(allTMonths[curAllIdx-1])} disabled={curAllIdx<=0} style={{ background:"none", border:"none", cursor:curAllIdx<=0?"default":"pointer", color:C.textSub, fontSize:16, opacity:curAllIdx<=0?0.3:1 }}>›</button>
+                        </div>
+                      )}
+                    </div>
+                    {curAllTrades.length === 0 ? (
+                      <div style={{ textAlign:"center", padding:"20px 0", color:C.muted, fontSize:12 }}>{tr("尚無交易紀錄")}</div>
+                    ) : (
+                      <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:520, overflowY:"auto" }}>
+                        {curAllTrades.map((t, i) => (
+                          <div key={t.id||i} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
+                            <div style={{ width:28, height:28, borderRadius:8, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?"買":"賣"}</div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.ticker} {t.name} · {t.shares}股 ＠{fmtPrice(t.price, t.market === "US" ? "USD" : "TWD")}</div>
+                              <div style={{ fontSize:10, color:C.muted }}>{t.date}{t.emotion ? ` · ${t.emotion}` : ""}</div>
+                            </div>
+                            <div style={{ textAlign:"right", flexShrink:0 }}>
+                              <div style={{ fontWeight:900, fontSize:12, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), t.market === "US" ? "USD" : "TWD")}</div>
+                              {t.type === "sell" && t.pnl != null && <div style={{ fontSize:10, fontWeight:700, color:pnlColor(t.pnl, C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl), t.market === "US" ? "USD" : "TWD")}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize:10, color:C.muted, marginTop:8 }}>＊點進個股詳細頁可以編輯或刪除單筆紀錄</div>
+                  </Card>
+                )}
+              </div>
+            );
+          })()}
+
           {invTab === "perf" && (
             <div>
               <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
-              {/* 勝率 / 賺賠比 */}
-              <Card style={{ padding:16, marginBottom:14 }}>
-                <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>{tr("勝率與賺賠比")}</div>
-                {tradeStats.totalSells === 0 ? (
-                  <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>{tr("還沒有賣出紀錄")}</div>
-                ) : (
-                  <div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
-                      <div>
-                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("勝率")}</div>
-                        <div style={{ fontWeight:900, fontSize:18, color:tradeStats.winRate>=50?C.income:C.expense }}>{tradeStats.winRate.toFixed(0)}%</div>
-                        <div style={{ fontSize:10, color:C.muted }}>{tradeStats.wins} {tr("勝")} / {tradeStats.losses} {tr("敗")}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("賺賠比")}</div>
-                        <div style={{ fontWeight:900, fontSize:18, color:C.text }}>{tradeStats.winLossRatio ? `${tradeStats.winLossRatio.toFixed(2)} : 1` : "—"}</div>
-                        <div style={{ fontSize:10, color:C.muted }}>{tr("平均賺")} {fmt(Math.round(tradeStats.avgWin))} / {tr("平均賠")} {fmt(Math.round(Math.abs(tradeStats.avgLoss)))}</div>
-                      </div>
-                    </div>
-                    {tradeStats.avgR != null ? (
-                      <div style={{ paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("平均 R 值（")}{tradeStats.rCount} {tr("筆有設停損）")}</div>
-                        <div style={{ fontWeight:900, fontSize:16, color:tradeStats.avgR>=0?C.income:C.expense }}>{tradeStats.avgR>=0?"+":""}{tradeStats.avgR.toFixed(2)} R</div>
-                        <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{tr("賺賠金額相對於停損風險的倍數，例如 +2R 代表賺了 2 倍你當初願意承受的虧損")}</div>
-                      </div>
-                    ) : (
-                      <div style={{ paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:11, color:C.muted }}>{tr("尚無 R 值資料——要先在個股詳細頁設定「停損%」，之後賣出時才會計算")}</div>
-                      </div>
-                    )}
-                    {tradeStats.disciplinedCount > 0 && (
-                      <div style={{ marginTop:10, padding:10, borderRadius:10, background:tradeStats.brokeStopCount>0?`${C.warn}15`:`${C.income}15` }}>
-                        <div style={{ fontSize:11, color:C.textSub }}>{tr("停損紀律")}</div>
-                        <div style={{ fontSize:12, fontWeight:700, color:tradeStats.brokeStopCount>0?C.warn:C.income, marginTop:2 }}>
-                          {tradeStats.disciplinedCount} {tr("筆有設停損，其中")} {tradeStats.brokeStopCount} {tr("筆賣出時已經跌破停損價才賣")}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-
-              {/* 最大回撤 */}
-              <Card style={{ padding:16, marginBottom:14 }}>
-                <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:6, letterSpacing:"0.05em" }}>{tr("最大回撤")}</div>
-                {maxDrawdown ? (
-                  <div>
-                    <div style={{ fontWeight:900, fontSize:20, color:C.expense }}>-{maxDrawdown.pct.toFixed(1)}%</div>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("資產從高點回落的最大幅度（")}{maxDrawdown.source==="daily"?tr("依每日市值"):tr("依月資產估算")}）</div>
-                  </div>
-                ) : <div style={{ fontSize:12, color:C.muted }}>{tr("資料不足，先到「持股」分頁讀取每日走勢")}</div>}
-              </Card>
-
-              {/* 與大盤比較 */}
-              <Card style={{ padding:16, marginBottom:14 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>{tr("與大盤（0050）比較")}</div>
-                  <button onClick={fetchBenchmarkCompare} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingBenchmark?tr("讀取中…"):tr("重新整理")}</button>
-                </div>
-                {benchmarkData.length > 1 ? (
-                  <div>
-                    <ResponsiveContainer width="100%" height={160}>
-                      <LineChart data={benchmarkData} margin={{ top:5, right:5, bottom:14, left:0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(benchmarkData.length/6)} />
-                        <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v}%`} />
-                        <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v,n)=>[`${v}%`, n==="portfolio"?tr("我的投組"):"0050"]} />
-                        <Line type="linear" dataKey="portfolio" stroke={C.accent} strokeWidth={2.5} dot={false} name="portfolio" />
-                        <Line type="linear" dataKey="benchmark" stroke={C.muted} strokeWidth={2} dot={false} strokeDasharray="4 3" name="benchmark" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                    <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textSub }}><div style={{ width:14, height:2, background:C.accent }} />{tr("我的投組")}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.textSub }}><div style={{ width:14, height:2, background:C.muted }} />0050</div>
-                    </div>
-                  </div>
-                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"14px 0" }}>{loadingBenchmark?tr("讀取中…"):tr("點右上角「重新整理」讀取比較資料")}</div>}
-              </Card>
-
-              <div style={{ fontSize:11, color:C.muted, margin:"18px 0 10px", lineHeight:1.6 }}>
-                每次買賣時標記當下的心態，累積夠多筆之後，下面會告訴你「衝動下的單」跟「計畫內的單」績效差多少。
-              </div>
-              {emotionReview.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>
-                  還沒有標記過情緒的交易紀錄
-                </div>
-              ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {emotionReview.map(em => {
-                    const winRate = em.sellCount > 0 ? (em.sellWin / em.sellCount * 100) : null;
-                    const avgPnl = em.sellCount > 0 ? em.sellPnl / em.sellCount : null;
-                    return (
-                      <Card key={em.key} style={{ padding:16 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                          <span style={{ fontSize:20 }}>{em.icon}</span>
-                          <span style={{ fontWeight:900, fontSize:14, color:C.text }}>{em.label}</span>
-                        </div>
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                          <div>
-                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>買進次數</div>
-                            <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{em.buyCount} 次{em.buyTotal > 0 ? `　${fmt(em.buyTotal)}` : ""}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>賣出勝率</div>
-                            <div style={{ fontWeight:700, fontSize:14, color:winRate===null?C.muted:winRate>=50?C.income:C.expense }}>{winRate===null ? "尚無資料" : `${winRate.toFixed(0)}% (${em.sellWin}/${em.sellCount})`}</div>
-                          </div>
-                        </div>
-                        {avgPnl !== null && (
-                          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                            <span style={{ fontSize:11, color:C.textSub }}>平均每筆損益</span>
-                            <span style={{ fontWeight:900, fontSize:14, color:pnlColor(avgPnl, C) }}>{avgPnl >= 0 ? "+" : ""}{fmt(Math.round(avgPnl))}</span>
-                          </div>
-                        )}
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
 
