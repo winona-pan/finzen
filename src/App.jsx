@@ -892,7 +892,7 @@ export default function App() {
   const [showHDP, setShowHDP] = useState(false);
 
   /* ── invest state ── */
-  const [invTab, setInvTab] = useState("holdings");
+  const [invTab, setInvTab] = useState("dashboard");
   useEffect(() => { if (tab !== "invest") setInvTab("holdings"); }, [tab]);
   const [invPie, setInvPie] = useState("alloc");
   const [mkt, setMkt] = useState("ALL");
@@ -1834,6 +1834,17 @@ export default function App() {
     return { totalSells:sells.length, wins:wins.length, losses:losses.length, winRate, avgWin, avgLoss, winLossRatio, avgR, rCount:rTrades.length, disciplinedCount:disciplined.length, brokeStopCount:brokeStop.length, sells };
   }, [stocks]);
 
+  /* ── 已實現損益總額（Dashboard 用）：把每筆賣出的損益依市場幣別換算成台幣後加總，
+     跟總資產／現金水位的算法一致，避免美股跟台股的數字直接相加造成誤導 ── */
+  const totalRealizedPnl = useMemo(() => {
+    let sum = 0;
+    stocks.forEach(s => {
+      const cur = s.market === "US" ? "USD" : "TWD";
+      (s.trades || []).forEach(t => { if (t.type === "sell") sum += toTWD(t.pnl || 0, cur, rates); });
+    });
+    return sum;
+  }, [stocks, rates, toTWD]);
+
   /* ── 與大盤（0050）績效比較 ── */
   const [benchmarkData, setBenchmarkData] = useState([]);
   const [loadingBenchmark, setLoadingBenchmark] = useState(false);
@@ -2606,7 +2617,7 @@ export default function App() {
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
     dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
     watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
-    tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare,
+    tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
     watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
     dailyPnlHeatmap, sectorPie, updateStockMeta,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
