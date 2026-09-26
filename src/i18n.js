@@ -125,6 +125,7 @@ const D = {
   "現有持股": { en:"Existing Holdings" }, "自選股": { en:"Watchlist" }, "績效": { en:"Performance" }, "持股": { en:"Holdings" },
   "總覽": { en:"Dashboard" }, "交易記錄": { en:"Trade Log" }, "即時現金": { en:"Cash on Hand" }, "已實現損益": { en:"Realized P&L" },
   "投組佔比": { en:"Portfolio Mix" }, "尚無交易紀錄": { en:"No trades yet" }, "全部": { en:"All" },
+  "已出清": { en:"Closed" }, "次賣出": { en:"sell(s)" },
   "均成本": { en:"Avg Cost" }, "市價": { en:"Market Price" }, "市值": { en:"Market Value" },
   "查這支股票的新聞": { en:"News about this stock" },
   "記錄買入": { en:"Record a Buy" }, "選擇": { en:"Select" },

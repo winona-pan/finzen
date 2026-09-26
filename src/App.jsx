@@ -489,16 +489,18 @@ function TWStockChart({ ticker }) {
   // 這樣 5 年資料（上千筆）也是瞬間算完，不會因為切換週期/K線就整個重算一輪、卡在那裡
   const dailyWithMa = useMemo(() => {
     const src = raw?.daily || [];
-    let sum5 = 0, sum60 = 0;
+    let sum5 = 0, sum20 = 0, sum60 = 0;
     return src.map((x, i) => {
       sum5 += x.c; if (i >= 5) sum5 -= src[i-5].c;
+      sum20 += x.c; if (i >= 20) sum20 -= src[i-20].c;
       sum60 += x.c; if (i >= 60) sum60 -= src[i-60].c;
       const ma5 = i >= 4 ? sum5 / 5 : null;
+      const ma20 = i >= 19 ? sum20 / 20 : null;
       const ma60 = i >= 59 ? sum60 / 60 : null;
-      return { t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5, ma60 };
+      return { t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5, ma20, ma60 };
     });
   }, [raw]);
-  const intradayPlain = useMemo(() => (raw?.intraday || []).map(x => ({ t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5:null, ma60:null })), [raw]);
+  const intradayPlain = useMemo(() => (raw?.intraday || []).map(x => ({ t:x.t, o:x.o??x.c, h:x.h??x.c, l:x.l??x.c, c:x.c, v:x.v||0, ma5:null, ma20:null, ma60:null })), [raw]);
 
   const sliced = useMemo(() => {
     const source = isIntraday ? intradayPlain : dailyWithMa;
@@ -521,6 +523,7 @@ function TWStockChart({ ticker }) {
       pct: first ? Number((((x.c - first) / first) * 100).toFixed(2)) : 0,
       vol: x.v,
       ma5: x.ma5 != null ? Number(x.ma5.toFixed(2)) : null,
+      ma20: x.ma20 != null ? Number(x.ma20.toFixed(2)) : null,
       ma60: x.ma60 != null ? Number(x.ma60.toFixed(2)) : null,
     }));
   }, [dailyWithMa, intradayPlain, isIntraday, range]);
@@ -546,6 +549,7 @@ function TWStockChart({ ticker }) {
             <div style={{ fontWeight:900, fontSize:16, color }}>{chgPct != null ? `${chgPct>=0?"+":""}${chgPct.toFixed(2)}%` : "—"}</div>
             {hasMa && <>
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.accentL }}><span style={{ width:10, height:2, background:C.accentL, display:"inline-block" }} />MA5</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.teal }}><span style={{ width:10, height:2, background:C.teal, display:"inline-block" }} />MA20</div>
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />季線(60日)</div>
             </>}
           </div>
@@ -563,6 +567,7 @@ function TWStockChart({ ticker }) {
               <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name,entry)=>{
                 if (name==="close") return [Number(v).toFixed(2), "價格"];
                 if (name==="ma5") return [Number(v).toFixed(2), "MA5"];
+                if (name==="ma20") return [Number(v).toFixed(2), "MA20"];
                 if (name==="ma60") return [Number(v).toFixed(2), "季線"];
                 if (name==="range") { const p = entry?.payload; return [p ? `開${p.o} 高${p.h} 低${p.l} 收${p.c}` : "", "K線"]; }
                 return [v, name];
@@ -573,6 +578,7 @@ function TWStockChart({ ticker }) {
                 <Area yAxisId="price" type="monotone" dataKey="close" stroke={color} strokeWidth={2} fill={`url(#${gradId})`} dot={false} />
               )}
               {hasMa && <Line yAxisId="price" type="linear" dataKey="ma5" stroke={C.accentL} strokeWidth={1.2} dot={false} connectNulls />}
+              {hasMa && <Line yAxisId="price" type="linear" dataKey="ma20" stroke={C.teal} strokeWidth={1.2} dot={false} connectNulls />}
               {hasMa && <Line yAxisId="price" type="linear" dataKey="ma60" stroke={C.warn} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />}
               <Line yAxisId="pct" type="monotone" dataKey="pct" stroke="transparent" dot={false} />
             </ComposedChart>
@@ -1658,6 +1664,9 @@ export default function App() {
 
   const cashBal = useMemo(() => accs.filter(a => a.type !== "credit" && a.type !== "investment" && a.vis).reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0), [accs, rates]);
 
+  // ── 持股成本計算採加權平均法：totalCost 代表「目前剩下股數」的成本，不是歷史買進總花費 ──
+  // 賣出只會減少股數，不會改變每股平均成本；賣光了（totalSh=0）成本就會自然歸零，
+  // 不會出現「明明賣光了、卻還顯示一大筆帳面虧損」的怪狀況（之前的算法是這裡的舊 bug）
   const stSum = useMemo(() => stocks.map(st => {
     const buys  = st.trades.filter(t => t.type==="buy");
     const sells = st.trades.filter(t => t.type==="sell");
@@ -1667,8 +1676,10 @@ export default function App() {
     const totalSh = st.manualShares != null ? Math.max(0, initSh + bSh - sSh) : Math.max(0, bSh - sSh);
     const initCost = st.manualTotalCost != null ? st.manualTotalCost : 0;
     const tradesCost = buys.reduce((s,t)=>s+t.shares*t.price+(t.fee||0), 0);
-    const totalCost = st.manualTotalCost != null ? initCost + tradesCost : tradesCost;
-    const avgCost = totalSh > 0 ? totalCost / totalSh : (st.manualAvgCost || 0);
+    const everSh = initSh + bSh; // 有史以來累積買進（含手動初始持股）的股數
+    const everCost = initCost + tradesCost; // 對應的總花費
+    const avgCost = everSh > 0 ? everCost / everSh : (st.manualAvgCost || 0); // 加權平均每股成本，賣出不改變它
+    const totalCost = avgCost * totalSh; // 剩下股數對應的成本，賣光了自然變 0
     const mv  = totalSh * (st.curPrice||0);
     const upnl = mv - totalCost;
     return {...st, totalSh, totalCost, avgCost, mv, upnl};
@@ -1950,7 +1961,9 @@ export default function App() {
     return Object.values(map).filter(x => x.buyCount > 0 || x.sellCount > 0);
   }, [stocks]);
 
-  const stByAcc = useMemo(() => { const g = {}; stSum.forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
+  // 賣光的股票（totalSh<=0）不再列進持股分頁——資料本身沒有刪掉，交易記錄還在，
+  // 只是「目前持股」清單本來就不該再顯示已經出清的標的，不然會讓人以為還持有
+  const stByAcc = useMemo(() => { const g = {}; stSum.filter(x => x.totalSh > 0).forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
   const moInc = useMemo(() => moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [moTxns]);
