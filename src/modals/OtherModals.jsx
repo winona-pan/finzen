@@ -109,10 +109,11 @@ export default function OtherModals({
             </Fld>
           )}
           {nG.goalType === "sinking" && (
-            <Fld label={tr("定期定額（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）")}>
+            <Fld label={tr("投入方式（選填，大概金額就好，會自動當作每月上限——那個月錢不夠會自動打折，不會硬扣）")}>
               <div style={{ display:"flex", gap:6, marginBottom:6 }}>
                 <button onClick={() => setNG(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(nG.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(nG.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(nG.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 {tr("固定金額")}</button>
                 <button onClick={() => setNG(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:nG.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${nG.recurringMode==="shares"?C.accent:C.border}`, color:nG.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 {tr("股數（股價變動自動換算）")}</button>
+                <button onClick={() => setNG(p => ({ ...p, recurringMode:"lumpsum" }))} style={{ flex:1, padding:6, borderRadius:8, background:nG.recurringMode==="lumpsum"?`${C.accent}20`:C.card, border:`1px solid ${nG.recurringMode==="lumpsum"?C.accent:C.border}`, color:nG.recurringMode==="lumpsum"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>🎯 {tr("單筆彈性投入")}</button>
               </div>
               {nG.recurringMode === "shares" ? (
                 <div>
@@ -124,6 +125,10 @@ export default function OtherModals({
                     </datalist>
                   </div>
                   <input type="number" min="0" value={nG.sharePriceOverride||""} placeholder={tr("自訂股價（選填，不填就用目前報價/買進均價）")} onChange={e => setNG(p => ({ ...p, sharePriceOverride: e.target.value===""?"":+e.target.value }))} style={{ ...iSt, marginTop:6 }} />
+                </div>
+              ) : nG.recurringMode === "lumpsum" ? (
+                <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, padding:"8px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}` }}>
+                  {tr("不用每月排程，適合單筆彈性投入（例如一次買一張美股、加密貨幣或任意資產）。之後想存錢進這個目標時，直接用「這個月多存的錢」手動存入即可，標的、股數不受限。")}
                 </div>
               ) : (
                 <input type="number" min="0" value={nG.recurringAmount||""} placeholder={tr("例如：5000，留空＝用系統自動估算的節奏")} onChange={e => setNG(p => ({ ...p, recurringAmount: e.target.value===""?"":+e.target.value }))} style={iSt} />
@@ -153,6 +158,7 @@ export default function OtherModals({
               })}
             </div>
           </Fld>}
+          <GoalSplitsEditor goal={nG} setGoal={setNG} accs={accs} buckets={buckets} C={C} iSt={iSt} Fld={Fld} tr={tr} />
           {stocks.length > 0 && (
             <Fld label="證券部分要不要算未實現損益">
               <div style={{ display:"flex", gap:8 }}>
@@ -226,8 +232,13 @@ export default function OtherModals({
               <div style={{ display:"flex", gap:6, marginBottom:6 }}>
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"amount" }))} style={{ flex:1, padding:6, borderRadius:8, background:(editGoal.recurringMode||"amount")==="amount"?`${C.accent}20`:C.card, border:`1px solid ${(editGoal.recurringMode||"amount")==="amount"?C.accent:C.border}`, color:(editGoal.recurringMode||"amount")==="amount"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>💰 {tr("固定金額")}</button>
                 <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"shares" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="shares"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="shares"?C.accent:C.border}`, color:editGoal.recurringMode==="shares"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>📈 {tr("股數（股價變動自動換算）")}</button>
+                <button onClick={() => setEditGoal(p => ({ ...p, recurringMode:"lumpsum" }))} style={{ flex:1, padding:6, borderRadius:8, background:editGoal.recurringMode==="lumpsum"?`${C.accent}20`:C.card, border:`1px solid ${editGoal.recurringMode==="lumpsum"?C.accent:C.border}`, color:editGoal.recurringMode==="lumpsum"?C.accentL:C.muted, fontSize:11, fontWeight:700, cursor:"pointer" }}>🎯 {tr("單筆彈性投入")}</button>
               </div>
-              {(() => {
+              {editGoal.recurringMode === "lumpsum" ? (
+                <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, padding:"8px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, marginBottom:8 }}>
+                  {tr("不用每月排程，適合單筆彈性投入（例如一次買一張美股、加密貨幣或任意資產）。之後想存錢進這個目標時，直接用「這個月多存的錢」手動存入即可，標的、股數不受限。")}
+                </div>
+              ) : (() => {
                 const amt = goalRecurringAmount(editGoal);
                 if (!(amt > 0)) return <div style={{ fontSize:11, color:C.muted, marginBottom:8, padding:"6px 10px", borderRadius:8, background:C.card }}>{tr("目前沒有生效中的定期定額（還沒設定，或排程還沒到起始月份）")}</div>;
                 const shares = editGoal.recurringMode==="shares" ? scheduledRecurringValue(editGoal, TODAY.slice(0,7)) : null;
@@ -247,7 +258,7 @@ export default function OtherModals({
                   </div>
                 </div>
               ) : null}
-              <RecurringScheduleEditor editGoal={editGoal} setEditGoal={setEditGoal} C={C} iSt={iSt} />
+              {editGoal.recurringMode !== "lumpsum" && <RecurringScheduleEditor editGoal={editGoal} setEditGoal={setEditGoal} C={C} iSt={iSt} />}
             </Fld>
           )}
           <Fld label={tr("計算哪些帳戶（不選則用總資產）")}>
@@ -273,6 +284,7 @@ export default function OtherModals({
               })}
             </div>
           </Fld>}
+          <GoalSplitsEditor goal={editGoal} setGoal={setEditGoal} accs={accs} buckets={buckets} C={C} iSt={iSt} Fld={Fld} tr={tr} />
           {stocks.length > 0 && (
             <Fld label="證券部分要不要算未實現損益">
               <div style={{ display:"flex", gap:8 }}>
@@ -501,6 +513,51 @@ export default function OtherModals({
             <Btn v="secondary" style={{ width:"100%", marginTop:8 }} onClick={close}>關閉</Btn>
           </Sheet>}
     </>
+  );
+}
+
+/* ── 分流目的地：一個目標選了不只一個帳戶／子帳戶時，可以設定套用分流時要怎麼拆到各個目的地
+   （比例或固定金額），不設定就維持舊行為——全部進第一個選的帳戶／子帳戶 ── */
+function GoalSplitsEditor({ goal, setGoal, accs, buckets, C, iSt, Fld, tr }) {
+  const destOptions = [
+    ...(goal.accIds||[]).map(id => ({ key:`acc:${id}`, accId:id, bucketId:null, label:accs.find(a=>a.id===id)?.name || id })),
+    ...(goal.bucketIds||[]).map(id => ({ key:`bucket:${id}`, accId:null, bucketId:id, label:buckets.find(b=>b.id===id)?.name || id })),
+  ];
+  if (destOptions.length < 2) return null; // 只有一個目的地就用不到分流設定
+  const splits = goal.splits || [];
+  const updateSplits = (next) => setGoal(p => ({ ...p, splits: next }));
+  const destKey = (o) => (o.accId||"")+"|"+(o.bucketId||"");
+  const addSplit = () => {
+    const used = new Set(splits.map(s => (s.accId||"")+"|"+(s.bucketId||"")));
+    const free = destOptions.find(o => !used.has(destKey(o)));
+    if (!free) return;
+    updateSplits([...splits, { id:"sp"+Date.now()+Math.random().toString(36).slice(2,6), accId:free.accId, bucketId:free.bucketId, mode:"percent", value:50 }]);
+  };
+  const patchSplit = (id, patch) => updateSplits(splits.map(s => s.id===id ? { ...s, ...patch } : s));
+  const removeSplit = (id) => updateSplits(splits.filter(s => s.id !== id));
+  const pctTotal = splits.filter(s => s.mode !== "fixed").reduce((s,x) => s + (+x.value||0), 0);
+  return (
+    <Fld label={`🔀 ${tr("分流目的地（選填，可以同時分配到多個帳戶）")}`}>
+      <div style={{ fontSize:10, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
+        {tr("不設定的話，分到這個目標的錢會全部進第一個選的帳戶／子帳戶。設定後可以同時分成好幾筆，各自用比例或固定金額拆分。")}
+      </div>
+      {splits.map(s => (
+        <div key={s.id} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+          <select value={destKey(s)} onChange={e => { const [a,b] = e.target.value.split("|"); patchSplit(s.id, { accId:a||null, bucketId:b||null }); }} style={{ ...iSt, flex:1, padding:"6px 8px", fontSize:12 }}>
+            {destOptions.map(o => <option key={o.key} value={destKey(o)}>{o.label}</option>)}
+          </select>
+          <button onClick={() => patchSplit(s.id, { mode: s.mode==="fixed" ? "percent" : "fixed" })} title={s.mode==="fixed"?tr("固定金額"):tr("百分比")} style={{ padding:"6px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{s.mode==="fixed"?"$":"%"}</button>
+          <input type="number" value={s.value} onChange={e => patchSplit(s.id, { value:+e.target.value||0 })} style={{ ...iSt, width:70, padding:"6px 8px", fontSize:12, flexShrink:0 }} />
+          <button onClick={() => removeSplit(s.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14, flexShrink:0 }}>✕</button>
+        </div>
+      ))}
+      {splits.length < destOptions.length && (
+        <button onClick={addSplit} style={{ width:"100%", padding:7, borderRadius:8, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>＋ {tr("新增分流目的地")}</button>
+      )}
+      {splits.length > 0 && pctTotal > 0 && pctTotal !== 100 && (
+        <div style={{ fontSize:10, color:C.warn, marginTop:6 }}>⚠️ {tr("比例合計")} {pctTotal}%（{tr("套用時會自動依比例正規化，不用剛好湊到100%")}）</div>
+      )}
+    </Fld>
   );
 }
 

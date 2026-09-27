@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 export default function TxnModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
-  savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
+  savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
   updateGoalRecurringSchedule, tr, accFieldLabel,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
@@ -371,7 +371,7 @@ export default function TxnModals({
             allocSettings={allocSettings} setAllocSettings={setAllocSettings} startNextMonthPlan={startNextMonthPlan}
             computeAllocation={computeAllocation} financialSuggestion={financialSuggestion}
             getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} setDefaultIncomeItems={setDefaultIncomeItems}
-            accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
+            accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} applyGoalAllocation={applyGoalAllocation} resolveGoalDestinations={resolveGoalDestinations} getGoalSavingsTarget={getGoalSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
             confirm={confirm} close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt}
             Fld={Fld} Sl={Sl} CalcInp={CalcInp} Inp={Inp} Btn={Btn} Sheet={Sheet} tr={tr}
           />
@@ -485,7 +485,7 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet, tr }) {
+function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet, tr }) {
   /* 這個分流引擎現在操作的「目標月份」：如果有設定計畫起始月份且晚於這個月（例如這個月還不想開始規劃），就用那個月，不然就是這個月 */
   const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
   /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到「目標月份」的排程 */
@@ -534,7 +534,22 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     goalOverrides: Object.fromEntries(Object.entries(goalOverrides).map(([k,v]) => [k, v===""?null:+v])),
   });
 
+  // ── 這個「規劃月份」是不是已經套用過了：直接讀存錢目標記錄，不是只看這次開啟後有沒有按過套用鍵，
+  // 這樣重新打開分流引擎也看得到「已經套用過」，不會誤以為還沒算 ──
+  const allocGoals = [...alloc.goalAllocs, ...alloc.wishlistAllocs];
+  const appliedGoals = allocGoals.filter(g => getGoalSavingsTarget(planStartYm, g.id) != null);
+  const appliedTotal = appliedGoals.reduce((s,g) => s + (getGoalSavingsTarget(planStartYm, g.id)||0), 0);
+
   return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
+    {appliedGoals.length > 0 && (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:14, background:`${C.teal}14`, marginBottom:10 }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:900, color:C.teal }}>✅ {tr("已完成分流")}</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{planStartYm} · {appliedGoals.length} {tr("個目標")}・{tr("共")} {fmt(appliedTotal)}</div>
+        </div>
+        <span style={{ fontSize:10, color:C.teal }}>{tr("下方可繼續調整、重新套用")}</span>
+      </div>
+    )}
     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:allocSettings.planStartYm && allocSettings.planStartYm>curYm?`${C.teal}12`:C.card, border:`1px solid ${allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal+"44":C.border}`, marginBottom:10 }}>
       <div style={{ fontSize:12, color:allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal:C.text }}>
         {allocSettings.planStartYm && allocSettings.planStartYm>curYm
@@ -628,12 +643,14 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
       </div>
 
       {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>專案存錢池（依優先級，收入越多分越多）</div>}
-      {alloc.goalAllocs.map(g => (
+      {alloc.goalAllocs.map(g => {
+        const applied = getGoalSavingsTarget(planStartYm, g.id);
+        return (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:g.isDone?`${C.teal}12`:C.card, border:`1px solid ${g.isDone?C.teal+"44":C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
             <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span></div>
-              <div style={{ fontSize:10, color:C.muted }}>{g.isDone ? "🎉 已達標" : `剩 ${g.monthsLeft} 個月・進度 ${g.pct.toFixed(0)}%`}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span>{applied != null && <span style={{ fontSize:9, color:C.teal, marginLeft:4 }}>✅</span>}</div>
+              <div style={{ fontSize:10, color:C.muted }}>{g.isDone ? "🎉 已達標" : `剩 ${g.monthsLeft} 個月・進度 ${g.pct.toFixed(0)}%`}{g.splits?.length > 1 ? `・${tr("分")} ${g.splits.length} ${tr("個帳戶")}` : ""}</div>
             </div>
             {g.isDone ? (
               <span style={{ fontSize:13, fontWeight:900, color:C.teal }}>—</span>
@@ -643,22 +660,26 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
           </div>
           <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:g.isDone?C.teal:C.accent }} /></div>
         </div>
-      ))}
+        );
+      })}
       {alloc.goalAllocs.length === 0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有設定「專案存錢池」類型的目標</div>}
 
       {alloc.wishlistAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>自由願望池（用剩餘溢流資金填滿）</div>}
-      {alloc.wishlistAllocs.map(g => (
+      {alloc.wishlistAllocs.map(g => {
+        const applied = getGoalSavingsTarget(planStartYm, g.id);
+        return (
         <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
             <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span></div>
-              <div style={{ fontSize:10, color:C.muted }}>進度 {g.pct.toFixed(0)}%</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span>{applied != null && <span style={{ fontSize:9, color:C.teal, marginLeft:4 }}>✅</span>}</div>
+              <div style={{ fontSize:10, color:C.muted }}>進度 {g.pct.toFixed(0)}%{g.splits?.length > 1 ? `・${tr("分")} ${g.splits.length} ${tr("個帳戶")}` : ""}</div>
             </div>
             <input type="number" value={goalOverrides[g.id] ?? g.alloc} onChange={e => setGoalOverrides(p => ({ ...p, [g.id]:e.target.value }))} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
           </div>
           <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:C.accent }} /></div>
         </div>
-      ))}
+        );
+      })}
 
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44` }}>
         <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 剩餘資金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
@@ -680,10 +701,10 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
       confirm(`${tr("確定把這份分流建議套用到")} ${applyMonths.join("、")}？${tr("只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字")}`, () => {
         applyMonths.forEach(ym => {
           [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
-            if (g.alloc <= 0) return;
-            const accId = g.accIds?.[0] || null;
-            const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-            setSavingsTarget(ym, accId, bucketId, g.alloc, `智慧分流：${g.name}`, g.id);
+            // 一個目標可能同時分給好幾個子帳戶（g.splits），resolveGoalDestinations 會依比例／固定金額拆好；
+            // 沒設定過分流比例的目標維持原本行為（全部進 accIds[0]/bucketIds[0]）
+            const destinations = resolveGoalDestinations(g, g.alloc);
+            applyGoalAllocation(ym, g.id, `智慧分流：${g.name}`, destinations);
           });
           if (allocSettings.reserveBucketId && alloc.reserveAmt > 0) {
             setSavingsTarget(ym, null, allocSettings.reserveBucketId, alloc.reserveAmt, "智慧分流：剩餘資金", "reserve");
