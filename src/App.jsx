@@ -1623,12 +1623,54 @@ export default function App() {
       return [...rest, { id:"sv"+ym+"_"+(key||"main"), ym, slotKey:key, accId:accId||null, bucketId:bucketId||null, amount:+amount, note:note||"" }];
     });
   }, [upd]);
+  /* ── 一次套用一個目標的「多重分流目的地」：一口氣把這個目標在這個月的舊分流全部清掉、換成新的一組，
+     可能是好幾筆（每個目的地一筆，同一個 slotKey），不會像逐筆呼叫 setSavingsTarget 那樣互相覆蓋掉 ── */
+  const applyGoalAllocation = useCallback((ym, goalId, note, destinations) => {
+    upd("savingsTargets", p => {
+      const rest = (p||[]).filter(x => !(x.ym === ym && x.slotKey === goalId));
+      const rows = (destinations||[]).filter(d => d.amount > 0).map((d, i) => ({
+        id:`sv${ym}_${goalId}_${i}`, ym, slotKey:goalId, accId:d.accId||null, bucketId:d.bucketId||null, amount:+d.amount, note:note||""
+      }));
+      return [...rest, ...rows];
+    });
+  }, [upd]);
   const removeSavingsTarget = useCallback((ym, slotKey) => {
     const key = slotKey || null;
     upd("savingsTargets", p => (p||[]).filter(x => !(x.ym===ym && (x.slotKey||null)===key)));
   }, [upd]);
-  /* 這個月套用到各專案目標的存錢金額（分流引擎套用時寫入，年度預測會優先採用這個實際值而不是重新估算）*/
-  const getGoalSavingsTarget = useCallback((ym, goalId) => savingsTargets.find(x => x.ym===ym && x.slotKey===goalId)?.amount ?? null, [savingsTargets]);
+  /* 這個月套用到某個目標的存錢金額——一個目標可能同時分流到好幾個目的地（好幾筆同 slotKey 的記錄），這裡加總回傳 */
+  const getGoalSavingsTarget = useCallback((ym, goalId) => {
+    const rows = savingsTargets.filter(x => x.ym===ym && x.slotKey===goalId);
+    return rows.length ? rows.reduce((s,x)=>s+x.amount,0) : null;
+  }, [savingsTargets]);
+  /* 目標的分流目的地清單：優先用 g.splits（多目的地，按比例或固定金額拆），沒設定就退回單一目的地（accIds[0]/bucketIds[0]，100%），
+     這樣舊資料、沒設定過分流比例的目標完全不受影響 */
+  const resolveGoalDestinations = useCallback((g, totalAmt) => {
+    const total = Math.max(0, +totalAmt || 0);
+    const splits = (g.splits||[]).filter(s => s.accId || s.bucketId);
+    if (!splits.length) {
+      const accId = g.accIds?.[0] || null;
+      const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+      return total > 0 ? [{ accId, bucketId, amount: total }] : [];
+    }
+    let remaining = total;
+    const results = [];
+    // 固定金額的先扣（不超過剩餘總額），剩下的再依比例分給百分比模式的目的地
+    splits.filter(s => s.mode === "fixed").forEach(s => {
+      const amt = Math.min(Math.max(0, +s.value || 0), remaining);
+      if (amt > 0) { results.push({ accId:s.accId||null, bucketId:s.accId?null:(s.bucketId||null), amount:Math.round(amt) }); remaining -= amt; }
+    });
+    const pctSplits = splits.filter(s => s.mode !== "fixed");
+    const pctTotal = pctSplits.reduce((s,x)=>s+(Math.max(0,+x.value||0)),0);
+    if (pctSplits.length) {
+      pctSplits.forEach(s => {
+        const share = pctTotal > 0 ? (Math.max(0,+s.value||0) / pctTotal) : (1/pctSplits.length);
+        const amt = Math.round(remaining * share);
+        if (amt > 0) results.push({ accId:s.accId||null, bucketId:s.accId?null:(s.bucketId||null), amount:amt });
+      });
+    }
+    return results;
+  }, []);
 
   const curYm = TODAY.slice(0,7);
   const nextYm = (() => { const d2 = new Date(TODAY + "T00:00:00"); d2.setMonth(d2.getMonth()+1); return toYmd(d2).slice(0,7); })();
@@ -2092,6 +2134,7 @@ export default function App() {
   /* 目標的「定期定額」可以排一個時間表：例如8月開始存5000，之後從1月起改成8000。
      沒有排時間表的話，就退回舊的單一數字（相容舊資料）。給一個月份，找出「那個月生效」的最新一筆設定值。 */
   const scheduledRecurringValue = useCallback((g, ym) => {
+    if (g.recurringMode === "lumpsum") return null; // 單筆彈性投入：不走每月排程，用手動存入
     const sched = g.recurringSchedule && g.recurringSchedule.length > 0
       ? g.recurringSchedule
       : ((g.recurringMode === "shares" ? g.recurringShares > 0 : g.recurringAmount > 0)
@@ -2211,7 +2254,7 @@ export default function App() {
       const monthsLeft = g.deadline ? Math.max(1, Math.round((new Date(g.deadline) - new Date(TODAY)) / (30*24*60*60*1000))) : null;
       const needed = monthsLeft ? Math.max(0, (g.target - cur) / monthsLeft) : Math.max(0, g.target - cur);
       const isDone = g.target > 0 && cur >= g.target;
-      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority==null?5:g.priority, target:g.target, cur, monthsLeft, needed:Math.round(needed), recurringAmount:goalRecurringAmount(g), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[] };
+      return { id:g.id, name:g.name, emoji:g.emoji, priority:g.priority==null?5:g.priority, target:g.target, cur, monthsLeft, needed:Math.round(needed), recurringAmount:goalRecurringAmount(g), isDone, pct:Math.min(100, g.target>0?(cur/g.target*100):0), accIds:g.accIds||[], bucketIds:g.bucketIds||[], splits:g.splits||[] };
     };
     const activeSinking = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(mapGoal).sort((a,b) => (a.priority - b.priority) || (a.monthsLeft - b.monthsLeft));
@@ -2653,7 +2696,7 @@ export default function App() {
     selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
-    savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
+    savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     budget502030, createEmergencyFund,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
