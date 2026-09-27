@@ -3,9 +3,27 @@ import { useState, useRef, useEffect } from "react";
 /* ── 簡易 Markdown 渲染：AI 回覆常常會帶 **粗體**、#### 標題、* 項目符號、--- 分隔線這些格式，
    原本只是原封不動當純文字顯示，語法符號會直接顯示出來很醜。沒有另外裝 markdown 套件（避免多一個依賴），
    自己寫一個輕量版的，涵蓋常見的這幾種就好，不用做到完整規格 ── */
+// AI 回覆有時會夾雜簡單的 LaTeX 數學式（例如 $54,067 \div 5,000 \approx 11$），
+// 沒裝 KaTeX 這種完整渲染套件，就把常見符號換成看得懂的 Unicode 符號、把 $ 跟反斜線去掉，
+// 至少不要讓使用者看到一堆 \div \approx 這種原始語法
+function stripLatex(text) {
+  const convert = (expr) => expr
+    .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, "($1/$2)")
+    .replace(/\\sqrt\{([^{}]*)\}/g, "√($1)")
+    .replace(/\\div/g, "÷").replace(/\\times/g, "×").replace(/\\approx/g, "≈")
+    .replace(/\\cdot/g, "·").replace(/\\pm/g, "±").replace(/\\leq/g, "≤")
+    .replace(/\\geq/g, "≥").replace(/\\neq/g, "≠").replace(/\\%/g, "%")
+    .replace(/\\,|\\;|\\ /g, " ")
+    .replace(/[{}]/g, "")
+    .replace(/\\/g, "")
+    .trim();
+  return text
+    .replace(/\$\$([^$]+)\$\$/g, (m, expr) => convert(expr))
+    .replace(/\$([^$]+)\$/g, (m, expr) => convert(expr));
+}
 function parseInline(text, C) {
   // 處理單行內的 **粗體**，回傳一個 React 節點陣列
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = stripLatex(text).split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i} style={{ color:C.text }}>{part.slice(2, -2)}</strong>;
@@ -13,6 +31,15 @@ function parseInline(text, C) {
     return part;
   });
 }
+// 判斷一行是不是「表格分隔列」，例如 |:---|:---:|---|
+const isTableSepRow = (line) => /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/.test(line.trim());
+// 把 | a | b | c | 這種一行拆成 ["a","b","c"]（去掉頭尾多餘的 |）
+const splitTableRow = (line) => {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map(s => s.trim());
+};
 function SimpleMarkdown({ text, C }) {
   const lines = text.split("\n");
   const blocks = [];
@@ -20,26 +47,58 @@ function SimpleMarkdown({ text, C }) {
   const flushList = () => {
     if (listBuf.length) { blocks.push(<ul key={`ul${blocks.length}`} style={{ margin:"4px 0", paddingLeft:18 }}>{listBuf}</ul>); listBuf = []; }
   };
-  lines.forEach((line, i) => {
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
     const trimmed = line.trim();
-    if (trimmed === "") { flushList(); return; }
-    if (/^---+$/.test(trimmed)) { flushList(); blocks.push(<hr key={i} style={{ border:"none", borderTop:`1px solid ${C.border}`, margin:"8px 0" }} />); return; }
+    if (trimmed === "") { flushList(); i++; continue; }
+    if (/^---+$/.test(trimmed)) { flushList(); blocks.push(<hr key={i} style={{ border:"none", borderTop:`1px solid ${C.border}`, margin:"8px 0" }} />); i++; continue; }
+    // GFM 表格：一行含 | 的表頭，緊接著下一行是 |---|---| 這種分隔列
+    if (trimmed.includes("|") && i + 1 < lines.length && isTableSepRow(lines[i + 1])) {
+      flushList();
+      const header = splitTableRow(trimmed);
+      const rows = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim() !== "" && lines[j].trim().includes("|")) {
+        rows.push(splitTableRow(lines[j]));
+        j++;
+      }
+      blocks.push(
+        <div key={`tbl${i}`} style={{ overflowX:"auto", margin:"8px 0", WebkitOverflowScrolling:"touch" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%", fontSize:12 }}>
+            <thead>
+              <tr>{header.map((h, hi) => <th key={hi} style={{ textAlign:"left", padding:"6px 8px", borderBottom:`2px solid ${C.border}`, color:C.text, fontWeight:900, whiteSpace:"nowrap" }}>{parseInline(h, C)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>{r.map((cell, ci) => <td key={ci} style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}`, color:C.textSub, verticalAlign:"top" }}>{parseInline(cell, C)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      i = j;
+      continue;
+    }
     const heading = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (heading) {
       flushList();
       const level = heading[1].length;
       const size = level <= 2 ? 15 : level === 3 ? 14 : 13;
       blocks.push(<div key={i} style={{ fontWeight:900, fontSize:size, color:C.text, marginTop:8, marginBottom:4 }}>{parseInline(heading[2], C)}</div>);
-      return;
+      i++;
+      continue;
     }
     const bullet = trimmed.match(/^[*-]\s+(.*)$/);
     if (bullet) {
       listBuf.push(<li key={i} style={{ marginBottom:3 }}>{parseInline(bullet[1], C)}</li>);
-      return;
+      i++;
+      continue;
     }
     flushList();
     blocks.push(<div key={i}>{parseInline(line, C)}</div>);
-  });
+    i++;
+  }
   flushList();
   return <div>{blocks}</div>;
 }

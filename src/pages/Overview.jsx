@@ -8,6 +8,7 @@ export default function OverviewPage({
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, goalDisplayAmount, guiltFreeGauge, allocSettings,
+  setEditGoal, getGoalSavingsTarget,
   hideAmounts, tr, accFieldLabel,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
@@ -94,7 +95,13 @@ export default function OverviewPage({
                 </div>
                 <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", color:isSafe?C.income:g.remaining<0?C.expense:C.text, ...maskStyle }}>{g.remaining>=0?"":"−"}{fmt(Math.abs(g.remaining))}</div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>{tr("已花")} {fmt(g.spentSoFar)} ／ {tr("生活費預算")} {fmt(g.livingBudget)}</div>
-                {!g.hasAllocated && <div style={{ fontSize:12, color:C.muted, marginTop:10, lineHeight:1.5 }}>{tr("還沒套用過本月分流建議，先點上面「🧠 智慧分流」規劃一下吧")}</div>}
+                {g.hasAllocated && <div style={{ fontSize:10, fontWeight:700, color:C.teal, marginTop:8 }}>🧠 {tr("本月分流已套用")}</div>}
+                {!g.hasAllocated && (
+                  <>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:10, lineHeight:1.5 }}>{tr("還沒套用過本月分流建議，先點上面「🧠 智慧分流」規劃一下吧")}</div>
+                    <button onClick={() => setModal("allocEngine")} style={{ width:"100%", marginTop:10, padding:"11px 16px", borderRadius:16, background:C.accent, border:"none", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"-0.01em" }}>🧠 {tr("前往智慧分流")}</button>
+                  </>
+                )}
                 {isMonthEnd && g.hasAllocated && g.remaining > 0 && (
                   <button onClick={() => setModal("sweepMoney")} style={{ width:"100%", marginTop:16, padding:"13px 16px", borderRadius:16, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"-0.01em" }}>🧹 {tr("一鍵掃入")} {fmt(g.remaining)} → {tr("願望池／存錢區")}</button>
                 )}
@@ -127,10 +134,14 @@ export default function OverviewPage({
                 const pct = Math.min(100, cur>0?(cur/g.target*100):0);
                 const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
                 const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
+                const applied = getGoalSavingsTarget ? getGoalSavingsTarget(curYm, g.id) : null;
                 return (
-                  <div key={g.id} style={{ paddingBottom:14, marginBottom:i<pinnedGoals.length-1?14:0, borderBottom:i<pinnedGoals.length-1?`1px solid ${C.border}`:"none" }}>
+                  <div key={g.id} onClick={() => { setEditGoal({ ...g }); setModal("editGoal"); }} style={{ cursor:"pointer", paddingBottom:14, marginBottom:i<pinnedGoals.length-1?14:0, borderBottom:i<pinnedGoals.length-1?`1px solid ${C.border}`:"none" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12, marginBottom:7 }}>
-                      <span style={{ fontWeight:700, color:C.text }}>{g.emoji} {g.name}{daysLeft!==null?` · ${tr("剩")}${daysLeft}${tr("天")}`:""}</span>
+                      <span style={{ fontWeight:700, color:C.text, display:"flex", alignItems:"center", gap:5 }}>
+                        {g.emoji} {g.name}{daysLeft!==null?` · ${tr("剩")}${daysLeft}${tr("天")}`:""}
+                        {applied != null && <span style={{ fontSize:9, fontWeight:700, color:C.teal, background:`${C.teal}18`, padding:"1px 6px", borderRadius:8 }}>✅ {tr("已套用")}</span>}
+                      </span>
                       <span style={{ fontWeight:700, color:col }}>{pct.toFixed(0)}%</span>
                     </div>
                     <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, background:col, width:`${pct}%`, transition:"width .5s" }} /></div>
