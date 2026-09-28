@@ -116,41 +116,41 @@ export default function OverviewPage({
             );
           })()}
 
-          {/* ── 生活費連續達標：現在連續幾個月沒超支，還差幾個月解鎖下一個獎勵徽章，獎勵文字可以點著編輯 ── */}
+          {/* ── 生活費連續達標：濃縮成一小格——標題數字同一行、里程碑縮成一排小圓點、獎勵文字一行帶過，不佔大版面 ── */}
           {livingStreak.months.length > 0 && (
-            <div style={{ margin:"0 16px 12px", padding:"16px 16px", borderRadius:20, background:C.card }}>
-              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:6 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:"0.02em" }}>🔥 {tr("生活費連續達標")}</div>
-                {livingStreak.longest > livingStreak.current && <span style={{ fontSize:10, color:C.muted }}>{tr("歷史最長")} {livingStreak.longest} {tr("個月")}</span>}
-              </div>
-              {livingStreak.current > 0 ? (
-                <div style={{ fontSize:26, fontWeight:800, color:C.income, letterSpacing:"-0.02em" }}>{livingStreak.current} <span style={{ fontSize:13, fontWeight:700, color:C.muted }}>{tr("個月沒超支")}</span></div>
-              ) : (
-                <div style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>{tr("上個月生活費超支了，這個月開始重新累積連續紀錄吧！")}</div>
-              )}
-              <div style={{ display:"flex", gap:6, marginTop:10 }}>
-                {STREAK_MILESTONES.map(m => {
-                  const achieved = livingStreak.longest >= m;
-                  const isNext = m === nextMilestone;
-                  return (
-                    <div key={m} style={{ flex:1, textAlign:"center", padding:"6px 4px", borderRadius:10, background: achieved ? `${C.teal}18` : isNext ? `${C.accent}14` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
-                      <div style={{ fontSize:14 }}>{achieved ? "🏅" : "🔒"}</div>
-                      <div style={{ fontSize:10, fontWeight:700, color: achieved ? C.teal : isNext ? C.accentL : C.muted, marginTop:2 }}>{m}{tr("個月")}</div>
-                    </div>
-                  );
-                })}
+            <div style={{ margin:"0 16px 12px", padding:"12px 14px", borderRadius:18, background:C.card }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, minWidth:0 }}>
+                  <span style={{ fontSize:12 }}>🔥</span>
+                  {livingStreak.current > 0 ? (
+                    <span style={{ fontSize:13, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{livingStreak.current} <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>{tr("個月沒超支")}</span></span>
+                  ) : (
+                    <span style={{ fontSize:11, color:C.muted }}>{tr("上個月生活費超支了，這個月開始重新累積連續紀錄吧！")}</span>
+                  )}
+                </div>
+                <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+                  {STREAK_MILESTONES.map(m => {
+                    const achieved = livingStreak.longest >= m;
+                    const isNext = m === nextMilestone;
+                    return (
+                      <div key={m} title={`${m}${tr("個月")}`} style={{ width:20, height:20, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, background: achieved ? `${C.teal}22` : isNext ? `${C.accent}18` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
+                        {achieved ? "🏅" : m}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               {nextMilestone && (
-                <div style={{ marginTop:10, padding:"10px 12px", borderRadius:12, background:`${C.accent}0d` }}>
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>{tr("再")} {nextMilestone - livingStreak.current} {tr("個月解鎖")} 🎁</div>
+                <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                  <span style={{ color:C.muted, flexShrink:0 }}>🎁 {tr("再")}{nextMilestone - livingStreak.current}{tr("個月解鎖")}：</span>
                   {editingMilestone === nextMilestone ? (
                     <input autoFocus value={milestoneDraft} onChange={e => setMilestoneDraft(e.target.value)}
                       onBlur={() => { setStreakReward(nextMilestone, milestoneDraft.trim() || streakRewards[nextMilestone]); setEditingMilestone(null); }}
                       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                      style={{ ...iSt, fontSize:12, padding:"6px 8px" }} />
+                      style={{ ...iSt, fontSize:11, padding:"4px 6px", flex:1 }} />
                   ) : (
-                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ fontSize:12, color:C.text, fontWeight:600, cursor:"pointer" }}>
-                      {streakRewards[nextMilestone]} <span style={{ fontSize:10, color:C.muted }}>✏️</span>
+                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ color:C.text, fontWeight:600, cursor:"pointer", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+                      {streakRewards[nextMilestone]} <span style={{ fontSize:9, color:C.muted }}>✏️</span>
                     </div>
                   )}
                 </div>
