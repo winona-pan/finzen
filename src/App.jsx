@@ -722,6 +722,22 @@ export default function App() {
   const { accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies } = d;
   const expensePools = d.expensePools || [];
   const buckets = d.buckets || [];
+  /* ── 判斷一筆交易「花的帳戶」是不是被標成「不算生活費」（例如父母給的錢那個戶頭、臨時借用的帳戶）。
+     t.acc 可能是子帳戶欄位格式 "bucket:<id>"，要先解析回母帳戶才能查得到 excludeFromLiving 設定。 ── */
+  const isLivingExcludedAcc = useCallback((accField) => {
+    if (!accField) return false;
+    let acc;
+    if (accField.startsWith("bucket:")) {
+      const bucket = buckets.find(b => b.id === accField.slice(7));
+      acc = bucket ? accs.find(a => a.id === bucket.accId) : null;
+    } else {
+      acc = accs.find(a => a.name === accField);
+    }
+    return !!acc?.excludeFromLiving;
+  }, [accs, buckets]);
+  /* ── 疊加在既有「生活費」相關篩選條件後面用：排除手動標記「不列入生活費」的交易、以及來自「不算生活費」帳戶的花費，
+     不動原本每個地方各自的邏輯（例如有些地方本來就排除願望兌現、有些沒有），單純多加這一層排除 ── */
+  const notLivingExcluded = useCallback((t) => t.tags !== "#不列入生活費" && !isLivingExcludedAcc(t.acc), [isLivingExcludedAcc]);
   const addBucket = useCallback((accId, name, emoji, allocated) => {
     upd("buckets", p => {
       const siblings = (p||[]).filter(b => b.accId === accId);
@@ -2242,7 +2258,7 @@ export default function App() {
     }
     const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t))
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 0);
@@ -2283,7 +2299,7 @@ export default function App() {
     const reserveAmt = Math.round(Math.max(0, remaining) / 100) * 100;
 
     return { income, investAmt, livingAmt, adaptiveLiving, historyMonths:histVariable.length, goalAllocs, wishlistAllocs, reserveAmt };
-  }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns, goalRecurringAmount]);
+  }, [allocSettings, goals, goalCurrentAmount, isGoalArchived, txns, goalRecurringAmount, notLivingExcluded]);
 
   /* ── 本月理財建議：生活費（已包含訂閱與基本開銷，不再另外重複扣一次）＋ 估出可以存多少 ── */
   const financialSuggestion = useMemo(() => {
@@ -2295,24 +2311,68 @@ export default function App() {
     }
     const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整")
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && notLivingExcluded(t))
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const avgVariable = histVariable.length ? histVariable.reduce((s, v) => s + v, 0) / histVariable.length : (allocSettings.defaultLivingCap || 0);
     const suggested = Math.max(0, Math.round(moInc - avgVariable));
     return { income: moInc, avgVariable: Math.round(avgVariable), suggested, historyMonths: histVariable.length };
-  }, [moInc, allocSettings, txns]);
+  }, [moInc, allocSettings, txns, notLivingExcluded]);
 
-  /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
+  /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現、手動標記不列入生活費的交易、不算生活費帳戶的花費）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
     const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
-    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現")
+    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t))
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
     const hasAllocated = savingsTargets.some(x => x.ym === curYm);
     return { livingBudget: Math.round(livingBudget), spentSoFar: Math.round(spentSoFar), remaining, hasAllocated };
-  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount]);
+  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount, notLivingExcluded]);
+
+  /* ── 生活費連續達標紀錄：回頭看每個「已結束」的月份，生活費有沒有守住，算出目前連續幾個月沒超支（current），
+     以及史上最長連續紀錄（longest，用來解鎖獎勵徽章，中斷過也不會消失）。
+     每個月的「生活水位」用跟 financialSuggestion 一樣的邏輯（該月之前3個月平均實際支出）往回算，
+     這樣才公平比較「那個當下」的水位，而不是拿現在的水位去套過去。有設定手動覆寫的話，過去的月份也一律用覆寫值。 ── */
+  const livingStreak = useMemo(() => {
+    const allYms = [...new Set(txns.map(t => t.date.slice(0,7)))].filter(ym => ym < curYm).sort();
+    const monthly = allYms.map(ym => {
+      let budget;
+      if (allocSettings.livingBudgetOverride) {
+        budget = allocSettings.livingBudgetOverride;
+      } else {
+        const dt = new Date(ym + "-01");
+        const hist = [];
+        for (let k = 1; k <= 3; k++) {
+          const hd = new Date(dt); hd.setMonth(hd.getMonth() - k);
+          const hym = `${hd.getFullYear()}-${String(hd.getMonth()+1).padStart(2,"0")}`;
+          const v = txns.filter(t => t.date.startsWith(hym) && t.type==="expense" && t.cat!=="帳戶調整" && notLivingExcluded(t))
+            .reduce((s,t)=>s+(t.proxyAmt?t.amt-t.proxyAmt:t.amt),0);
+          if (v > 0) hist.push(v);
+        }
+        budget = hist.length ? Math.round(hist.reduce((s,v)=>s+v,0)/hist.length) : (allocSettings.defaultLivingCap || 0);
+      }
+      const spent = txns.filter(t => t.date.startsWith(ym) && t.type==="expense" && t.cat!=="帳戶調整" && t.tags!=="#願望兌現" && notLivingExcluded(t))
+        .reduce((s,t)=>s+(t.proxyAmt?t.amt-t.proxyAmt:t.amt),0);
+      return { ym, budget, spent, under: budget > 0 ? spent <= budget : null };
+    }).filter(m => m.under !== null);
+
+    let longest = 0, run = 0;
+    monthly.forEach(m => { if (m.under) { run++; longest = Math.max(longest, run); } else { run = 0; } });
+    let current = 0;
+    for (let i = monthly.length - 1; i >= 0; i--) { if (monthly[i].under) current++; else break; }
+    return { current, longest, months: monthly };
+  }, [txns, allocSettings, curYm, notLivingExcluded]);
+  const STREAK_MILESTONES = [3, 6, 12, 24];
+  const DEFAULT_STREAK_REWARDS = {
+    3: "犒賞自己一杯喜歡的飲料或一場電影 🎬",
+    6: "買一個想很久的小東西（預算抓半個月生活費）🛍️",
+    12: "安排一趟小旅行或吃一頓好的犒賞自己 ✈️",
+    24: "從願望清單挑一項中大型的直接兌現，你真的很自律 🏆",
+  };
+  const setStreakReward = useCallback((milestone, text) => {
+    setAllocSettings({ streakRewards: { ...DEFAULT_STREAK_REWARDS, ...(allocSettings.streakRewards||{}), [milestone]: text } });
+  }, [allocSettings.streakRewards, setAllocSettings]);
 
   /* ── 理財策略：可以自己選要不要啟用某個理財框架（緊急預備金／50-30-20／多桶理財／零基預算），存在 allocSettings 裡 ── */
   const NEED_CATS_DEFAULT = ["食物","交通","家居","教育","醫療","保費","訂閱"];
@@ -2321,7 +2381,7 @@ export default function App() {
   const budget502030 = useMemo(() => {
     const needCats = allocSettings.needCats && allocSettings.needCats.length ? allocSettings.needCats : NEED_CATS_DEFAULT;
     const wantCats = allocSettings.wantCats && allocSettings.wantCats.length ? allocSettings.wantCats : WANT_CATS_DEFAULT;
-    const expenseTxns = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現");
+    const expenseTxns = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t));
     const sumBy = (cats) => expenseTxns.filter(t => cats.includes(t.cat)).reduce((s,t) => s + (t.proxyAmt ? t.amt-t.proxyAmt : t.amt), 0);
     const needs = sumBy(needCats);
     const wants = sumBy(wantCats);
@@ -2330,7 +2390,7 @@ export default function App() {
     const savings = Math.max(0, income - needs - wants - otherExp);
     const pct = (v) => income > 0 ? Math.round(v/income*100) : 0;
     return { income, needs, wants, otherExp, savings, needPct:pct(needs), wantPct:pct(wants+otherExp), savePct:pct(savings) };
-  }, [moTxns, moInc, allocSettings]);
+  }, [moTxns, moInc, allocSettings, notLivingExcluded]);
 
   /* 一鍵建立緊急預備金目標：抓生活費預算 × 你選的月數（3或6個月），自動設成最高優先級的專案存錢目標 */
   const createEmergencyFund = useCallback((months) => {
@@ -2697,6 +2757,7 @@ export default function App() {
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
+    livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
     budget502030, createEmergencyFund,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
