@@ -23,66 +23,74 @@ import AccountPage   from "./pages/AccountPage";
 import LanguagePage  from "./pages/LanguagePage";
 import ThemePage     from "./pages/ThemePage";
 
-/* ── Tokens ── */
+/* ── Tokens：6 套主題色票，2026-09 全面重構——每套主題只用一組明確指定的色號，
+   彼此之間刻意拉開色相差異，不再共用同一種曖昧的紫／靛藍，也不會看起來大同小異 ── */
 const THEMES = {
   dark: {
-    bg:"#0d0f14", surface:"#14161e", card:"#1a1d28",
-    border:"#252839", borderL:"#303550",
-    income:"#f43f5e", expense:"#4ade80",
-    accent:"#7c7cf8", accentL:"#a5b4fc", accentD:"#5b5bd6",
+    // Dark Tech（深色）：極黑灰 + 科技藍
+    bg:"#121214", surface:"#18181b", card:"#1e1e22",
+    border:"#2a2a2f", borderL:"#3a3a40",
+    income:"#ef4444", expense:"#22c55e",
+    accent:"#3b82f6", accentL:"#60a5fa", accentD:"#2563eb",
     warn:"#fb923c", teal:"#2dd4bf",
-    text:"#eef0fa", textSub:"#7c80a0", muted:"#444660", danger:"#ef4444",
+    text:"#f4f4f5", textSub:"#8b8d94", muted:"#64748b", danger:"#ef4444",
     name:"深色", icon:"🌙",
   },
   nordic: {
-    bg:"#e6ebf0", surface:"#f2f6f9", card:"#ffffff",
-    border:"#c4d0da", borderL:"#a3b5c2",
+    // Nordic Minimal（北歐風）：燕麥白 + 冷石灰 + 冰川藍
+    bg:"#f8fafc", surface:"#f1f5f9", card:"#ffffff",
+    border:"#cbd5e1", borderL:"#94a3b8",
     income:"#c85a4a", expense:"#6b9e64",
-    accent:"#3d6e8f", accentL:"#2f5670", accentD:"#234253",
-    warn:"#c9982f", teal:"#4f9088",
-    text:"#26313a", textSub:"#5f7280", muted:"#9cb0bc", danger:"#c1442e",
+    accent:"#475569", accentL:"#64748b", accentD:"#334155",
+    warn:"#c9982f", teal:"#0ea5e9",
+    text:"#334155", textSub:"#64748b", muted:"#94a3b8", danger:"#c1442e",
     name:"北歐風", icon:"🌲",
   },
   mediterranean: {
-    bg:"#fbe6bf", surface:"#fff3dc", card:"#fffaf0",
-    border:"#eec988", borderL:"#dbab55",
+    // Mediterranean（地中海風）：陽光米白 + 海洋藍 + 青綠 + 暖黃
+    bg:"#fdfbf7", surface:"#fff8ee", card:"#ffffff",
+    border:"#e2e8f0", borderL:"#cbd5e1",
     income:"#d8542f", expense:"#7a9a3e",
-    accent:"#12707f", accentL:"#0d5865", accentD:"#08404b",
-    warn:"#d67f12", teal:"#1f8f92",
+    accent:"#0284c7", accentL:"#38bdf8", accentD:"#075985",
+    warn:"#f59e0b", teal:"#0d9488",
     text:"#402c14", textSub:"#7a5a30", muted:"#c9a568", danger:"#c1442e",
     name:"地中海風", icon:"🌊",
   },
   korean: {
-    bg:"#f6e2ee", surface:"#fcedf5", card:"#ffffff",
-    border:"#eabdd8", borderL:"#dd97c0",
-    income:"#d43a68", expense:"#4aa88c",
-    accent:"#b8447e", accentL:"#9c3568", accentD:"#7d2952",
-    warn:"#d99a3e", teal:"#4a9d92",
-    text:"#38222e", textSub:"#7a5468", muted:"#cf9fba", danger:"#d1476a",
+    // Korean Clean（韓式）：奶油白 + 奶茶金 + 柔粉 + 霧灰
+    bg:"#fffaf0", surface:"#fff5e6", card:"#ffffff",
+    border:"#e7e5e4", borderL:"#a8a29e",
+    income:"#f472b6", expense:"#4aa88c",
+    accent:"#d97706", accentL:"#f59e0b", accentD:"#b45309",
+    warn:"#ca8a04", teal:"#4a9d92",
+    text:"#44403c", textSub:"#78716c", muted:"#a8a29e", danger:"#d1476a",
     name:"韓式", icon:"🌸",
   },
   japanese: {
-    bg:"#e8dcbe", surface:"#f2e8cc", card:"#faf3e2",
-    border:"#d0ba86", borderL:"#b89c60",
+    // Zen Wabi-sabi（日式）：沉穩墨黑 + 抹茶綠 + 枯茶棕
+    bg:"#1c1917", surface:"#211d1a", card:"#292420",
+    border:"#3a332c", borderL:"#78716c",
     income:"#a02e2e", expense:"#4a6e42",
-    accent:"#22404f", accentL:"#182e3a", accentD:"#0f2028",
-    warn:"#a87418", teal:"#356b60",
-    text:"#241f14", textSub:"#5c4f34", muted:"#a68f60", danger:"#a3372f",
+    accent:"#15803d", accentL:"#22c55e", accentD:"#166534",
+    warn:"#b45309", teal:"#356b60",
+    text:"#e7e5e4", textSub:"#a8a29e", muted:"#78716c", danger:"#a3372f",
     name:"日式", icon:"🍃",
   },
   american: {
-    bg:"#eef1f6", surface:"#f8fafc", card:"#ffffff",
-    border:"#c6cfda", borderL:"#a3b1c2",
-    income:"#c8202a", expense:"#1e7a44",
-    accent:"#173864", accentL:"#0f2848", accentD:"#0a1c33",
-    warn:"#c07716", teal:"#146860",
-    text:"#182230", textSub:"#4c5a6c", muted:"#96a5b6", danger:"#c8202a",
+    // American Modern（美式）：率性深藍 + 美式紅 + 藍
+    bg:"#0f172a", surface:"#16213b", card:"#1c2841",
+    border:"#243352", borderL:"#334155",
+    income:"#3b82f6", expense:"#1e7a44",
+    accent:"#ef4444", accentL:"#f87171", accentD:"#b91c1c",
+    warn:"#c07716", teal:"#3b82f6",
+    text:"#ffffff", textSub:"#94a3b8", muted:"#64748b", danger:"#ef4444",
     name:"美式", icon:"🦅",
   },
 };
 let C = THEMES.dark;
 function getC(theme) { return THEMES[theme] || THEMES.dark; }
-const PIE = ["#f43f5e","#7c7cf8","#4ade80","#fb923c","#06b6d4","#ec4899","#a78bfa","#34d399"];
+// 圖表分類色票：拿掉原本混在裡面的紫／靛藍色系，換成彼此色相差異夠大、不撞色的顏色
+const PIE = ["#f43f5e","#3b82f6","#4ade80","#fb923c","#06b6d4","#ec4899","#eab308","#14b8a6"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TODAY = new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 /* 用本地時區組出 YYYY-MM-DD，不要用 toISOString()（那個會轉成 UTC，正時區會把日期往前推一天） */
