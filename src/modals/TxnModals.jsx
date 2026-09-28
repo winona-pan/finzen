@@ -145,6 +145,11 @@ export default function TxnModals({
           <CalcInp label={tr("金額")} value={nT.amt} onChange={v => setNT(p => ({ ...p, amt:v, overseasFee:false }))} />
           <AutoInput label={tr("說明")} placeholder="蝦仁蛋炒飯" value={nT.desc} onChange={v => setNT(p => ({ ...p, desc:v }))} history={descHistoryByCat[nT.cat] || []} />
           <AutoInput label={tr("標籤（選填）")} placeholder="#標籤" value={nT.tags} onChange={v => setNT(p => ({ ...p, tags:v }))} history={tagsHistory} />
+          {nT.type === "expense" && (
+            <button onClick={() => setNT(p => ({ ...p, tags: p.tags === "#不列入生活費" ? "" : "#不列入生活費" }))} style={{ width:"100%", marginBottom:12, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:nT.tags === "#不列入生活費" ? `${C.warn}22` : C.card, color:nT.tags === "#不列入生活費" ? C.warn : C.textSub, border:`1px solid ${nT.tags === "#不列入生活費" ? C.warn : C.border}`, cursor:"pointer" }}>
+              <span>{nT.tags === "#不列入生活費" ? "✅" : "⬜"}</span> {tr("不列入生活費（別人給的錢、非日常花費）")}
+            </button>
+          )}
           <Sl label={tr("帳戶")} value={nT.acc} onChange={e => setNT(p => ({ ...p, acc:e.target.value }))}><option value="">— {tr("選擇帳戶")} —</option>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
           <Fld label={`${tr("日期")}${nT.date !== TODAY ? " 📅 " + tr("補記") + " " + nT.date : ""}`}><input type="date" value={nT.date} onChange={e => setNT(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           
@@ -206,6 +211,11 @@ export default function TxnModals({
           <CalcInp label="金額" value={String(selTxn.amt)} onChange={v => setSelTxn(p => ({ ...p, amt:+v }))} />
           <AutoInput label="說明" value={selTxn.desc || ""} onChange={v => setSelTxn(p => ({ ...p, desc:v }))} history={descHistory} />
           <AutoInput label="標籤" value={selTxn.tags || ""} placeholder="#標籤" onChange={v => setSelTxn(p => ({ ...p, tags:v }))} history={tagsHistory} />
+          {selTxn.type === "expense" && (
+            <button onClick={() => setSelTxn(p => ({ ...p, tags: p.tags === "#不列入生活費" ? "" : "#不列入生活費" }))} style={{ width:"100%", marginBottom:12, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, fontSize:13, fontWeight:700, background:selTxn.tags === "#不列入生活費" ? `${C.warn}22` : C.card, color:selTxn.tags === "#不列入生活費" ? C.warn : C.textSub, border:`1px solid ${selTxn.tags === "#不列入生活費" ? C.warn : C.border}`, cursor:"pointer" }}>
+              <span>{selTxn.tags === "#不列入生活費" ? "✅" : "⬜"}</span> {tr("不列入生活費（別人給的錢、非日常花費）")}
+            </button>
+          )}
           <Sl label="帳戶" value={selTxn.acc || ""} onChange={e => setSelTxn(p => ({ ...p, acc:e.target.value }))}>{accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}{buckets.length>0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}</Sl>
           <Fld label="日期"><input type="date" value={selTxn.date} onChange={e => setSelTxn(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
           <div style={{ display:"flex", gap:8, marginTop:8 }}>

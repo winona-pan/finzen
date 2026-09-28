@@ -140,6 +140,10 @@ export default function WalletModals({
             <Fld label={tr("帳戶類型")}><div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {[{ v:"cash", l:`💰 ${tr("現金")}` }, { v:"debit", l:`🏦 ${tr("金融卡")}` }, { v:"investment", l:`📊 ${tr("證券")}` }, { v:"credit", l:`💳 ${tr("信用卡")}` }].map(o => <button key={o.v} onClick={() => setSelAcc(p => ({ ...p, type:o.v }))} style={{ flex:1, padding:"7px 4px", borderRadius:10, fontSize:11, fontWeight:700, background:selAcc.type === o.v ? `${C.accent}30` : C.card, color:selAcc.type === o.v ? C.accentL : C.muted, border:`1px solid ${selAcc.type === o.v ? C.accent : C.border}`, cursor:"pointer", minWidth:60 }}>{o.l}</button>)}
             </div></Fld>
+            <button onClick={() => setSelAcc(p => ({ ...p, excludeFromLiving:!p.excludeFromLiving }))} style={{ width:"100%", display:"flex", alignItems:"flex-start", gap:8, padding:"10px 12px", borderRadius:10, fontSize:12, fontWeight:700, background:selAcc.excludeFromLiving ? `${C.warn}18` : C.card, color:selAcc.excludeFromLiving ? C.warn : C.textSub, border:`1px solid ${selAcc.excludeFromLiving ? C.warn : C.border}`, cursor:"pointer", marginBottom:12, textAlign:"left" }}>
+              <span>{selAcc.excludeFromLiving ? "✅" : "⬜"}</span>
+              <span>{tr("這個帳戶花的錢不算生活費")}<div style={{ fontSize:10, fontWeight:400, color:C.muted, marginTop:2 }}>{tr("適合父母給的錢、臨時借用的帳戶等——從這個帳戶花的錢不會被算進「生活區安全水位」跟生活費自動學習的平均值")}</div></span>
+            </button>
             <div style={{ borderRadius:14, padding:16, marginBottom:12, background:C.surface }}>
               <div style={{ display:"flex", justifyContent:"space-between" }}>
                 <div><div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("目前餘額")}</div><div style={{ fontWeight:900, fontSize:24, color:C.accentL }}>{fmt(selAcc.bal, selAcc.cur)}</div></div>
@@ -154,7 +158,7 @@ export default function WalletModals({
             </div>}
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <Btn style={{ flex:1 }} onClick={() => {
-                upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, type:selAcc.type, icon:selAcc.icon } : a));
+                upd("accs", p => p.map(a => a.id === selAcc.id ? { ...a, name:selAcc.name, type:selAcc.type, icon:selAcc.icon, excludeFromLiving:!!selAcc.excludeFromLiving } : a));
                 if (newBal && +newBal !== selAcc.bal) adjBal(selAcc, newBal, isFirst, adjDesc);
                 setNewBal(""); setAdjDesc(""); close();
               }}>{isFirst && newBal && +newBal !== selAcc.bal ? "設為初始金額" : "儲存"}</Btn>
