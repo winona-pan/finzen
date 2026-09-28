@@ -125,7 +125,7 @@ export default function StockModals({
             <div style={{ fontSize:13, fontWeight:900, color:C.warn, marginBottom:6 }}>🔥 追高警示</div>
             <div style={{ fontSize:12, color:C.textSub, marginBottom:8, lineHeight:1.5 }}>
               {buyChgPct !== undefined && buyChgPct > 3 ? `今天已經上漲 ${buyChgPct.toFixed(1)}%，` : ""}
-              {existingBuySum?.avgCost > 0 && priceEntered > existingBuySum.avgCost * 1.08 ? `目前買價比你的均成本（${fmt(Math.round(existingBuySum.avgCost))}）高出不少，` : ""}
+              {existingBuySum?.avgCost > 0 && priceEntered > existingBuySum.avgCost * 1.08 ? `目前買價比你的均成本（${fmtPrice(existingBuySum.avgCost)}）高出不少，` : ""}
               先寫下這筆為什麼還要買，冷靜想清楚再送出。
             </div>
             <textarea value={buyF.buyReason || ""} onChange={e => setBuyF(p => ({ ...p, buyReason:e.target.value }))} placeholder="例如：基本面轉強、長線布局、非短期追價…" rows={2} style={{ ...iSt, resize:"none", fontFamily:"inherit" }} />
@@ -292,7 +292,7 @@ export default function StockModals({
                 <div>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("現價")}</div>
                   <div style={{ fontWeight:900, fontSize:14, color:C.text }}>{fmtPrice(st.curPrice, stCur)}/{tr("股")}</div>
-                  <div style={{ fontSize:10, color:C.muted }}>{tr("均")} {fmt(Math.round(st.avgCost||0), stCur)}/{tr("股")}</div>
+                  <div style={{ fontSize:10, color:C.muted }}>{tr("均")} {fmtPrice(st.avgCost||0, stCur)}/{tr("股")}</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("未實現損益")}</div>

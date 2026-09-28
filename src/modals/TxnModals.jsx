@@ -512,6 +512,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
   const [showSettings, setShowSettings] = useState(true);
   const [savedDefault, setSavedDefault] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
+  const [showHelp, setShowHelp] = useState(false); // 分流引擎的說明文字太多太亂，全部收在底下要展開才看得到
   /* 要套用到哪些月份：預設從目標月份開始，也可以一次勾多個月一起設定存錢目標 */
   const monthOptions = Array.from({ length: 6 }, (_, i) => { const dt = new Date(planStartYm+"-01"); dt.setMonth(dt.getMonth()+i); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; });
   const [applyMonths, setApplyMonths] = useState([planStartYm]);
@@ -572,9 +573,6 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
         <button onClick={startNextMonthPlan} style={{ padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>從下個月開始</button>
       )}
     </div>
-    <div style={{ fontSize:11, color:C.muted, lineHeight:1.6, marginBottom:8, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
-      這筆錢會依序被分配：① 下面填每一筆收入的來源與金額 → ② 依序扣掉投資、生活費 → ③ 剩下的錢依優先級分給各個目標 → ④ 分不完的全部變成「剩餘資金」。<strong style={{ color:C.text }}>收入填得越高，最後能分配的錢自然越多。</strong>投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒。
-    </div>
     <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={{ width:"100%", marginBottom:14, padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>🗑 {tr("清空以上規劃，重新輸入")}</button>
 
     <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -629,7 +627,6 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
           </div>
         ))}
         <button onClick={addInvestAlloc} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆投資分流</button>
-        <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>這裡的設定會自動存起來，不用另外按套用；實際買進請你自己去操作證券戶。</div>
         {buckets.length > 0 && (
           <div style={{ marginTop:10 }}>
             <Sl label="剩餘資金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
@@ -724,9 +721,21 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
       }, "確認套用");
     }}>✅ 套用到存錢目標（{applyMonths.length} 個月份）</Btn>
     {justApplied && <div style={{ textAlign:"center", fontSize:12, color:C.teal, fontWeight:700, marginTop:8 }}>✅ 已套用，你可以繼續調整，改完再按一次套用就好</div>}
-    <div style={{ fontSize:10, color:C.muted, marginTop:8, lineHeight:1.6 }}>
-      套用後：各目標與剩餘資金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。
-    </div>
+
+    {/* ── 說明文字太多會很亂，全部集中在這裡，預設收合，要看再展開 ── */}
+    <button onClick={() => setShowHelp(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginTop:12 }}>
+      <span style={{ fontSize:11, fontWeight:700, color:C.muted }}>ℹ️ {tr("使用說明")}</span>
+      <span style={{ fontSize:11, color:C.muted }}>{showHelp?"▲":"▼"}</span>
+    </button>
+    {showHelp && (
+      <div style={{ fontSize:11, color:C.muted, lineHeight:1.7, marginTop:6, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
+        <div style={{ marginBottom:8 }}>
+          {tr("這筆錢會依序被分配")}：① {tr("下面填每一筆收入的來源與金額")} → ② {tr("依序扣掉投資、生活費")} → ③ {tr("剩下的錢依優先級分給各個目標")} → ④ {tr("分不完的全部變成「剩餘資金」")}。<strong style={{ color:C.text }}>{tr("收入填得越高，最後能分配的錢自然越多")}。</strong>{tr("投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒")}。
+        </div>
+        <div>{tr("套用後：各目標與剩餘資金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。")}</div>
+      </div>
+    )}
+
     <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
       📅 切換到年度現金流預測排程 →
     </button>
