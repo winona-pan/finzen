@@ -9,6 +9,7 @@ export default function OverviewPage({
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, goalDisplayAmount, guiltFreeGauge, allocSettings,
   setEditGoal, getGoalSavingsTarget,
+  livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
   hideAmounts, tr, accFieldLabel,
   // 共用 UI atoms
   InfoBtn, Card, SH, Bdg, SwipeRow, Btn
@@ -22,6 +23,12 @@ export default function OverviewPage({
   /* ── 搜尋框局部狀態 ── */
   const [showSq, setShowSq] = useState(false);
   const [sq, setSq] = useState("");
+
+  /* ── 連續達標獎勵：點下一個里程碑的文字可以直接編輯成自己想要的獎勵 ── */
+  const [editingMilestone, setEditingMilestone] = useState(null);
+  const [milestoneDraft, setMilestoneDraft] = useState("");
+  const streakRewards = { ...DEFAULT_STREAK_REWARDS, ...(allocSettings.streakRewards||{}) };
+  const nextMilestone = STREAK_MILESTONES.find(m => m > livingStreak.current) || null;
 
   /* ── 清單行樣式 ── */
   const rowSt = (i, border = true) => ({ 
@@ -108,6 +115,48 @@ export default function OverviewPage({
               </div>
             );
           })()}
+
+          {/* ── 生活費連續達標：現在連續幾個月沒超支，還差幾個月解鎖下一個獎勵徽章，獎勵文字可以點著編輯 ── */}
+          {livingStreak.months.length > 0 && (
+            <div style={{ margin:"0 16px 12px", padding:"16px 16px", borderRadius:20, background:C.card }}>
+              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:6 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:"0.02em" }}>🔥 {tr("生活費連續達標")}</div>
+                {livingStreak.longest > livingStreak.current && <span style={{ fontSize:10, color:C.muted }}>{tr("歷史最長")} {livingStreak.longest} {tr("個月")}</span>}
+              </div>
+              {livingStreak.current > 0 ? (
+                <div style={{ fontSize:26, fontWeight:800, color:C.income, letterSpacing:"-0.02em" }}>{livingStreak.current} <span style={{ fontSize:13, fontWeight:700, color:C.muted }}>{tr("個月沒超支")}</span></div>
+              ) : (
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>{tr("上個月生活費超支了，這個月開始重新累積連續紀錄吧！")}</div>
+              )}
+              <div style={{ display:"flex", gap:6, marginTop:10 }}>
+                {STREAK_MILESTONES.map(m => {
+                  const achieved = livingStreak.longest >= m;
+                  const isNext = m === nextMilestone;
+                  return (
+                    <div key={m} style={{ flex:1, textAlign:"center", padding:"6px 4px", borderRadius:10, background: achieved ? `${C.teal}18` : isNext ? `${C.accent}14` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
+                      <div style={{ fontSize:14 }}>{achieved ? "🏅" : "🔒"}</div>
+                      <div style={{ fontSize:10, fontWeight:700, color: achieved ? C.teal : isNext ? C.accentL : C.muted, marginTop:2 }}>{m}{tr("個月")}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              {nextMilestone && (
+                <div style={{ marginTop:10, padding:"10px 12px", borderRadius:12, background:`${C.accent}0d` }}>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>{tr("再")} {nextMilestone - livingStreak.current} {tr("個月解鎖")} 🎁</div>
+                  {editingMilestone === nextMilestone ? (
+                    <input autoFocus value={milestoneDraft} onChange={e => setMilestoneDraft(e.target.value)}
+                      onBlur={() => { setStreakReward(nextMilestone, milestoneDraft.trim() || streakRewards[nextMilestone]); setEditingMilestone(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                      style={{ ...iSt, fontSize:12, padding:"6px 8px" }} />
+                  ) : (
+                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ fontSize:12, color:C.text, fontWeight:600, cursor:"pointer" }}>
+                      {streakRewards[nextMilestone]} <span style={{ fontSize:10, color:C.muted }}>✏️</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Tier 2：待處理摘要列——把原本四五條各自獨立的橫幅濃縮成一列標籤 ── */}
           {pendingChips.length > 0 && (

@@ -13,6 +13,19 @@ export default function NotesPage({
   // 表單預設值
   const D0 = { type:"receivable", person:"", amt:"", desc:"", date:TODAY, note:"", installTotal:0, installAmt:"", installPaid:0, installPaidAmt:0 };
 
+  /* ── 已結清往來帳：可以勾選要刪除哪幾筆，或一次全選刪除 ── */
+  const [selSettled, setSelSettled] = useState([]);
+  const toggleSelSettled = (id) => setSelSettled(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const settledList = debts.filter(d => d.settled);
+  const allSettledSelected = settledList.length > 0 && selSettled.length === settledList.length;
+  const deleteSelSettled = () => {
+    if (!selSettled.length) return;
+    confirm(`${tr("確定刪除選取的")} ${selSettled.length} ${tr("筆已結清往來帳？")}`, () => {
+      upd("debts", p => p.filter(x => !selSettled.includes(x.id)));
+      setSelSettled([]);
+    });
+  };
+
   return (
     <>
       {tab === "notes" && (
@@ -83,14 +96,29 @@ export default function NotesPage({
             );
           })}
           
-          {debts.filter(d => d.settled).length > 0 && (
+          {settledList.length > 0 && (
             <div>
-              <SH title="已結清 ✅" />
-              {debts.filter(d => d.settled).map(d => (
-                <Card key={d.id} style={{ padding:"12px 16px", marginBottom:6, opacity:.4 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <SH title={`${tr("已結清")} ✅`} />
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <button onClick={() => setSelSettled(allSettledSelected ? [] : settledList.map(d => d.id))} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:11, fontWeight:700 }}>
+                    {allSettledSelected ? tr("取消全選") : tr("全選")}
+                  </button>
+                  {selSettled.length > 0 && (
+                    <button onClick={deleteSelSettled} style={{ background:"none", border:"none", cursor:"pointer", color:C.danger, fontSize:11, fontWeight:700 }}>
+                      🗑 {tr("刪除")}（{selSettled.length}）
+                    </button>
+                  )}
+                </div>
+              </div>
+              {settledList.map(d => (
+                <Card key={d.id} style={{ padding:"12px 16px", marginBottom:6, opacity: selSettled.includes(d.id) ? 0.9 : 0.4, border: selSettled.includes(d.id) ? `1px solid ${C.danger}88` : undefined }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div><span style={{ fontSize:14, fontWeight:700, color:C.text }}>{d.person}</span><span style={{ fontSize:12, color:C.muted, marginLeft:8 }}>{d.desc}</span></div>
-                    <div style={{ display:"flex", gap:8, alignItems:"center" }}><span style={{ fontWeight:900, fontSize:13, color:C.muted }}>{fmt(d.amt)}</span><button onClick={() => confirm(`${tr("確定刪除")}「${d.person} ${d.desc||""}」${tr("這筆往來帳？")}`, () => upd("debts", p => p.filter(x => x.id !== d.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button></div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                      <input type="checkbox" checked={selSettled.includes(d.id)} onChange={() => toggleSelSettled(d.id)} style={{ width:16, height:16, flexShrink:0, cursor:"pointer" }} />
+                      <div style={{ minWidth:0 }}><span style={{ fontSize:14, fontWeight:700, color:C.text }}>{d.person}</span><span style={{ fontSize:12, color:C.muted, marginLeft:8 }}>{d.desc}</span></div>
+                    </div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}><span style={{ fontWeight:900, fontSize:13, color:C.muted }}>{fmt(d.amt)}</span><button onClick={() => confirm(`${tr("確定刪除")}「${d.person} ${d.desc||""}」${tr("這筆往來帳？")}`, () => upd("debts", p => p.filter(x => x.id !== d.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button></div>
                   </div>
                 </Card>
               ))}
