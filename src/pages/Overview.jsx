@@ -80,83 +80,78 @@ export default function OverviewPage({
             {hideAmounts && !peek && <div style={{ fontSize:10, color:C.muted, textAlign:"center", marginTop:6 }}>👁️ {tr("點數字看 3 秒")}</div>}
           </div>
 
-          {(() => {
-            // 如果設定了「計畫起始月份」而且還沒到，這個月先不顯示生活費安全水位（避免規劃還沒開始就被判定超支/安全）
-            if (allocSettings.planStartYm && curYm < allocSettings.planStartYm) return null;
-            const g = guiltFreeGauge;
-            const isSafe = g.hasAllocated && g.remaining >= 0;
-            const dayOfMonth = new Date(TODAY).getDate();
-            const isMonthEnd = dayOfMonth >= 25;
-            return (
-              <div style={{
-                margin:"0 16px 12px", padding:22, borderRadius:24,
-                background: isSafe ? `linear-gradient(160deg, ${C.income}1c, ${C.card})` : g.hasAllocated ? `linear-gradient(160deg, ${C.expense}14, ${C.card})` : C.card,
-                boxShadow:`0 1px 0 ${C.border}`
-              }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:34, height:34, borderRadius:11, background:`${isSafe?C.income:C.text}14`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🍜</div>
-                    <span style={{ fontSize:13, fontWeight:700, color:C.textSub }}>{tr("生活區安全水位")}</span>
+          {/* ── 生活區安全水位 + 生活費連續達標：左右各半，直的分成兩欄，不再各佔一整排 ── */}
+          <div style={{ display:"flex", gap:10, margin:"0 16px 12px", alignItems:"stretch" }}>
+            {(() => {
+              // 如果設定了「計畫起始月份」而且還沒到，這個月先不顯示生活費安全水位（避免規劃還沒開始就被判定超支/安全）
+              if (allocSettings.planStartYm && curYm < allocSettings.planStartYm) return <div style={{ flex:1 }} />;
+              const g = guiltFreeGauge;
+              const isSafe = g.hasAllocated && g.remaining >= 0;
+              const dayOfMonth = new Date(TODAY).getDate();
+              const isMonthEnd = dayOfMonth >= 25;
+              return (
+                <div style={{
+                  flex:1, minWidth:0, padding:"14px 14px", borderRadius:20,
+                  background: isSafe ? `linear-gradient(160deg, ${C.income}1c, ${C.card})` : g.hasAllocated ? `linear-gradient(160deg, ${C.expense}14, ${C.card})` : C.card,
+                  boxShadow:`0 1px 0 ${C.border}`, display:"flex", flexDirection:"column"
+                }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:8 }}>
+                    <span style={{ fontSize:14 }}>🍜</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:C.textSub }}>{tr("生活水位")}</span>
                   </div>
-                  {g.hasAllocated && <span style={{ fontSize:10, fontWeight:700, color:isSafe?C.income:C.warn, background:`${isSafe?C.income:C.warn}18`, padding:"3px 10px", borderRadius:20 }}>{isSafe?tr("可以放心花"):tr("已經超支")}</span>}
-                </div>
-                <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", color:isSafe?C.income:g.remaining<0?C.expense:C.text, ...maskStyle }}>{g.remaining>=0?"":"−"}{fmt(Math.abs(g.remaining))}</div>
-                <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>{tr("已花")} {fmt(g.spentSoFar)} ／ {tr("生活費預算")} {fmt(g.livingBudget)}</div>
-                {g.hasAllocated && <div style={{ fontSize:10, fontWeight:700, color:C.teal, marginTop:8 }}>🧠 {tr("本月分流已套用")}</div>}
-                {!g.hasAllocated && (
-                  <>
-                    <div style={{ fontSize:12, color:C.muted, marginTop:10, lineHeight:1.5 }}>{tr("還沒套用過本月分流建議，先點上面「🧠 智慧分流」規劃一下吧")}</div>
-                    <button onClick={() => setModal("allocEngine")} style={{ width:"100%", marginTop:10, padding:"11px 16px", borderRadius:16, background:C.accent, border:"none", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"-0.01em" }}>🧠 {tr("前往智慧分流")}</button>
-                  </>
-                )}
-                {isMonthEnd && g.hasAllocated && g.remaining > 0 && (
-                  <button onClick={() => setModal("sweepMoney")} style={{ width:"100%", marginTop:16, padding:"13px 16px", borderRadius:16, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"-0.01em" }}>🧹 {tr("一鍵掃入")} {fmt(g.remaining)} → {tr("願望池／存錢區")}</button>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* ── 生活費連續達標：濃縮成一小格——標題數字同一行、里程碑縮成一排小圓點、獎勵文字一行帶過，不佔大版面 ── */}
-          {livingStreak.months.length > 0 && (
-            <div style={{ margin:"0 16px 12px", padding:"12px 14px", borderRadius:18, background:C.card }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                <div style={{ display:"flex", alignItems:"baseline", gap:6, minWidth:0 }}>
-                  <span style={{ fontSize:12 }}>🔥</span>
-                  {livingStreak.current > 0 ? (
-                    <span style={{ fontSize:13, fontWeight:700, color:C.text, whiteSpace:"nowrap" }}>{livingStreak.current} <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>{tr("個月沒超支")}</span></span>
-                  ) : (
-                    <span style={{ fontSize:11, color:C.muted }}>{tr("上個月生活費超支了，這個月開始重新累積連續紀錄吧！")}</span>
+                  <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", color:isSafe?C.income:g.remaining<0?C.expense:C.text, ...maskStyle }}>{g.remaining>=0?"":"−"}{fmt(Math.abs(g.remaining))}</div>
+                  <div style={{ fontSize:10, color:C.muted, marginTop:4, lineHeight:1.5 }}>{tr("已花")} {fmt(g.spentSoFar)} ／ {fmt(g.livingBudget)}</div>
+                  {g.hasAllocated && <div style={{ fontSize:9, fontWeight:700, color:isSafe?C.income:C.warn, marginTop:6 }}>{isSafe?`✅ ${tr("可以放心花")}`:`⚠️ ${tr("已經超支")}`}</div>}
+                  <div style={{ flex:1 }} />
+                  {!g.hasAllocated && (
+                    <button onClick={() => setModal("allocEngine")} style={{ width:"100%", marginTop:10, padding:"9px 8px", borderRadius:14, background:C.accent, border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>🧠 {tr("智慧分流")}</button>
+                  )}
+                  {isMonthEnd && g.hasAllocated && g.remaining > 0 && (
+                    <button onClick={() => setModal("sweepMoney")} style={{ width:"100%", marginTop:10, padding:"9px 8px", borderRadius:14, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>🧹 {tr("掃入")} {fmt(g.remaining)}</button>
                   )}
                 </div>
-                <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+              );
+            })()}
+
+            {/* ── 生活費連續達標：跟左邊生活水位各半，一樣濃縮成小格 ── */}
+            {livingStreak.months.length > 0 && (
+              <div style={{ flex:1, minWidth:0, padding:"14px 14px", borderRadius:20, background:C.card, display:"flex", flexDirection:"column" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:8 }}>
+                  <span style={{ fontSize:14 }}>🔥</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:C.textSub }}>{tr("連續達標")}</span>
+                </div>
+                {livingStreak.current > 0 ? (
+                  <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", color:C.text }}>{livingStreak.current}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> {tr("個月")}</span></div>
+                ) : (
+                  <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{tr("這個月開始重新累積")}</div>
+                )}
+                <div style={{ display:"flex", gap:4, marginTop:8, flexWrap:"wrap" }}>
                   {STREAK_MILESTONES.map(m => {
                     const achieved = livingStreak.longest >= m;
                     const isNext = m === nextMilestone;
                     return (
-                      <div key={m} title={`${m}${tr("個月")}`} style={{ width:20, height:20, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, background: achieved ? `${C.teal}22` : isNext ? `${C.accent}18` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
+                      <div key={m} title={`${m}${tr("個月")}`} style={{ width:18, height:18, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, background: achieved ? `${C.teal}22` : isNext ? `${C.accent}18` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
                         {achieved ? "🏅" : m}
                       </div>
                     );
                   })}
                 </div>
-              </div>
-              {nextMilestone && (
-                <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
-                  <span style={{ color:C.muted, flexShrink:0 }}>🎁 {tr("再")}{nextMilestone - livingStreak.current}{tr("個月解鎖")}：</span>
-                  {editingMilestone === nextMilestone ? (
+                <div style={{ flex:1 }} />
+                {nextMilestone && (
+                  editingMilestone === nextMilestone ? (
                     <input autoFocus value={milestoneDraft} onChange={e => setMilestoneDraft(e.target.value)}
                       onBlur={() => { setStreakReward(nextMilestone, milestoneDraft.trim() || streakRewards[nextMilestone]); setEditingMilestone(null); }}
                       onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                      style={{ ...iSt, fontSize:11, padding:"4px 6px", flex:1 }} />
+                      style={{ ...iSt, fontSize:10, padding:"4px 6px", marginTop:8 }} />
                   ) : (
-                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ color:C.text, fontWeight:600, cursor:"pointer", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
-                      {streakRewards[nextMilestone]} <span style={{ fontSize:9, color:C.muted }}>✏️</span>
+                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ fontSize:10, color:C.muted, marginTop:8, cursor:"pointer", lineHeight:1.4 }}>
+                      🎁 {tr("再")}{nextMilestone - livingStreak.current}{tr("個月")} <span style={{ fontSize:9 }}>✏️</span>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  )
+                )}
+              </div>
+            )}
+          </div>
 
           {/* ── Tier 2：待處理摘要列——把原本四五條各自獨立的橫幅濃縮成一列標籤 ── */}
           {pendingChips.length > 0 && (

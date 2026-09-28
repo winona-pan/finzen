@@ -277,7 +277,7 @@ export default function InvestPage({
                                   </div>
                                 </div>
                                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, ...maskStyle }}>
-                                  <span>{st.totalSh}股 · 均 {fmt(Math.round(st.avgCost || 0), stCur)}/股</span>
+                                  <span>{st.totalSh}股 · 均 {fmtPrice(st.avgCost || 0, stCur)}/股</span>
                                   {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmtPrice(st.curPrice, stCur)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost, stCur)}</span>}
                                 </div>
                               </div>
