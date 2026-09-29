@@ -1,105 +1,105 @@
 {
   "_meta": {
-    "last_updated": "2026-09-29 10:34:36",
+    "last_updated": "2026-09-29 17:01:34",
     "tw_count": 5,
     "us_count": 2,
-    "institutional_date": "20260924"
+    "institutional_date": "20260929"
   },
   "0050": {
-    "price": 111.85,
+    "price": 111.3,
     "high": 112.25,
-    "low": 111.5999984741211,
-    "vol": 31314927,
-    "chgPct": -0.49,
+    "low": 111.05000305175781,
+    "vol": 110133560,
+    "chgPct": -0.98,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
     "institutional": {
-      "foreign": 10477,
-      "trust": 4728,
-      "dealer": 4211
+      "foreign": -344,
+      "trust": 2184,
+      "dealer": 1270
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "0050.TW": {
-    "price": 111.85,
+    "price": 111.3,
     "high": 112.25,
-    "low": 111.5999984741211,
-    "vol": 31314927,
-    "chgPct": -0.49,
+    "low": 111.05000305175781,
+    "vol": 110133560,
+    "chgPct": -0.98,
     "name": "YUANTA SECURITIES INV TRUST CO ",
     "market": "TW",
     "institutional": {
-      "foreign": 10477,
-      "trust": 4728,
-      "dealer": 4211
+      "foreign": -344,
+      "trust": 2184,
+      "dealer": 1270
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "2330": {
-    "price": 2485.0,
+    "price": 2475.0,
     "high": 2495.0,
     "low": 2475.0,
-    "vol": 10417629,
-    "chgPct": 0.4,
+    "vol": 25532143,
+    "chgPct": 0.0,
     "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
     "market": "TW",
     "institutional": {
-      "foreign": 243,
-      "trust": 185,
-      "dealer": 176
+      "foreign": 117,
+      "trust": 101,
+      "dealer": -6
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "2330.TW": {
-    "price": 2485.0,
+    "price": 2475.0,
     "high": 2495.0,
     "low": 2475.0,
-    "vol": 10417629,
-    "chgPct": 0.4,
+    "vol": 25532143,
+    "chgPct": 0.0,
     "name": "TAIWAN SEMICONDUCTOR MANUFACTUR",
     "market": "TW",
     "institutional": {
-      "foreign": 243,
-      "trust": 185,
-      "dealer": 176
+      "foreign": 117,
+      "trust": 101,
+      "dealer": -6
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "009816": {
-    "price": 16.5,
+    "price": 16.4,
     "high": 16.549999237060547,
-    "low": 16.479999542236328,
-    "vol": 47025618,
-    "chgPct": -0.42,
+    "low": 16.399999618530273,
+    "vol": 124450454,
+    "chgPct": -1.03,
     "name": "KGI SECURITIES INVT TST CO LTD ",
     "market": "TW",
     "institutional": {
-      "foreign": -33613,
+      "foreign": -78240,
       "trust": 0,
-      "dealer": 0
+      "dealer": -50
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "009816.TW": {
-    "price": 16.5,
+    "price": 16.4,
     "high": 16.549999237060547,
-    "low": 16.479999542236328,
-    "vol": 47025618,
-    "chgPct": -0.42,
+    "low": 16.399999618530273,
+    "vol": 124450454,
+    "chgPct": -1.03,
     "name": "KGI SECURITIES INVT TST CO LTD ",
     "market": "TW",
     "institutional": {
-      "foreign": -33613,
+      "foreign": -78240,
       "trust": 0,
-      "dealer": 0
+      "dealer": -50
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "VOO": {
     "price": 703.61,
@@ -109,7 +109,7 @@
     "chgPct": -0.76,
     "name": "Vanguard S&P 500 ETF",
     "market": "US",
-    "updated": "2026-09-29 10:34"
+    "updated": "2026-09-29 17:01"
   },
   "QQQ": {
     "price": 736.53,
@@ -119,100 +119,100 @@
     "chgPct": -1.07,
     "name": "Invesco QQQ Trust, Series 1",
     "market": "US",
-    "updated": "2026-09-29 10:34"
+    "updated": "2026-09-29 17:01"
   },
   "^TWII": {
-    "price": 47839.12,
+    "price": 47631.96,
     "high": 48045.12890625,
-    "low": 47782.5390625,
+    "low": 47573.08984375,
     "vol": 0,
-    "chgPct": -0.39,
+    "chgPct": -0.82,
     "name": "台灣加權指數",
     "market": "INDEX",
-    "updated": "2026-09-29 10:34"
+    "updated": "2026-09-29 17:01"
   },
   "^SOX": {
     "price": 12465.241,
-    "high": 12665.3974609375,
+    "high": 12665.400390625,
     "low": 12277.41015625,
     "vol": 0,
     "chgPct": -1.61,
     "name": "費城半導體指數",
     "market": "INDEX",
-    "updated": "2026-09-29 10:34"
+    "updated": "2026-09-29 17:01"
   },
   "^GSPC": {
     "price": 7683.69,
     "high": 7724.14990234375,
     "low": 7666.60009765625,
-    "vol": 2909239000,
+    "vol": 5129710000,
     "chgPct": -0.77,
     "name": "S&P 500",
     "market": "INDEX",
-    "updated": "2026-09-29 10:34"
+    "updated": "2026-09-29 17:01"
   },
   "2345": {
-    "price": 1850.0,
+    "price": 1810.0,
     "high": 1880.0,
-    "low": 1845.0,
-    "vol": 1174759,
-    "chgPct": -2.37,
+    "low": 1800.0,
+    "vol": 4153316,
+    "chgPct": -4.49,
     "name": "ACCTON TECHNOLOGY CORP",
     "market": "TW",
     "institutional": {
-      "foreign": 9,
-      "trust": 11,
-      "dealer": -8
+      "foreign": 2,
+      "trust": 54,
+      "dealer": 5
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "2345.TW": {
-    "price": 1850.0,
+    "price": 1810.0,
     "high": 1880.0,
-    "low": 1845.0,
-    "vol": 1174759,
-    "chgPct": -2.37,
+    "low": 1800.0,
+    "vol": 4153316,
+    "chgPct": -4.49,
     "name": "ACCTON TECHNOLOGY CORP",
     "market": "TW",
     "institutional": {
-      "foreign": 9,
-      "trust": 11,
-      "dealer": -8
+      "foreign": 2,
+      "trust": 54,
+      "dealer": 5
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "2368": {
-    "price": 1095.0,
-    "high": 1105.0,
+    "price": 1120.0,
+    "high": 1125.0,
     "low": 1070.0,
-    "vol": 4230054,
-    "chgPct": -0.9,
+    "vol": 8798725,
+    "chgPct": 1.36,
     "name": "GOLD CIRCUIT ELECTRONICS CO",
     "market": "TW",
     "institutional": {
-      "foreign": 204,
-      "trust": 322,
-      "dealer": 242
+      "foreign": 193,
+      "trust": 219,
+      "dealer": 144
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   },
   "2368.TW": {
-    "price": 1095.0,
-    "high": 1105.0,
+    "price": 1120.0,
+    "high": 1125.0,
     "low": 1070.0,
-    "vol": 4230054,
-    "chgPct": -0.9,
+    "vol": 8798725,
+    "chgPct": 1.36,
     "name": "GOLD CIRCUIT ELECTRONICS CO",
     "market": "TW",
     "institutional": {
-      "foreign": 204,
-      "trust": 322,
-      "dealer": 242
+      "foreign": 193,
+      "trust": 219,
+      "dealer": 144
     },
-    "institutional_date": "20260924",
-    "updated": "2026-09-29 10:34"
+    "institutional_date": "20260929",
+    "updated": "2026-09-29 17:01"
   }
 }
