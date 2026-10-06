@@ -392,7 +392,7 @@ export default function TxnModals({
             yearlySchedule={yearlySchedule} yearlyGoalSchedule={yearlyGoalSchedule} yearlyForecastTable={yearlyForecastTable}
             setIncomeSchedule={setIncomeSchedule} setRigidOverride={setRigidOverride} startNextMonthPlan={startNextMonthPlan} getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} accs={accs} setSavingsTarget={setSavingsTarget} removeSavingsTarget={removeSavingsTarget} updateGoalRecurringSchedule={updateGoalRecurringSchedule}
             allocSettings={allocSettings} setAllocSettings={setAllocSettings} curYm={curYm} nextYm={nextYm}
-            close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet}
+            close={close} setModal={setModal} C={C} iSt={iSt} fmt={fmt} Btn={Btn} Sheet={Sheet} tr={tr}
           />
         )}
 
@@ -856,11 +856,11 @@ function SweepMoneySheet({ title, amount, amountLabel, ym, kind, addSweptAmount,
 }
 
 /* ── 年度現金流預測與動態排程：12個月收入矩陣 + 各目標平滑分配排程表 ── */
-function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, setRigidOverride, startNextMonthPlan, getIncomeItems, setIncomeItems, accs, setSavingsTarget, removeSavingsTarget, updateGoalRecurringSchedule, allocSettings, setAllocSettings, curYm, nextYm, close, setModal, C, iSt, fmt, Btn, Sheet }) {
+function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, setIncomeSchedule, setRigidOverride, startNextMonthPlan, getIncomeItems, setIncomeItems, accs, setSavingsTarget, removeSavingsTarget, updateGoalRecurringSchedule, allocSettings, setAllocSettings, curYm, nextYm, close, setModal, C, iSt, fmt, Btn, Sheet, tr: trProp }) {
   const [expandedYm, setExpandedYm] = useState(null);
   const [draftItems, setDraftItems] = useState([]);
   const [editingChip, setEditingChip] = useState(null); // `${goalId}_${ym}`
-  const [editingRigid, setEditingRigid] = useState(null); // ym
+  const [showHelp, setShowHelp] = useState(false);
   const matrixRef = useRef(null);
   const goalScheduleRef = useRef(null);
 
@@ -876,151 +876,207 @@ function YearlyForecastSheet({ yearlySchedule, yearlyGoalSchedule, yearlyForecas
   const addDraft = (ym) => { const next = [...draftItems, { id:"inc"+Date.now(), label:"", amt:0, accId:"" }]; setDraftItems(next); saveDraft(ym, next); };
   const removeDraft = (ym, id) => { const next = draftItems.filter(it => it.id!==id); setDraftItems(next); saveDraft(ym, next); };
 
-  return <Sheet title="📅 年度現金流預測排程" onClose={close}>
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:allocSettings.planStartYm && allocSettings.planStartYm>curYm?`${C.teal}12`:C.card, border:`1px solid ${allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal+"44":C.border}`, marginBottom:14 }}>
-      <div style={{ fontSize:12, color:allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal:C.text }}>
-        {allocSettings.planStartYm && allocSettings.planStartYm>curYm
-          ? <>📌 目前從 <strong>{allocSettings.planStartYm}</strong> 開始規劃，{curYm} 不列入</>
-          : "這個月也算在規劃裡"}
-      </div>
-      {allocSettings.planStartYm && allocSettings.planStartYm>curYm ? (
-        <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ padding:"6px 10px", borderRadius:8, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>取消</button>
-      ) : (
-        <button onClick={startNextMonthPlan} style={{ padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>從下個月開始</button>
-      )}
+  /* ── 畫面：上面三格一年總計，中間一份 12 個月清單（每列附一條比例條：固定支出／存目標／剩餘），
+     點一個月展開，在同一個地方改收入、固定支出；下面是各目標每月存多少。
+     以前「收入矩陣」跟「現金流總覽表」是兩份一樣的 12 個月清單，現在合成一份 ── */
+  const tr = trProp || (x => x);
+  const scheduleByYm = Object.fromEntries(yearlySchedule.map(m => [m.ym, m]));
+  const totals = yearlyForecastTable.reduce((t, r) => ({ income:t.income + r.income, sinking:t.sinking + r.sinkingAlloc, overflow:t.overflow + r.overflowAmt }), { income:0, sinking:0, overflow:0 });
+  const isLaterStart = allocSettings.planStartYm && allocSettings.planStartYm > curYm;
+  const colRigid = C.warn, colGoal = "#a78bfa", colLeft = C.teal;
+  const linkBtn = { background:"none", border:"none", padding:"4px 2px", color:C.muted, fontSize:11, fontWeight:600, cursor:"pointer" };
+  const sectionTitle = (text, right) => (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"22px 2px 8px" }}>
+      <span style={{ fontSize:12, fontWeight:800, color:C.textSub }}>{text}</span>{right}
     </div>
-    <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-      已經過去或本月會自動帶入實際收入；還沒到的月份預設參考「去年同月」的實際收入（沒有歷史資料才用固定預設值），點一個月份可以展開填各項收入來源，下面的目標排程會自動用「收入高的月多存、低的月少存」重新平滑分配。
-    </div>
+  );
+  const numInput = (props) => (
+    <input type="text" inputMode="decimal" {...props}
+      style={{ ...iSt, width:92, textAlign:"right", padding:"7px 10px", fontSize:14, fontWeight:800, background:C.bg, border:`1px solid ${C.border}`, ...(props.style||{}) }} />
+  );
+  const digits = (v) => v.replace(/[^\d.]/g, "");
 
-    <div ref={matrixRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月收入矩陣（點月份展開填收入來源）</div>
-    <div style={{ display:"flex", flexDirection:"column", gap:1, marginBottom:20, maxHeight:320, overflowY:"auto" }}>
-      {yearlySchedule.map((m, i) => (
-        <div key={m.ym} style={{ background: m.isCurrent ? `${C.accent}12` : "transparent", borderTop:i>0?`1px solid ${C.border}`:undefined, borderRadius:m.isCurrent?8:0 }}>
-          <button onClick={() => openMonth(m.ym)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background:"none", border:"none", cursor:"pointer" }}>
-            <span style={{ fontSize:12, color:C.text, fontWeight:m.isCurrent?900:400 }}>{m.label}{m.isCurrent?" (本月)":""}</span>
-            {m.actualIncome != null ? (
-              <span style={{ fontSize:13, fontWeight:700, color:C.income }}>{fmt(m.actualIncome)}<span style={{ fontSize:10, color:C.muted, fontWeight:400 }}> 實際</span></span>
-            ) : (
-              <span style={{ fontSize:13, fontWeight:700, color:C.accentL }}>{fmt(m.projected)} <span style={{ fontSize:10, color:C.muted, fontWeight:400 }}>{m.isSeasonalEstimate?"去年同月 ✏️":"預估 ✏️"}</span></span>
-            )}
-          </button>
-          {expandedYm === m.ym && (
-            <div style={{ padding:"0 10px 10px" }}>
-              <div style={{ borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 1fr 20px", gap:4, padding:"5px 6px", background:C.card, fontSize:10, fontWeight:700, color:C.muted }}>
-                  <span>來源</span><span>金額</span><span>帳戶</span><span></span>
-                </div>
-                {draftItems.map(it => (
-                  <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 80px 1fr 20px", gap:4, padding:"5px 6px", borderTop:`1px solid ${C.border}`, alignItems:"center" }}>
-                    <input value={it.label} onChange={e => patchDraft(m.ym, it.id, { label:e.target.value })} placeholder="零用錢/薪水…" style={{ ...iSt, padding:"4px 6px", fontSize:11 }} />
-                    <input type="number" value={it.amt} onChange={e => patchDraft(m.ym, it.id, { amt:+e.target.value||0 })} style={{ ...iSt, padding:"4px 6px", fontSize:11, fontWeight:700 }} />
-                    <select value={it.accId||""} onChange={e => patchDraft(m.ym, it.id, { accId:e.target.value })} style={{ ...iSt, padding:"4px 2px", fontSize:10 }}>
-                      <option value="">—</option>
-                      {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                    <button onClick={() => removeDraft(m.ym, it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12 }}>✕</button>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => addDraft(m.ym)} style={{ width:"100%", marginTop:6, padding:6, borderRadius:8, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>＋ 新增收入來源</button>
-            </div>
-          )}
+  return <Sheet title={`📅 ${tr("年度預測")}`} onClose={close}>
+    {/* ── 一年總計 ── */}
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", padding:"14px 6px", borderRadius:18, background:C.card }}>
+      {[
+        { label:tr("12 個月收入"), amt:totals.income, color:C.text },
+        { label:tr("存進目標"), amt:totals.sinking, color:colGoal },
+        { label:tr("剩餘"), amt:totals.overflow, color:colLeft },
+      ].map((x, i) => (
+        <div key={x.label} style={{ padding:"0 8px", minWidth:0, textAlign:"center", borderLeft:i>0?`1px solid ${C.border}`:"none" }}>
+          <div style={{ fontSize:10, color:C.muted, fontWeight:700 }}>{x.label}</div>
+          <div style={{ fontSize:13, fontWeight:900, color:x.color, marginTop:4, letterSpacing:"-0.02em", wordBreak:"break-all" }}>{fmt(x.amt)}</div>
         </div>
       ))}
     </div>
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:8 }}>12 個月現金流總覽（① 總流入 ② 剛性扣除 ③ 專案存錢 ④ 溢流／剩餘資金）</div>
-    <div style={{ overflowX:"auto", marginBottom:20 }}>
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-        <thead>
-          <tr style={{ background:C.card }}>
-            {["月份","①流入","②剛性扣除","③專案存錢","④剩餘資金"].map(h => (
-              <th key={h} style={{ padding:"6px 8px", textAlign:"right", fontWeight:700, color:C.muted, whiteSpace:"nowrap" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {yearlyForecastTable.map(row => (
-            <tr key={row.ym} style={{ background: row.isCurrent ? `${C.accent}12` : "transparent", borderTop:`1px solid ${C.border}` }}>
-              <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", fontWeight:row.isCurrent?900:400, color:C.text, whiteSpace:"nowrap", cursor:"pointer", textDecoration:"underline", textDecorationStyle:"dotted", textDecorationColor:C.muted }}>{row.label}</td>
-              <td onClick={() => jumpToMonth(row.ym)} style={{ padding:"6px 8px", textAlign:"right", color:C.income, cursor:"pointer" }}>{fmt(row.income)} ✏️</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", color:C.expense, cursor:"pointer" }} onClick={() => editingRigid !== row.ym && setEditingRigid(row.ym)}>
-                {editingRigid === row.ym ? (
-                  <input autoFocus type="number" defaultValue={row.rigid}
-                    onBlur={e => { setRigidOverride(row.ym, e.target.value === "" ? null : +e.target.value); setEditingRigid(null); }}
-                    onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                    style={{ ...iSt, width:70, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"right" }} />
-                ) : (
-                  <>−{fmt(row.rigid)} {row.isRigidOverride ? "✏️" : ""}</>
-                )}
-              </td>
-              <td onClick={jumpToGoalSchedule} style={{ padding:"6px 8px", textAlign:"right", color:C.accentL, cursor:"pointer" }}>{fmt(row.sinkingAlloc)} ✏️</td>
-              <td style={{ padding:"6px 8px", textAlign:"right", color:C.teal }}>{fmt(row.overflowAmt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <div style={{ fontSize:10, color:C.muted, marginBottom:8 }}>👆 點「月份」「①流入」可以跳回收入矩陣編輯；點「②剛性扣除」可以直接覆寫那個月的金額（清空恢復自動計算）；點「③專案存錢」會跳到下面各專案的排程，那邊格子也能直接點著改；④是income−②−③算出來的餘數，不能單獨改，想讓它變多就去調整①②③。</div>
-    <div style={{ fontSize:10, color:C.muted, marginBottom:20, lineHeight:1.6 }}>
-      ②剛性扣除＝固定投資＋生活費（生活費已經包含訂閱與基本開銷在內，不會另外重複扣，都可以在設定頁調整預設值）；③是所有專案存錢池共用同一份月剩餘資金，依優先級分配，細分請看下方各專案排程；④把「自由願望池」跟「剩餘資金」合併呈現。
-    </div>
+    {/* ── 12 個月 ── */}
+    {sectionTitle(tr("每個月"), (
+      <span style={{ display:"flex", gap:10, fontSize:10, color:C.muted }}>
+        {[[colRigid, tr("固定支出")], [colGoal, tr("目標")], [colLeft, tr("剩餘")]].map(([c, l]) => (
+          <span key={l} style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:7, height:7, borderRadius:"50%", background:c }} />{l}</span>
+        ))}
+      </span>
+    ))}
+    <div ref={matrixRef} style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
+      {yearlyForecastTable.map((row, i) => {
+        const m = scheduleByYm[row.ym] || {};
+        const open = expandedYm === row.ym;
+        const base = Math.max(row.income, row.rigid + row.sinkingAlloc, 1);
+        const tag = m.actualIncome != null ? tr("實際") : m.isSeasonalEstimate ? tr("去年同月") : tr("預估");
+        return (
+          <div key={row.ym} style={{ borderTop:i>0?`1px solid ${C.border}`:"none", background:open?C.bg:"transparent" }}>
+            <button onClick={() => openMonth(row.ym)} style={{ width:"100%", display:"grid", gridTemplateColumns:"64px 1fr auto", gap:12, alignItems:"center", padding:"12px 14px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
+              <span style={{ fontSize:13, fontWeight:row.isCurrent?900:700, color:row.isCurrent?C.accentL:C.text }}>{row.label.split("/")[1]}{tr("月")}<span style={{ display:"block", fontSize:9, fontWeight:600, color:C.muted }}>{row.label.split("/")[0]}{row.isCurrent?` · ${tr("本月")}`:""}</span></span>
+              <div style={{ display:"flex", height:8, borderRadius:4, overflow:"hidden", background:C.border, gap:1 }}>
+                {[[row.rigid, colRigid], [row.sinkingAlloc, colGoal], [row.overflowAmt, colLeft]].filter(([v]) => v > 0).map(([v, c], k) => <div key={k} style={{ width:`${v / base * 100}%`, background:c }} />)}
+              </div>
+              <span style={{ textAlign:"right" }}>
+                <span style={{ display:"block", fontSize:13, fontWeight:800, color:C.text }}>{fmt(row.income)}</span>
+                <span style={{ display:"block", fontSize:9, color:C.muted }}>{tag} {open?"▲":"▼"}</span>
+              </span>
+            </button>
+            {open && (
+              <div style={{ padding:"0 14px 14px" }}>
+                {/* 收入來源 */}
+                <div style={{ fontSize:10, fontWeight:700, color:C.muted, margin:"2px 0 6px" }}>{tr("收入來源")}{m.actualIncome != null ? `・${tr("已記帳")} ${fmt(m.actualIncome)}` : ""}</div>
+                <div style={{ borderRadius:12, background:C.card, overflow:"hidden" }}>
+                  {draftItems.map(it => (
+                    <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 92px", gap:8, padding:"8px 10px", borderBottom:`1px solid ${C.border}`, alignItems:"center" }}>
+                      <div style={{ minWidth:0 }}>
+                        <input value={it.label} onChange={e => patchDraft(row.ym, it.id, { label:e.target.value })} placeholder={tr("薪水、零用錢…")} style={{ width:"100%", background:"none", border:"none", outline:"none", color:C.text, fontSize:12, fontWeight:700, padding:0 }} />
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:2 }}>
+                          <select value={it.accId||""} onChange={e => patchDraft(row.ym, it.id, { accId:e.target.value })} style={{ background:"none", border:"none", outline:"none", color:C.muted, fontSize:10, padding:0, maxWidth:"100%" }}>
+                            <option value="">{tr("存入帳戶（選填）")}</option>
+                            {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>→ {a.name}</option>)}
+                          </select>
+                          <button onClick={() => removeDraft(row.ym, it.id)} style={{ ...linkBtn, fontSize:10, padding:0, marginLeft:"auto" }}>{tr("刪除")}</button>
+                        </div>
+                      </div>
+                      {numInput({ value:it.amt || "", onChange:e => patchDraft(row.ym, it.id, { amt:+digits(e.target.value)||0 }), style:{ fontSize:13, padding:"6px 8px" } })}
+                    </div>
+                  ))}
+                  <button onClick={() => addDraft(row.ym)} style={{ width:"100%", padding:"9px 10px", background:"none", border:"none", color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer", textAlign:"left" }}>＋ {tr("新增收入")}</button>
+                </div>
 
-    <div ref={goalScheduleRef} style={{ fontSize:12, fontWeight:700, color:C.muted, marginBottom:2 }}>各專案存錢池的排程（🧠＝手動套用的單月數字、🔁＝定期定額算出來的；點 🔁 格子直接改，等於改「從這個月起」的定期定額排程，跟目標編輯頁排的時間表是同一份，改哪邊都會同步；點 🧠 格子改的只是那一個月的例外；已套用的可以點右上角✕移除）</div>
-    {yearlyGoalSchedule.length === 0 ? (
-      <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有「專案存錢池」類型的目標</div>
-    ) : yearlyGoalSchedule.map(g => (
-      <div key={g.id} style={{ padding:14, borderRadius:12, background:C.card, border:`1px solid ${C.border}`, marginTop:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{g.emoji} {g.name}</span>
-          <span style={{ fontSize:11, color:C.muted }}>還差 {fmt(g.totalNeeded)}・剩 {g.monthsLeft} 個月</span>
-        </div>
-        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
-          {g.perMonth.map(m => {
-            const chipKey = `${g.id}_${m.ym}`;
-            const isEditing = editingChip === chipKey;
-            const highlighted = m.isApplied || m.isRecurring;
-            return (
-              <div key={m.ym} style={{ position:"relative", flex:"0 0 auto", minWidth:56, textAlign:"center", padding:"6px 4px", borderRadius:8, background:m.isApplied?`${C.teal}18`:m.isRecurring?`${C.accentL}18`:C.bg, border:m.isApplied?`1px solid ${C.teal}44`:m.isRecurring?`1px solid ${C.accentL}44`:"1px solid transparent" }}>
-                {m.isApplied && !isEditing && (
-                  <button onClick={(e) => { e.stopPropagation(); const accId = g.accIds?.[0] || null; const bucketId = !accId ? (g.bucketIds?.[0] || null) : null; removeSavingsTarget(m.ym, g.id); }}
-                    style={{ position:"absolute", top:-6, right:-6, width:16, height:16, borderRadius:"50%", background:C.expense, color:"#fff", border:"none", fontSize:9, lineHeight:"16px", padding:0, cursor:"pointer" }}>✕</button>
-                )}
-                <div onClick={() => !isEditing && setEditingChip(chipKey)} style={{ cursor:"pointer" }}>
-                  <div style={{ fontSize:9, color:C.muted }}>{m.label}{m.isApplied?" 🧠":m.isRecurring?" 🔁":""}</div>
-                  {isEditing ? (
-                    <input
-                      autoFocus type="number" defaultValue={m.alloc}
-                      onBlur={e => {
-                        const val = +e.target.value || 0;
-                        if (m.isRecurring && !m.isApplied && g.recurringMode !== "shares") {
-                          // 這個月的數字是「定期定額」算出來的（不是股數模式，股數模式要換算股價比較複雜，改回目標設定頁排時間表比較準）：
-                          // 直接改這裡等於改排程「從這個月起」的金額，跟目標編輯頁排的時間表是同一份資料
-                          updateGoalRecurringSchedule(g.id, m.ym, val);
-                        } else {
-                          const accId = g.accIds?.[0] || null;
-                          const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
-                          setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
-                        }
-                        setEditingChip(null);
-                      }}
-                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                      style={{ ...iSt, width:48, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
-                    />
-                  ) : (
-                    <div style={{ fontSize:11, fontWeight:700, color:m.isApplied?C.teal:m.isRecurring?C.accentL:C.accentL }}>{fmt(m.alloc)}</div>
-                  )}
+                {/* 這個月的錢怎麼分 */}
+                <div style={{ marginTop:10, borderRadius:12, background:C.card, overflow:"hidden" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 10px", borderBottom:`1px solid ${C.border}` }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background:colRigid, flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{tr("固定支出")}</div>
+                      <div style={{ fontSize:10, color:C.muted }}>
+                        {tr("投資＋生活費")}
+                        {row.isRigidOverride && <>・{tr("已手動修改")} <button onClick={() => setRigidOverride(row.ym, null)} style={{ ...linkBtn, fontSize:10, padding:0, color:C.accentL }}>{tr("恢復自動")}</button></>}
+                      </div>
+                    </div>
+                    {numInput({ key:`${row.ym}_${row.rigid}`, defaultValue:row.rigid, onChange:e => { e.target.value = digits(e.target.value); },
+                      onBlur:e => { const v = e.target.value; if (v === "" ? row.isRigidOverride : +v !== row.rigid) setRigidOverride(row.ym, v === "" ? null : +v); },
+                      onKeyDown:e => { if (e.key === "Enter") e.target.blur(); }, style:{ fontSize:13, padding:"6px 8px" } })}
+                  </div>
+                  <button onClick={jumpToGoalSchedule} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 10px", background:"none", border:"none", borderBottom:`1px solid ${C.border}`, cursor:"pointer", textAlign:"left" }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background:colGoal, flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{tr("存進目標")}</div>
+                      <div style={{ fontSize:10, color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        {row.sinkingBreakdown?.length ? row.sinkingBreakdown.map(x => `${x.emoji||""}${x.name} ${fmt(x.alloc)}`).join("・") : tr("這個月沒有")}
+                      </div>
+                    </div>
+                    <span style={{ fontSize:13, fontWeight:800, color:C.text }}>{fmt(row.sinkingAlloc)}</span>
+                    <span style={{ fontSize:10, color:C.muted }}>↓</span>
+                  </button>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px", background:`${colLeft}12` }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background:colLeft, flexShrink:0 }} />
+                    <div style={{ flex:1, fontSize:12, fontWeight:800, color:colLeft }}>{tr("剩餘")}</div>
+                    <span style={{ fontSize:14, fontWeight:900, color:colLeft }}>{fmt(row.overflowAmt)}</span>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-    ))}
+            )}
+          </div>
+        );
+      })}
+    </div>
 
-    <button onClick={() => { close(); setTimeout(() => setModal("allocEngine"), 50); }} style={{ width:"100%", marginTop:8, padding:12, borderRadius:12, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:900, fontSize:13, cursor:"pointer" }}>
-      ← 切換回當月執行模式
-    </button>
+    {/* ── 各目標每月存多少 ── */}
+    <div ref={goalScheduleRef}>
+      {sectionTitle(tr("各目標每月存多少"), <span style={{ fontSize:10, color:C.muted }}>{tr("點數字可改")}</span>)}
+    </div>
+    <div style={{ display:"flex", gap:12, fontSize:10, color:C.muted, margin:"-2px 2px 8px" }}>
+      <span><span style={{ color:C.accentL, fontWeight:800 }}>🔁</span> {tr("定期定額，改了會從那個月起都改")}</span>
+      <span><span style={{ color:C.teal, fontWeight:800 }}>🧠</span> {tr("已套用，只改那個月")}</span>
+    </div>
+    {yearlyGoalSchedule.length === 0 ? (
+      <div style={{ fontSize:11, color:C.muted, padding:"12px 14px", borderRadius:16, background:C.card }}>{tr("還沒有「專案存錢池」類型的目標")}</div>
+    ) : (
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {yearlyGoalSchedule.map(g => (
+          <div key={g.id} style={{ padding:"12px 14px", borderRadius:16, background:C.card }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:10 }}>
+              <span style={{ fontSize:13, fontWeight:800, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.emoji} {g.name}</span>
+              <span style={{ fontSize:10, color:C.muted, flexShrink:0 }}>{tr("還差")} {fmt(g.totalNeeded)}・{tr("剩")} {g.monthsLeft} {tr("個月")}</span>
+            </div>
+            <div style={{ display:"flex", gap:6, overflowX:"auto", paddingTop:6, paddingBottom:2 }}>
+              {g.perMonth.map(m => {
+                const chipKey = `${g.id}_${m.ym}`;
+                const isEditing = editingChip === chipKey;
+                const tint = m.isApplied ? C.teal : m.isRecurring ? C.accentL : null;
+                return (
+                  <div key={m.ym} style={{ position:"relative", flex:"0 0 auto", minWidth:58, textAlign:"center", padding:"7px 4px", borderRadius:10, background:tint ? `${tint}18` : C.bg }}>
+                    {m.isApplied && !isEditing && (
+                      <button onClick={(e) => { e.stopPropagation(); removeSavingsTarget(m.ym, g.id); }} title={tr("移除套用")}
+                        style={{ position:"absolute", top:-6, right:-4, width:16, height:16, borderRadius:"50%", background:C.surface || C.card, color:C.muted, border:`1px solid ${C.border}`, fontSize:9, lineHeight:"14px", padding:0, cursor:"pointer" }}>✕</button>
+                    )}
+                    <div onClick={() => !isEditing && setEditingChip(chipKey)} style={{ cursor:"pointer" }}>
+                      <div style={{ fontSize:9, color:C.muted }}>{m.label.split("/")[1]}{tr("月")}{m.isApplied?" 🧠":m.isRecurring?" 🔁":""}</div>
+                      {isEditing ? (
+                        <input
+                          autoFocus type="text" inputMode="decimal" defaultValue={m.alloc}
+                          onChange={e => { e.target.value = digits(e.target.value); }}
+                          onBlur={e => {
+                            const val = +e.target.value || 0;
+                            if (m.isRecurring && !m.isApplied && g.recurringMode !== "shares") {
+                              // 這個月的數字是「定期定額」算出來的（不是股數模式，股數模式要換算股價比較複雜，改回目標設定頁排時間表比較準）：
+                              // 直接改這裡等於改排程「從這個月起」的金額，跟目標編輯頁排的時間表是同一份資料
+                              updateGoalRecurringSchedule(g.id, m.ym, val);
+                            } else {
+                              const accId = g.accIds?.[0] || null;
+                              const bucketId = !accId ? (g.bucketIds?.[0] || null) : null;
+                              setSavingsTarget(m.ym, accId, bucketId, val, `年度預測手動調整：${g.name}`, g.id);
+                            }
+                            setEditingChip(null);
+                          }}
+                          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{ ...iSt, width:50, padding:"2px 4px", fontSize:11, fontWeight:700, textAlign:"center" }}
+                        />
+                      ) : (
+                        <div style={{ fontSize:12, fontWeight:800, color:tint || C.text, marginTop:2 }}>{fmt(m.alloc)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* ── 次要設定 ── */}
+    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"2px 14px", marginTop:18 }}>
+      <button onClick={() => { close(); setTimeout(() => setModal("allocEngine"), 50); }} style={{ ...linkBtn, color:C.accentL }}>← {tr("回智慧分流")}</button>
+      {isLaterStart
+        ? <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ ...linkBtn, color:C.teal }}>📌 {tr("從")} {allocSettings.planStartYm} {tr("開始")}・{tr("取消")}</button>
+        : <button onClick={startNextMonthPlan} style={linkBtn}>{tr("從下個月開始規劃")}</button>}
+      <button onClick={() => setShowHelp(p => !p)} style={linkBtn}>{tr("說明")} {showHelp?"▲":"▼"}</button>
+    </div>
+    {showHelp && (
+      <div style={{ fontSize:11, color:C.muted, lineHeight:1.7, marginTop:8, padding:"12px 14px", borderRadius:14, background:C.card }}>
+        <div style={{ marginBottom:6 }}>{tr("已過去和本月用實際記帳的收入；之後的月份參考去年同月，沒有資料就用預設收入。點月份可以改那個月的收入來源。")}</div>
+        <div style={{ marginBottom:6 }}>{tr("固定支出＝投資＋生活費，可以單月手動改，按「恢復自動」回到預設。")}</div>
+        <div>{tr("每個月的收入扣掉固定支出後，依目標優先級分給各目標，剩下的就是剩餘。")}</div>
+      </div>
+    )}
   </Sheet>;
 }
