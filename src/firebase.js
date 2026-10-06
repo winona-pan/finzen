@@ -122,26 +122,23 @@ export function watchAuth(cb) {
   return onAuthStateChanged(auth, cb);
 }
 
-/* 讀取這個帳號雲端存的完整資料，沒有的話回傳 null */
+/* 讀取這個帳號雲端存的完整資料：回傳 { data, updatedAt }，雲端還沒有資料時 data 是 null。
+   讀取失敗（網路斷掉等）一定要丟出錯誤，不能回傳 null——不然外面會誤以為「雲端沒資料」，
+   把這台裝置可能是舊的資料傳上去蓋掉雲端，資料就不見了 */
 export async function loadCloudData(uid) {
-  if (!db) return null;
-  try {
-    const snap = await getDoc(doc(db, "users", uid));
-    return snap.exists() ? snap.data().appData || null : null;
-  } catch (e) {
-    console.error("讀取雲端資料失敗", e);
-    return null;
-  }
+  if (!db) return { data: null, updatedAt: 0 };
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return { data: null, updatedAt: 0 };
+  const v = snap.data();
+  return { data: v.appData || null, updatedAt: v.updatedAt || 0 };
 }
 
-/* 把整包資料存到這個帳號的雲端 */
+/* 把整包資料存到這個帳號的雲端，回傳這次寫入的時間戳。失敗會丟出錯誤，讓外面知道沒存成功、之後要重試 */
 export async function saveCloudData(uid, data) {
-  if (!db) return;
-  try {
-    await setDoc(doc(db, "users", uid), { appData: data, updatedAt: Date.now() });
-  } catch (e) {
-    console.error("寫入雲端資料失敗", e);
-  }
+  if (!db) return 0;
+  const updatedAt = Date.now();
+  await setDoc(doc(db, "users", uid), { appData: data, updatedAt });
+  return updatedAt;
 }
 
 /* 刪除這個帳號在雲端存的資料（本機資料不會動） */
