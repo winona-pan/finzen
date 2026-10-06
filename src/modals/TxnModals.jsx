@@ -509,7 +509,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
   });
   const [livingOverride, setLivingOverride] = useState(null);
   const [goalOverrides, setGoalOverrides] = useState({});
-  const [showSettings, setShowSettings] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [savedDefault, setSavedDefault] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
   const [showHelp, setShowHelp] = useState(false); // 分流引擎的說明文字太多太亂，全部收在底下要展開才看得到
@@ -551,159 +551,167 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
   const appliedGoals = allocGoals.filter(g => getGoalSavingsTarget(planStartYm, g.id) != null);
   const appliedTotal = appliedGoals.reduce((s,g) => s + (getGoalSavingsTarget(planStartYm, g.id)||0), 0);
 
-  return <Sheet title="🧠 智慧資金分流引擎" onClose={close}>
-    {appliedGoals.length > 0 && (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:14, background:`${C.teal}14`, marginBottom:10 }}>
-        <div>
-          <div style={{ fontSize:12, fontWeight:900, color:C.teal }}>✅ {tr("已完成分流")}</div>
-          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{planStartYm} · {appliedGoals.length} {tr("個目標")}・{tr("共")} {fmt(appliedTotal)}</div>
-        </div>
-        <span style={{ fontSize:10, color:C.teal }}>{tr("下方可繼續調整、重新套用")}</span>
-      </div>
-    )}
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", borderRadius:10, background:allocSettings.planStartYm && allocSettings.planStartYm>curYm?`${C.teal}12`:C.card, border:`1px solid ${allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal+"44":C.border}`, marginBottom:10 }}>
-      <div style={{ fontSize:12, color:allocSettings.planStartYm && allocSettings.planStartYm>curYm?C.teal:C.text }}>
-        {allocSettings.planStartYm && allocSettings.planStartYm>curYm
-          ? <>📌 目前從 <strong>{allocSettings.planStartYm}</strong> 開始規劃，{curYm} 不列入</>
-          : "這個月也算在規劃裡"}
-      </div>
-      {allocSettings.planStartYm && allocSettings.planStartYm>curYm ? (
-        <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ padding:"6px 10px", borderRadius:8, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>取消</button>
-      ) : (
-        <button onClick={startNextMonthPlan} style={{ padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>從下個月開始</button>
-      )}
-    </div>
-    <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={{ width:"100%", marginBottom:14, padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:11, cursor:"pointer" }}>🗑 {tr("清空以上規劃，重新輸入")}</button>
+  /* ── 畫面：上面一張「收入 → 分去哪裡」的總覽條，下面三步：① 收入 ② 分配 ③ 套用。
+     次要的設定（從下個月開始、清空、年度預測、說明）全部收到最底下一排小字連結 ── */
+  const goalsTotal = allocGoals.reduce((s, g) => s + (+g.alloc || 0), 0);
+  const allocatedTotal = alloc.investAmt + alloc.livingAmt + goalsTotal;
+  const overBy = Math.max(0, allocatedTotal - income);
+  const segments = [
+    { key:"invest", label:tr("投資"), amt:alloc.investAmt, color:C.accent },
+    { key:"living", label:tr("生活費"), amt:alloc.livingAmt, color:C.warn },
+    { key:"goals", label:tr("目標"), amt:goalsTotal, color:"#a78bfa" },
+    { key:"reserve", label:tr("剩餘"), amt:alloc.reserveAmt, color:C.teal },
+  ];
+  const barTotal = Math.max(income, allocatedTotal, 1);
+  const isLaterStart = allocSettings.planStartYm && allocSettings.planStartYm > curYm;
+  const reserveBucket = buckets.find(b => b.id === allocSettings.reserveBucketId);
+  const ymLabel = (ym) => `${+ym.slice(5)}${tr("月")}`;
 
-    <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-      <span>💵 這個月的收入來源</span>
-      <span style={{ color:C.income, fontWeight:900 }}>合計 {fmt(income)}</span>
+  const sectionTitle = (n, text, right) => (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"22px 2px 8px" }}>
+      <span style={{ fontSize:12, fontWeight:800, color:C.textSub, letterSpacing:"0.02em" }}><span style={{ color:C.accentL, marginRight:6 }}>{n}</span>{text}</span>
+      {right}
     </div>
-    <div style={{ borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden", marginBottom:8 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 90px 1fr 24px", gap:4, padding:"6px 8px", background:C.card, fontSize:10, fontWeight:700, color:C.muted }}>
-        <span>來源</span><span>金額</span><span>存入帳戶</span><span></span>
+  );
+  // 用文字框＋數字鍵盤，不用 type="number"（那個會出現很醜的上下箭頭）；只留數字
+  const amtInput = (value, onValue) => (
+    <input type="text" inputMode="decimal" value={value} onChange={e => onValue(e.target.value.replace(/[^\d.]/g, ""))}
+      style={{ ...iSt, width:92, textAlign:"right", padding:"7px 10px", fontSize:14, fontWeight:800, background:C.bg, border:`1px solid ${C.border}` }} />
+  );
+  const row = ({ key, icon, title, sub, right, onClick, last }) => (
+    <div key={key} onClick={onClick} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderBottom:last?"none":`1px solid ${C.border}`, cursor:onClick?"pointer":"default" }}>
+      <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{icon}</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{title}</div>
+        {sub && <div style={{ fontSize:10.5, color:C.muted, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>}
       </div>
-      {incomeItems.map(it => (
-        <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 90px 1fr 24px", gap:4, padding:"6px 8px", borderTop:`1px solid ${C.border}`, alignItems:"center" }}>
-          <input value={it.label} onChange={e => patchIncomeItem(it.id, { label:e.target.value })} placeholder="零用錢/薪水…" style={{ ...iSt, padding:"6px 8px", fontSize:12 }} />
-          <input type="number" value={it.amt} onChange={e => patchIncomeItem(it.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, padding:"6px 8px", fontSize:12, fontWeight:700 }} />
-          <select value={it.accId||""} onChange={e => patchIncomeItem(it.id, { accId:e.target.value })} style={{ ...iSt, padding:"6px 4px", fontSize:11 }}>
-            <option value="">— 選填 —</option>
-            {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <button onClick={() => removeIncomeItem(it.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>✕</button>
-        </div>
-      ))}
+      {right}
     </div>
-    <button onClick={addIncomeItem} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer", marginBottom:6 }}>＋ 新增一筆收入</button>
-    {!savedDefault ? (
-      <button onClick={() => { setDefaultIncomeItems(incomeItems); setSavedDefault(true); }} style={{ width:"100%", padding:6, background:"none", border:"none", color:C.muted, fontSize:11, cursor:"pointer", marginBottom:8 }}>把這份收入細項設成以後每個月的預設值</button>
-    ) : (
-      <div style={{ textAlign:"center", fontSize:11, color:C.teal, marginBottom:8 }}>✅ 已設成以後每月的預設收入</div>
-    )}
+  );
+  const linkBtn = { background:"none", border:"none", padding:"4px 2px", color:C.muted, fontSize:11, fontWeight:600, cursor:"pointer" };
 
-    <button onClick={() => setShowSettings(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginBottom:showSettings?8:14, marginTop:10 }}>
-      <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>📊 投資分流規劃（可以分好幾筆到不同帳戶，只記錄不自動轉帳）</span>
-      <span style={{ fontSize:12, color:C.muted }}>{showSettings?"▲":"▼"}</span>
-    </button>
-    {showSettings && (
-      <div style={{ padding:12, borderRadius:10, background:C.card, border:`1px solid ${C.border}`, marginBottom:14 }}>
-        {investAllocs.map(r => (
-          <div key={r.id} style={{ padding:10, borderRadius:10, background:C.bg, border:`1px solid ${C.border}`, marginBottom:8 }}>
-            <div style={{ display:"flex", gap:6, marginBottom:6 }}>
-              <input type="number" value={r.amt} onChange={e => patchInvestAlloc(r.id, { amt:+e.target.value||0 })} placeholder="金額" style={{ ...iSt, width:100, padding:"6px 8px", fontSize:13, fontWeight:700 }} />
-              <button onClick={() => removeInvestAlloc(r.id)} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14, padding:"0 4px", marginLeft:"auto" }}>✕</button>
-            </div>
-            <select value={r.toAccId||""} onChange={e => patchInvestAlloc(r.id, { toAccId:e.target.value })} style={{ ...iSt, width:"100%", padding:"6px 8px", fontSize:12, marginBottom:6 }}>
-              <option value="">— 投資目標帳戶（證券戶）—</option>
-              {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            {r.toAccId && (
-              <select value={r.fromAccId||""} onChange={e => patchInvestAlloc(r.id, { fromAccId:e.target.value })} style={{ ...iSt, width:"100%", padding:"6px 8px", fontSize:12 }}>
-                <option value="">— 從哪個帳戶轉出（純備註，不會自動轉帳）—</option>
-                {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            )}
+  return <Sheet title={`🧠 ${tr("智慧分流")}`} onClose={close}>
+    {/* ── 總覽：收入 → 分去哪裡 ── */}
+    <div style={{ padding:"16px 16px 14px", borderRadius:20, background:C.card }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontSize:11, fontWeight:700, color:C.muted }}>{planStartYm} {tr("收入")}</span>
+        {appliedGoals.length > 0
+          ? <span style={{ fontSize:10, fontWeight:700, color:C.teal, background:`${C.teal}18`, padding:"3px 8px", borderRadius:10 }}>✓ {tr("已套用")} {fmt(appliedTotal)}</span>
+          : <span style={{ fontSize:10, fontWeight:700, color:C.muted, background:C.bg, padding:"3px 8px", borderRadius:10 }}>{tr("尚未套用")}</span>}
+      </div>
+      <div style={{ fontSize:28, fontWeight:900, color:C.text, letterSpacing:"-0.02em", margin:"4px 0 12px" }}>{fmt(income)}</div>
+      <div style={{ display:"flex", height:10, borderRadius:5, overflow:"hidden", background:C.border, gap:2 }}>
+        {segments.filter(sg => sg.amt > 0).map(sg => <div key={sg.key} style={{ width:`${sg.amt / barTotal * 100}%`, background:sg.color, transition:"width .3s" }} />)}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 12px", marginTop:12 }}>
+        {segments.map(sg => (
+          <div key={sg.key} style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:sg.color, flexShrink:0 }} />
+            <span style={{ fontSize:11, color:C.textSub }}>{sg.label}</span>
+            <span style={{ fontSize:12, fontWeight:800, color:C.text, marginLeft:"auto" }}>{fmt(sg.amt)}</span>
           </div>
         ))}
-        <button onClick={addInvestAlloc} style={{ width:"100%", padding:8, borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>＋ 新增一筆投資分流</button>
-        {buckets.length > 0 && (
-          <div style={{ marginTop:10 }}>
-            <Sl label="剩餘資金要設定到哪個子帳戶" value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })}>
-              <option value="">— 不自動設定 —</option>
-              {buckets.map(b => <option key={b.id} value={b.id}>{b.emoji} {b.name}</option>)}
-            </Sl>
-          </div>
-        )}
       </div>
-    )}
-
-    <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:`${C.accent}12`, border:`1px solid ${C.accent}33` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>📊 股票投資（規劃）</div><div style={{ fontSize:10, color:C.muted }}>依上面投資分流規劃加總，僅供參考</div></div>
-        <div style={{ fontWeight:900, fontSize:15, color:C.accentL }}>{fmt(alloc.investAmt)}</div>
-      </div>
-
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
-        <div><div style={{ fontSize:12, fontWeight:700, color:C.text }}>🍜 生活費預算</div><div style={{ fontSize:10, color:C.muted }}>自動抓近{alloc.historyMonths}個月平均，可調整</div></div>
-        <input type="number" value={livingOverride ?? alloc.livingAmt} onChange={e => setLivingOverride(e.target.value)} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
-      </div>
-
-      {alloc.goalAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>專案存錢池（依優先級，收入越多分越多）</div>}
-      {alloc.goalAllocs.map(g => {
-        const applied = getGoalSavingsTarget(planStartYm, g.id);
-        return (
-        <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:g.isDone?`${C.teal}12`:C.card, border:`1px solid ${g.isDone?C.teal+"44":C.border}` }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span>{applied != null && <span style={{ fontSize:9, color:C.teal, marginLeft:4 }}>✅</span>}</div>
-              <div style={{ fontSize:10, color:C.muted }}>{g.isDone ? "🎉 已達標" : `剩 ${g.monthsLeft} 個月・進度 ${g.pct.toFixed(0)}%`}{g.splits?.length > 1 ? `・${tr("分")} ${g.splits.length} ${tr("個帳戶")}` : ""}</div>
-            </div>
-            {g.isDone ? (
-              <span style={{ fontSize:13, fontWeight:900, color:C.teal }}>—</span>
-            ) : (
-              <input type="number" value={goalOverrides[g.id] ?? g.alloc} onChange={e => setGoalOverrides(p => ({ ...p, [g.id]:e.target.value }))} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
-            )}
-          </div>
-          <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:g.isDone?C.teal:C.accent }} /></div>
-        </div>
-        );
-      })}
-      {alloc.goalAllocs.length === 0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"10px 0" }}>還沒有設定「專案存錢池」類型的目標</div>}
-
-      {alloc.wishlistAllocs.length > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginTop:4 }}>自由願望池（用剩餘溢流資金填滿）</div>}
-      {alloc.wishlistAllocs.map(g => {
-        const applied = getGoalSavingsTarget(planStartYm, g.id);
-        return (
-        <div key={g.id} style={{ padding:"12px 14px", borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{g.emoji} {g.name} <span style={{ fontSize:10, color:C.muted }}>P{g.priority}</span>{applied != null && <span style={{ fontSize:9, color:C.teal, marginLeft:4 }}>✅</span>}</div>
-              <div style={{ fontSize:10, color:C.muted }}>進度 {g.pct.toFixed(0)}%{g.splits?.length > 1 ? `・${tr("分")} ${g.splits.length} ${tr("個帳戶")}` : ""}</div>
-            </div>
-            <input type="number" value={goalOverrides[g.id] ?? g.alloc} onChange={e => setGoalOverrides(p => ({ ...p, [g.id]:e.target.value }))} style={{ ...iSt, width:90, textAlign:"right", padding:"6px 8px", fontWeight:700 }} />
-          </div>
-          <div style={{ height:5, borderRadius:3, background:C.border }}><div style={{ height:"100%", borderRadius:3, width:`${g.pct}%`, background:C.accent }} /></div>
-        </div>
-        );
-      })}
-
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px", borderRadius:12, background:`${C.teal}15`, border:`1px solid ${C.teal}44` }}>
-        <div><div style={{ fontSize:13, fontWeight:900, color:C.teal }}>💰 剩餘資金</div><div style={{ fontSize:10, color:C.muted }}>分配完剩下的都存起來</div></div>
-        <div style={{ fontWeight:900, fontSize:18, color:C.teal }}>{fmt(alloc.reserveAmt)}</div>
-      </div>
+      {overBy > 0 && <div style={{ fontSize:11, fontWeight:700, color:C.warn, marginTop:10 }}>⚠️ {tr("分配超過收入")} {fmt(overBy)}，{tr("調低生活費或目標金額")}</div>}
     </div>
 
-    <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:6 }}>要套用到哪些月份的存錢目標？</div>
-    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
-      {monthOptions.map(ym => (
-        <button key={ym} onClick={() => setApplyMonths(p => p.includes(ym) ? p.filter(x=>x!==ym) : [...p, ym])}
-          style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:applyMonths.includes(ym)?`${C.accent}28`:C.card, color:applyMonths.includes(ym)?C.accentL:C.muted, border:`1px solid ${applyMonths.includes(ym)?C.accent:C.border}`, cursor:"pointer" }}>
-          {ym}{ym===planStartYm?"（規劃起點）":ym===curYm?"（本月）":""}
-        </button>
+    {/* ── ① 收入 ── */}
+    {sectionTitle("①", tr("收入"), savedDefault
+      ? <span style={{ fontSize:10, color:C.teal }}>✓ {tr("已設為每月預設")}</span>
+      : <button onClick={() => { setDefaultIncomeItems(incomeItems); setSavedDefault(true); }} style={{ ...linkBtn, color:C.accentL }}>{tr("設為每月預設")}</button>)}
+    <div style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
+      {incomeItems.map(it => (
+        <div key={it.id} style={{ display:"grid", gridTemplateColumns:"1fr 92px", gap:8, padding:"10px 12px", borderBottom:`1px solid ${C.border}`, alignItems:"center" }}>
+          <div style={{ minWidth:0 }}>
+            <input value={it.label} onChange={e => patchIncomeItem(it.id, { label:e.target.value })} placeholder={tr("薪水、零用錢…")} style={{ width:"100%", background:"none", border:"none", outline:"none", color:C.text, fontSize:13, fontWeight:700, padding:0 }} />
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:3 }}>
+              <select value={it.accId||""} onChange={e => patchIncomeItem(it.id, { accId:e.target.value })} style={{ background:"none", border:"none", outline:"none", color:C.muted, fontSize:10.5, padding:0, maxWidth:"100%" }}>
+                <option value="">{tr("存入帳戶（選填）")}</option>
+                {accs.filter(a=>a.type!=="credit").map(a => <option key={a.id} value={a.id}>→ {a.name}</option>)}
+              </select>
+              <button onClick={() => removeIncomeItem(it.id)} style={{ ...linkBtn, fontSize:10, padding:0, marginLeft:"auto" }}>{tr("刪除")}</button>
+            </div>
+          </div>
+          {amtInput(it.amt || "", v => patchIncomeItem(it.id, { amt:+v||0 }))}
+        </div>
       ))}
+      <button onClick={addIncomeItem} style={{ width:"100%", padding:"11px 12px", background:"none", border:"none", color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer", textAlign:"left" }}>＋ {tr("新增收入")}</button>
     </div>
 
+    {/* ── ② 分配 ── */}
+    {sectionTitle("②", tr("分配"), <span style={{ fontSize:10, color:C.muted }}>{tr("數字可直接改")}</span>)}
+    <div style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
+      {row({ key:"invest", icon:"📊", title:tr("投資"),
+        sub: investAllocs.length ? `${investAllocs.length} ${tr("筆")}・${tr("只記錄，不自動轉帳")}` : tr("點這裡設定"),
+        onClick: () => setShowSettings(p => !p),
+        right: <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ fontSize:14, fontWeight:800, color:C.text }}>{fmt(alloc.investAmt)}</span><span style={{ fontSize:10, color:C.muted }}>{showSettings?"▲":"▼"}</span></span> })}
+      {showSettings && (
+        <div style={{ padding:"4px 14px 12px", background:C.bg, borderBottom:`1px solid ${C.border}` }}>
+          {investAllocs.map(r => (
+            <div key={r.id} style={{ display:"grid", gridTemplateColumns:"1fr 92px", gap:8, alignItems:"center", padding:"8px 0", borderBottom:`1px dashed ${C.border}` }}>
+              <div style={{ minWidth:0, display:"flex", flexDirection:"column", gap:2 }}>
+                <select value={r.toAccId||""} onChange={e => patchInvestAlloc(r.id, { toAccId:e.target.value })} style={{ alignSelf:"flex-start", maxWidth:"100%", background:"none", border:"none", outline:"none", color:C.text, fontSize:12, fontWeight:700, padding:0 }}>
+                  <option value="">{tr("選證券戶")}</option>
+                  {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <select value={r.fromAccId||""} onChange={e => patchInvestAlloc(r.id, { fromAccId:e.target.value })} style={{ background:"none", border:"none", outline:"none", color:C.muted, fontSize:10.5, padding:0, maxWidth:"100%" }}>
+                    <option value="">{tr("從哪轉出（選填）")}</option>
+                    {accs.filter(a=>a.type!=="credit" && a.type!=="investment").map(a => <option key={a.id} value={a.id}>{a.name} →</option>)}
+                  </select>
+                  <button onClick={() => removeInvestAlloc(r.id)} style={{ ...linkBtn, fontSize:10, padding:0, marginLeft:"auto" }}>{tr("刪除")}</button>
+                </div>
+              </div>
+              {amtInput(r.amt || "", v => patchInvestAlloc(r.id, { amt:+v||0 }))}
+            </div>
+          ))}
+          <button onClick={addInvestAlloc} style={{ ...linkBtn, color:C.accentL, fontWeight:700, fontSize:12, marginTop:8 }}>＋ {tr("新增投資")}</button>
+        </div>
+      )}
+      {row({ key:"living", icon:"🍜", title:tr("生活費"), sub: alloc.historyMonths > 0 ? `${tr("近")}${alloc.historyMonths}${tr("個月平均")}` : tr("還沒有記帳紀錄，自己填"),
+        right: amtInput(livingOverride ?? alloc.livingAmt, v => setLivingOverride(v)) })}
+      {allocGoals.map(g => {
+        const isWish = alloc.wishlistAllocs.includes(g);
+        const applied = getGoalSavingsTarget(planStartYm, g.id) != null;
+        const meta = [
+          `P${g.priority}`,
+          isWish ? tr("願望") : g.isDone ? `🎉 ${tr("已達標")}` : g.monthsLeft ? `${tr("剩")} ${g.monthsLeft} ${tr("個月")}` : null,
+          `${g.pct.toFixed(0)}%`,
+          applied ? `✓ ${tr("已套用")}` : null,
+        ].filter(Boolean).join("・");
+        return row({ key:g.id, icon:g.emoji || "🎯", title:g.name, sub:meta,
+          right: g.isDone && !isWish ? <span style={{ fontSize:13, color:C.muted }}>—</span> : amtInput(goalOverrides[g.id] ?? g.alloc, v => setGoalOverrides(p => ({ ...p, [g.id]:v }))) });
+      })}
+      {allocGoals.length === 0 && <div style={{ padding:"12px 14px", fontSize:11, color:C.muted, borderBottom:`1px solid ${C.border}` }}>{tr("還沒有存錢目標，可以到「目標」頁新增")}</div>}
+      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px", background:`${C.teal}12` }}>
+        <div style={{ width:32, height:32, borderRadius:10, background:`${C.teal}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>💰</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13, fontWeight:800, color:C.teal }}>{tr("剩餘")}</div>
+          {buckets.length > 0 ? (
+            <select value={allocSettings.reserveBucketId||""} onChange={e => setAllocSettings({ reserveBucketId:e.target.value })} style={{ background:"none", border:"none", outline:"none", color:C.muted, fontSize:10.5, padding:0, marginTop:2, maxWidth:"100%" }}>
+              <option value="">{tr("存到子帳戶（選填）")}</option>
+              {buckets.map(b => <option key={b.id} value={b.id}>→ {b.emoji} {b.name}</option>)}
+            </select>
+          ) : <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{tr("分完剩下的都存起來")}</div>}
+        </div>
+        <span style={{ fontSize:18, fontWeight:900, color:C.teal }}>{fmt(alloc.reserveAmt)}</span>
+      </div>
+    </div>
+
+    {/* ── ③ 套用 ── */}
+    {sectionTitle("③", tr("套用到"), <span style={{ fontSize:10, color:C.muted }}>{tr("可多選")}</span>)}
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6, marginBottom:12 }}>
+      {monthOptions.map(ym => {
+        const on = applyMonths.includes(ym);
+        return (
+          <button key={ym} title={ym} onClick={() => setApplyMonths(p => on ? p.filter(x=>x!==ym) : [...p, ym])}
+            style={{ padding:"9px 0", borderRadius:12, fontSize:12, fontWeight:800, background:on?C.accent:C.card, color:on?"#fff":C.muted, border:"none", cursor:"pointer", position:"relative" }}>
+            {ymLabel(ym)}
+            {ym === curYm && <span style={{ position:"absolute", top:3, right:5, width:5, height:5, borderRadius:"50%", background:on?"#fff":C.accentL }} />}
+          </button>
+        );
+      })}
+    </div>
     <Btn style={{ width:"100%" }} disabled={applyMonths.length===0} onClick={() => {
       confirm(`${tr("確定把這份分流建議套用到")} ${applyMonths.join("、")}？${tr("只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字")}`, () => {
         applyMonths.forEach(ym => {
@@ -719,29 +727,24 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
         });
         setJustApplied(true);
       }, "確認套用");
-    }}>✅ 套用到存錢目標（{applyMonths.length} 個月份）</Btn>
-    {justApplied && <div style={{ textAlign:"center", fontSize:12, color:C.teal, fontWeight:700, marginTop:8 }}>✅ 已套用，你可以繼續調整，改完再按一次套用就好</div>}
+    }}>{appliedGoals.length > 0 ? tr("重新套用") : tr("套用")}（{applyMonths.length} {tr("個月")}）</Btn>
+    {justApplied && <div style={{ textAlign:"center", fontSize:11, color:C.teal, fontWeight:700, marginTop:8 }}>✓ {tr("已套用，改完再按一次就會更新")}</div>}
 
-    {/* ── 說明文字太多會很亂，全部集中在這裡，預設收合，要看再展開 ── */}
-    <button onClick={() => setShowHelp(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 4px", background:"none", border:"none", cursor:"pointer", marginTop:12 }}>
-      <span style={{ fontSize:11, fontWeight:700, color:C.muted }}>ℹ️ {tr("使用說明")}</span>
-      <span style={{ fontSize:11, color:C.muted }}>{showHelp?"▲":"▼"}</span>
-    </button>
+    {/* ── 次要設定：收成一排小字 ── */}
+    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"2px 14px", marginTop:18 }}>
+      {isLaterStart
+        ? <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ ...linkBtn, color:C.teal }}>📌 {tr("從")} {ymLabel(allocSettings.planStartYm)} {tr("開始")}・{tr("取消")}</button>
+        : <button onClick={startNextMonthPlan} style={linkBtn}>{tr("從下個月開始規劃")}</button>}
+      <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={linkBtn}>{tr("清空重填")}</button>
+      <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={linkBtn}>{tr("年度預測")} →</button>
+      <button onClick={() => setShowHelp(p=>!p)} style={linkBtn}>{tr("說明")} {showHelp?"▲":"▼"}</button>
+    </div>
     {showHelp && (
-      <div style={{ fontSize:11, color:C.muted, lineHeight:1.7, marginTop:6, padding:"10px 12px", borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
-        <div style={{ marginBottom:8 }}>
-          {tr("這筆錢會依序被分配")}：① {tr("下面填每一筆收入的來源與金額")} → ② {tr("依序扣掉投資、生活費")} → ③ {tr("剩下的錢依優先級分給各個目標")} → ④ {tr("分不完的全部變成「剩餘資金」")}。<strong style={{ color:C.text }}>{tr("收入填得越高，最後能分配的錢自然越多")}。</strong>{tr("投資分流只是幫你記錄規劃，不會自動幫你轉帳；下面「套用」只會設定各目標的本月存錢提醒")}。
-        </div>
-        <div>{tr("套用後：各目標與剩餘資金會設定成對應月份的「存錢目標」提醒，實際存錢／投資動作還是要你自己去操作。上面的收入細項跟投資分流規劃已經即時自動存檔，不用另外按套用。")}</div>
+      <div style={{ fontSize:11, color:C.muted, lineHeight:1.7, marginTop:8, padding:"12px 14px", borderRadius:14, background:C.card }}>
+        <div style={{ marginBottom:6 }}>{tr("收入會依序扣掉投資、生活費，剩下的依優先級（P1 最先）分給各目標，分不完的就是「剩餘」。")}</div>
+        <div>{tr("套用只會設定各目標的存錢提醒，不會自動轉帳；收入和投資的設定會自動存檔。")}</div>
       </div>
     )}
-
-    <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={{ width:"100%", marginTop:12, padding:10, borderRadius:12, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
-      📅 切換到年度現金流預測排程 →
-    </button>
-    <button onClick={close} style={{ width:"100%", marginTop:8, padding:10, borderRadius:12, background:"none", border:"none", color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
-      關閉
-    </button>
   </Sheet>;
 }
 
