@@ -150,42 +150,57 @@ export default function GoalsPage({
             釘選（📌）的目標會顯示在總覽頁最上方；設定同一個「分類」的目標會合併顯示在一個大框裡。
           </div>
 
-          <Card style={{ padding:16, marginBottom:16 }}>
-            <button onClick={() => setShowAllocSettings(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <span style={{ fontWeight:900, fontSize:14, color:C.text }}>🧠 智慧分流：預設參數</span>
-              <span style={{ fontSize:12, color:C.muted }}>{showAllocSettings?"▲":"▼"}</span>
-            </button>
-            {showAllocSettings && (
-              <div style={{ marginTop:14 }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:12, lineHeight:1.6 }}>
-                  分流引擎和年度現金流預測排程，沒有特別設定時都會用這裡的預設值。
-                </div>
-                <div style={{ marginBottom:10 }}>
-                  <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設每月收入</label>
-                  <input type="number" defaultValue={allocSettings.defaultIncome} onBlur={e => setAllocSettings({ defaultIncome:+e.target.value||0 })} style={iSt} />
-                </div>
-                <div style={{ marginBottom:10 }}>
-                  <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設生活費上限</label>
-                  <input type="number" defaultValue={allocSettings.defaultLivingCap} onBlur={e => setAllocSettings({ defaultLivingCap:+e.target.value||0 })} style={iSt} />
-                </div>
-                <div style={{ marginBottom:10 }}>
-                  <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>預設投資額</label>
-                  <input type="number" defaultValue={allocSettings.defaultInvestAmt} onBlur={e => setAllocSettings({ defaultInvestAmt:+e.target.value||0 })} style={iSt} />
-                </div>
-                <Sl label="預設證券帳戶" value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })}>
-                  <option value="">— 不指定 —</option>
+          {/* ── 智慧分流預設值：收起來時一行摘要，展開後每一項一列「名稱＋說明＋右邊輸入框」── */}
+          {(() => {
+            const investAcc = accs.find(a => a.id === allocSettings.defaultInvestAccId);
+            const summary = [
+              allocSettings.defaultIncome ? `收入 ${fmt(allocSettings.defaultIncome)}` : null,
+              allocSettings.defaultLivingCap ? `生活費 ${fmt(allocSettings.defaultLivingCap)}` : null,
+              allocSettings.defaultInvestAmt ? `投資 ${fmt(allocSettings.defaultInvestAmt)}` : null,
+            ].filter(Boolean).join("・") || "還沒設定";
+            const numField = (key) => (
+              <input key={`${key}_${allocSettings[key]||0}`} type="text" inputMode="decimal" defaultValue={allocSettings[key] || ""} placeholder="0"
+                onChange={e => { e.target.value = e.target.value.replace(/[^\d.]/g, ""); }}
+                onBlur={e => setAllocSettings({ [key]: +e.target.value || 0 })}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ ...iSt, width:110, textAlign:"right", padding:"7px 10px", fontSize:14, fontWeight:800 }} />
+            );
+            const pickStyle = { ...iSt, width:130, padding:"7px 8px", fontSize:12, fontWeight:700 };
+            const rows = [
+              { icon:"💵", title:"每月收入", sub:"智慧分流沒填收入時用這個", right:numField("defaultIncome") },
+              { icon:"🍜", title:"生活費上限", sub:"年度預測的固定支出會用到", right:numField("defaultLivingCap") },
+              { icon:"📊", title:"每月投資", sub:"只記錄，不自動轉帳", right:numField("defaultInvestAmt") },
+              { icon:"🏦", title:"證券帳戶", sub:investAcc ? "投資預設存到這裡" : "選填", right:(
+                <select value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })} style={pickStyle}>
+                  <option value="">不指定</option>
                   {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </Sl>
-                <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${C.border}` }}>
-                  <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>計畫起始月份（選填）</label>
-                  <div style={{ fontSize:10, color:C.muted, marginBottom:8, lineHeight:1.6 }}>
-                    年度現金流預測、各專案的每月排程，都會從這個月開始算，比這個月更早的月份不會出現、也不會被算進「已存了多少」。留空＝從這個月開始。
+                </select>) },
+              { icon:"📌", title:"從哪個月開始規劃", sub:"留空＝從本月開始", right:(
+                <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={pickStyle} />) },
+            ];
+            return (
+              <Card style={{ padding:0, marginBottom:16, overflow:"hidden" }}>
+                <button onClick={() => setShowAllocSettings(p=>!p)} style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
+                  <span style={{ fontSize:18 }}>🧠</span>
+                  <span style={{ flex:1, minWidth:0 }}>
+                    <span style={{ display:"block", fontWeight:800, fontSize:14, color:C.text }}>智慧分流預設值</span>
+                    <span style={{ display:"block", fontSize:11, color:C.muted, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{summary}</span>
+                  </span>
+                  <span style={{ fontSize:11, color:C.muted }}>{showAllocSettings?"▲":"▼"}</span>
+                </button>
+                {showAllocSettings && rows.map(r => (
+                  <div key={r.title} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderTop:`1px solid ${C.border}` }}>
+                    <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{r.icon}</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.title}</div>
+                      <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{r.sub}</div>
+                    </div>
+                    {r.right}
                   </div>
-                  <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={iSt} />
-                </div>
-              </div>
-            )}
-          </Card>
+                ))}
+              </Card>
+            );
+          })()}
 
           {(!goals || goals.length === 0) && (
             <Card style={{ padding:20, textAlign:"center", marginBottom:16 }}>
