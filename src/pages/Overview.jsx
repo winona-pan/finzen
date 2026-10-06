@@ -153,46 +153,49 @@ export default function OverviewPage({
             )}
           </div>
 
-          {/* ── Tier 2：待處理摘要列——把原本四五條各自獨立的橫幅濃縮成一列標籤 ── */}
-          {pendingChips.length > 0 && (
-            <div style={{ margin:"0 16px 12px", padding:"12px 14px", borderRadius:18, background:C.card }}>
-              <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:8, letterSpacing:"0.02em" }}>⚡ {tr("待處理")}</div>
-              <div style={{ display:"flex", gap:8, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
-                {pendingChips.map(chip => (
-                  <div key={chip.key} onClick={chip.onClick || undefined} style={{ flex:"0 0 auto", display:"flex", alignItems:"center", gap:6, padding:"7px 12px", borderRadius:20, background:`${chip.color}14`, cursor:chip.onClick?"pointer":"default", whiteSpace:"nowrap" }}>
-                    <span style={{ fontSize:12 }}>{chip.icon}</span>
-                    <span style={{ fontSize:12, fontWeight:700, color:chip.color }}>{chip.label}</span>
-                    {chip.onClick && <span style={{ fontSize:11, color:chip.color, opacity:0.7 }}>›</span>}
+          {/* ── Tier 2+3：待處理 + 目標進度：左右各半，只有一邊有東西時就佔滿整排 ── */}
+          {(pendingChips.length > 0 || pinnedGoals.length > 0) && (
+            <div style={{ display:"flex", gap:10, margin:"0 16px 12px", alignItems:"stretch" }}>
+              {pendingChips.length > 0 && (
+                <div style={{ flex:1, minWidth:0, padding:"14px 14px", borderRadius:20, background:C.card }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:8, letterSpacing:"0.02em" }}>⚡ {tr("待處理")}</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {pendingChips.map(chip => (
+                      <div key={chip.key} onClick={chip.onClick || undefined} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 10px", borderRadius:14, background:`${chip.color}14`, cursor:chip.onClick?"pointer":"default", minWidth:0 }}>
+                        <span style={{ fontSize:12, flexShrink:0 }}>{chip.icon}</span>
+                        <span style={{ flex:1, minWidth:0, fontSize:12, fontWeight:700, color:chip.color, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{chip.label}</span>
+                        {chip.onClick && <span style={{ fontSize:11, color:chip.color, opacity:0.7, flexShrink:0 }}>›</span>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* ── Tier 3：目標進度整合成一張卡，柔和進度條 ── */}
-          {pinnedGoals.length > 0 && (
-            <div style={{ margin:"0 16px 12px", padding:"16px 16px 6px", borderRadius:20, background:C.card }}>
-              <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:10, letterSpacing:"0.02em" }}>🎯 {tr("目標進度")}</div>
-              {pinnedGoals.map((g, i) => {
-                const cur = goalDisplayAmount[g.id] ?? goalCurrentAmount(g);
-                const pct = Math.min(100, cur>0?(cur/g.target*100):0);
-                const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
-                const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
-                const applied = getGoalSavingsTarget ? getGoalSavingsTarget(curYm, g.id) : null;
-                return (
-                  <div key={g.id} onClick={() => { setEditGoal({ ...g }); setModal("editGoal"); }} style={{ cursor:"pointer", paddingBottom:14, marginBottom:i<pinnedGoals.length-1?14:0, borderBottom:i<pinnedGoals.length-1?`1px solid ${C.border}`:"none" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12, marginBottom:7 }}>
-                      <span style={{ fontWeight:700, color:C.text, display:"flex", alignItems:"center", gap:5 }}>
-                        {g.emoji} {g.name}{daysLeft!==null?` · ${tr("剩")}${daysLeft}${tr("天")}`:""}
-                        {applied != null && <span style={{ fontSize:9, fontWeight:700, color:C.teal, background:`${C.teal}18`, padding:"1px 6px", borderRadius:8 }}>✅ {tr("已套用")}</span>}
-                      </span>
-                      <span style={{ fontWeight:700, color:col }}>{pct.toFixed(0)}%</span>
-                    </div>
-                    <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, background:col, width:`${pct}%`, transition:"width .5s" }} /></div>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>{tr("差")} {fmt(Math.max(0,g.target-cur))}</div>
-                  </div>
-                );
-              })}
+              {pinnedGoals.length > 0 && (
+                <div style={{ flex:1, minWidth:0, padding:"14px 14px", borderRadius:20, background:C.card }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:10, letterSpacing:"0.02em" }}>🎯 {tr("目標進度")}</div>
+                  {pinnedGoals.map((g, i) => {
+                    const cur = goalDisplayAmount[g.id] ?? goalCurrentAmount(g);
+                    const pct = Math.min(100, cur>0?(cur/g.target*100):0);
+                    const daysLeft = g.deadline ? Math.max(0, Math.ceil((new Date(g.deadline)-new Date(TODAY))/86400000)) : null;
+                    const col = daysLeft!==null&&daysLeft<=30 ? C.warn : C.accent;
+                    const applied = getGoalSavingsTarget ? getGoalSavingsTarget(curYm, g.id) : null;
+                    return (
+                      <div key={g.id} onClick={() => { setEditGoal({ ...g }); setModal("editGoal"); }} style={{ cursor:"pointer", paddingBottom:i<pinnedGoals.length-1?10:0, marginBottom:i<pinnedGoals.length-1?10:0, borderBottom:i<pinnedGoals.length-1?`1px solid ${C.border}`:"none" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, fontSize:12, marginBottom:6 }}>
+                          <span style={{ flex:1, minWidth:0, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.emoji} {g.name}</span>
+                          <span style={{ fontWeight:700, color:col, flexShrink:0 }}>{pct.toFixed(0)}%</span>
+                        </div>
+                        <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, background:col, width:`${pct}%`, transition:"width .5s" }} /></div>
+                        <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", fontSize:10, color:C.muted, marginTop:5 }}>
+                          <span>{tr("差")} {fmt(Math.max(0,g.target-cur))}{daysLeft!==null?` · ${tr("剩")}${daysLeft}${tr("天")}`:""}</span>
+                          {applied != null && <span style={{ fontSize:9, fontWeight:700, color:C.teal, background:`${C.teal}18`, padding:"1px 6px", borderRadius:8 }}>✅ {tr("已套用")}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
