@@ -25,7 +25,8 @@ export default function OtherModals({
   saveTxn, delTxn, moExp, moInc, moTxns, addCustomCE, ceMap: _ce,
   goalRecurringAmount, scheduledRecurringValue, tr,
   // 共用 UI atoms
-  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji
+  Sheet, Inp, Sl, Fld, CalcInp, Btn, Card, Bdg, EmojiPicker, Sl: SlComponent, guessEmoji,
+  createEmergencyFund, setTab
 }) {
 
   /* ── 類別管理局部狀態 ── */
@@ -65,6 +66,8 @@ export default function OtherModals({
 
   return (
     <>
+        {modal === "strategies" && <StrategiesSheet goals={goals} createEmergencyFund={createEmergencyFund} confirm={confirm} close={close} setTab={setTab} C={C} Sheet={Sheet} tr={tr} />}
+
         {modal === "addGoal" && <Sheet title={tr("新增目標")} onClose={close}>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginBottom:12 }}>
             <button onClick={() => setShowGoalEP(true)} style={{ width:52, height:52, borderRadius:14, background:C.card, border:`2px solid ${C.accent}`, fontSize:26, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{nG.emoji}</button>
@@ -603,4 +606,38 @@ function RecurringScheduleEditor({ editGoal, setEditGoal, C, iSt }) {
       </div>
     </div>
   );
+}
+
+/* ── 理財策略：參考用的小知識，原本放在目標頁最下面很突兀，改成從「更多」頁和圖表頁 50/30/20 卡片點進來 ── */
+function StrategiesSheet({ goals, createEmergencyFund, confirm, close, setTab, C, Sheet, tr }) {
+  const hasEmergencyFund = (goals||[]).some(g => g.isEmergencyFund);
+  const go = (t) => { close(); setTab(t); };
+  const link = (label, onClick) => <button onClick={onClick} style={{ background:"none", border:"none", padding:0, marginTop:8, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{label} ›</button>;
+  const items = [
+    { icon:"🚨", title:tr("緊急預備金"), body:tr("先存 3～6 個月的生活費當緩衝，跟旅費、3C 這種「想要」的目標分開。"), extra: hasEmergencyFund
+      ? <div style={{ fontSize:11, color:C.teal, marginTop:8 }}>✓ {tr("已經建立了")}</div>
+      : <div style={{ display:"flex", gap:8, marginTop:10 }}>
+          {[3, 6].map(n => (
+            <button key={n} onClick={() => confirm(tr(`用「生活費預算 × ${n}個月」建立一個優先級最高的緊急預備金目標？`), () => createEmergencyFund(n))} style={{ flex:1, padding:9, borderRadius:10, background:`${C.accent}18`, border:"none", color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr(`建立 ${n} 個月份`)}</button>
+          ))}
+        </div> },
+    { icon:"📊", title:tr("50/30/20 法則"), body:tr("收入分成需要 50%、想要 30%、儲蓄 20%。"), extra: link(tr("看這個月的比例"), () => go("charts")) },
+    { icon:"0️⃣", title:tr("零基預算"), body:tr("每一塊錢都要有去處，分到剩 0 為止。智慧分流就是照這個邏輯：收入先扣投資、生活費，剩下依序分給目標，分不完的才是剩餘。") },
+    { icon:"🪣", title:tr("多桶理財法"), body:tr("依時間長短分桶：短期（1 年內）、中期（3～5 年）、長期（退休）。目標的「分類」填短期／中期／長期，同分類會自動合併顯示。"), extra: link(tr("去目標頁"), () => go("goals")) },
+    { icon:"❄️", title:tr("債務雪球／雪崩法"), body:tr("還沒做。目前的往來帳記的是代墊和應收應付，不是貸款或分期，之後需要再加。") },
+  ];
+  return <Sheet title={`📚 ${tr("理財策略")}`} onClose={close}>
+    <div style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
+      {items.map((it, i) => (
+        <div key={it.title} style={{ display:"flex", gap:12, padding:"14px", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+          <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{it.icon}</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{it.title}</div>
+            <div style={{ fontSize:11.5, color:C.muted, marginTop:3, lineHeight:1.6 }}>{it.body}</div>
+            {it.extra}
+          </div>
+        </div>
+      ))}
+    </div>
+  </Sheet>;
 }

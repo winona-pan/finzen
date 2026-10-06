@@ -513,6 +513,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
   const [savedDefault, setSavedDefault] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
   const [showHelp, setShowHelp] = useState(false); // 分流引擎的說明文字太多太亂，全部收在底下要展開才看得到
+  const [showDefaults, setShowDefaults] = useState(false); // 預設值（原本放在目標頁，搬到這裡統一）
   /* 要套用到哪些月份：預設從目標月份開始，也可以一次勾多個月一起設定存錢目標 */
   const monthOptions = Array.from({ length: 6 }, (_, i) => { const dt = new Date(planStartYm+"-01"); dt.setMonth(dt.getMonth()+i); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; });
   const [applyMonths, setApplyMonths] = useState([planStartYm]);
@@ -734,11 +735,41 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"2px 14px", marginTop:18 }}>
       {isLaterStart
         ? <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ ...linkBtn, color:C.teal }}>📌 {tr("從")} {ymLabel(allocSettings.planStartYm)} {tr("開始")}・{tr("取消")}</button>
-        : <button onClick={startNextMonthPlan} style={linkBtn}>{tr("從下個月開始規劃")}</button>}
-      <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={linkBtn}>{tr("清空重填")}</button>
+        : <button onClick={startNextMonthPlan} style={linkBtn}>{tr("下個月開始")}</button>}
+      <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={linkBtn}>{tr("清空")}</button>
       <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={linkBtn}>{tr("年度預測")} →</button>
+      <button onClick={() => setShowDefaults(p=>!p)} style={linkBtn}>⚙️ {tr("預設值")} {showDefaults?"▲":"▼"}</button>
       <button onClick={() => setShowHelp(p=>!p)} style={linkBtn}>{tr("說明")} {showHelp?"▲":"▼"}</button>
     </div>
+    {showDefaults && (() => {
+      // 沒有特別設定的月份（智慧分流沒填收入、年度預測未來月份）都會用這裡的數字
+      const numField = (key) => (
+        <input key={`${key}_${allocSettings[key]||0}`} type="text" inputMode="decimal" defaultValue={allocSettings[key] || ""} placeholder="0"
+          onChange={e => { e.target.value = e.target.value.replace(/[^\d.]/g, ""); }}
+          onBlur={e => setAllocSettings({ [key]: +e.target.value || 0 })}
+          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+          style={{ ...iSt, width:92, textAlign:"right", padding:"7px 10px", fontSize:14, fontWeight:800, background:C.bg, border:`1px solid ${C.border}` }} />
+      );
+      const pickStyle = { ...iSt, width:124, padding:"7px 8px", fontSize:12, fontWeight:700, background:C.bg, border:`1px solid ${C.border}` };
+      const rows = [
+        { icon:"💵", title:tr("每月收入"), sub:tr("上面沒填收入時用這個"), right:numField("defaultIncome") },
+        { icon:"🍜", title:tr("生活費上限"), sub:tr("年度預測的固定支出會用到"), right:numField("defaultLivingCap") },
+        { icon:"📊", title:tr("每月投資"), sub:tr("只記錄，不自動轉帳"), right:numField("defaultInvestAmt") },
+        { icon:"🏦", title:tr("證券帳戶"), sub:tr("選填"), right:(
+          <select value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })} style={pickStyle}>
+            <option value="">{tr("不指定")}</option>
+            {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>) },
+        { icon:"📌", title:tr("從哪個月開始規劃"), sub:tr("留空＝從本月開始"), right:(
+          <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={pickStyle} />) },
+      ];
+      return (
+        <div style={{ marginTop:8, borderRadius:16, background:C.card, overflow:"hidden" }}>
+          <div style={{ padding:"10px 14px 4px", fontSize:10.5, color:C.muted }}>{tr("沒有特別設定的月份，智慧分流和年度預測都會用這些數字")}</div>
+          {rows.map((r, i) => row({ key:r.title, icon:r.icon, title:r.title, sub:r.sub, right:r.right, last:i===rows.length-1 }))}
+        </div>
+      );
+    })()}
     {showHelp && (
       <div style={{ fontSize:11, color:C.muted, lineHeight:1.7, marginTop:8, padding:"12px 14px", borderRadius:14, background:C.card }}>
         <div style={{ marginBottom:6 }}>{tr("收入會依序扣掉投資、生活費，剩下的依優先級（P1 最先）分給各目標，分不完的就是「剩餘」。")}</div>

@@ -27,7 +27,6 @@ export default function ChartsPage({
   const [expandedCat, setExpandedCat] = useState(null);
   const [catRange, setCatRange] = useState(null);
   const [showCatDP, setShowCatDP] = useState(false);
-  const [show502030, setShow502030] = useState(false);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 }; });
   
   const prevMo = () => setMonth(({ y, m }) => m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 });
@@ -82,35 +81,34 @@ export default function ChartsPage({
           </div>
           {showCatDP && <DatePicker value={catRange || { s:`${month.y}-${String(month.m).padStart(2,"0")}-01`, e:TODAY }} onChange={setCatRange} onClose={() => setShowCatDP(false)} />}
 
-          <Card style={{ padding:14, marginBottom:16 }}>
-            <button onClick={() => setShow502030(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <span style={{ fontWeight:900, fontSize:13, color:C.text }}>📊 50/30/20 這個月的比例</span>
-              <span style={{ fontSize:12, color:C.muted }}>{show502030?"▲":"▼"}</span>
-            </button>
-            {show502030 && (
-              <div style={{ marginTop:12 }}>
-                <div style={{ fontSize:10, color:C.muted, marginBottom:10, lineHeight:1.6 }}>
-                  需要類別預設抓「食物/交通/家居/教育/醫療/保費/訂閱」，想要類別抓「娛樂/美容/其他」，其餘（含未分類支出）算在想要裡；剩下沒花掉的算儲蓄。這是抓「本月」（不是你現在瀏覽的月份）的即時數字。
-                </div>
-                {[
-                  { l:"需要 Needs", target:50, pct:budget502030.needPct, v:budget502030.needs, c:C.accent },
-                  { l:"想要 Wants", target:30, pct:budget502030.wantPct, v:budget502030.wants+budget502030.otherExp, c:C.warn },
-                  { l:"儲蓄 Savings", target:20, pct:budget502030.savePct, v:budget502030.savings, c:C.teal },
-                ].map(row => (
-                  <div key={row.l} style={{ marginBottom:10 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.textSub, marginBottom:4 }}>
-                      <span>{row.l}（目標 {row.target}%）</span>
-                      <span style={{ fontWeight:700, color:row.pct>row.target?C.warn:C.text }}>{row.pct}% · {fmt(row.v)}</span>
-                    </div>
-                    <div style={{ height:8, borderRadius:4, background:C.border, position:"relative" }}>
-                      <div style={{ height:"100%", borderRadius:4, width:`${Math.min(100,row.pct)}%`, background:row.c }} />
-                      <div style={{ position:"absolute", top:0, bottom:0, left:`${row.target}%`, width:1, background:C.text, opacity:0.4 }} />
-                    </div>
+          {/* ── 50/30/20：直接顯示，不用再點開；一列一個類別，右邊是實際比例／目標比例 ── */}
+          <Card style={{ padding:"14px 16px", marginBottom:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 }}>
+              <span style={{ fontWeight:900, fontSize:13, color:C.text }}>50/30/20 <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>本月</span></span>
+              <button onClick={() => setModal("strategies")} style={{ background:"none", border:"none", padding:0, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>📚 理財策略 ›</button>
+            </div>
+            {[
+              { l:"需要", target:50, pct:budget502030.needPct, v:budget502030.needs, c:C.accent },
+              { l:"想要", target:30, pct:budget502030.wantPct, v:budget502030.wants+budget502030.otherExp, c:C.warn },
+              { l:"儲蓄", target:20, pct:budget502030.savePct, v:budget502030.savings, c:C.teal, atLeast:true },
+            ].map(row => {
+              const off = row.atLeast ? row.pct < row.target : row.pct > row.target;
+              return (
+                <div key={row.l} style={{ display:"grid", gridTemplateColumns:"34px 1fr auto", gap:10, alignItems:"center", marginBottom:10 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:C.textSub }}>{row.l}</span>
+                  <div style={{ height:8, borderRadius:4, background:C.border, position:"relative" }}>
+                    <div style={{ height:"100%", borderRadius:4, width:`${Math.min(100, Math.max(0, row.pct))}%`, background:row.c }} />
+                    <div style={{ position:"absolute", top:-2, bottom:-2, left:`${row.target}%`, width:2, borderRadius:1, background:C.text, opacity:0.35 }} />
                   </div>
-                ))}
-                <div style={{ fontSize:10, color:C.muted }}>灰線是 50/30/20 的建議比例，條狀是你這個月實際的比例。</div>
-              </div>
-            )}
+                  <span style={{ minWidth:92, textAlign:"right", fontSize:12 }}>
+                    <span style={{ fontWeight:800, color:off?C.warn:C.text }}>{row.pct}%</span>
+                    <span style={{ color:C.muted }}> / {row.target}%</span>
+                    <span style={{ display:"block", fontSize:10, color:C.muted }}>{fmt(row.v)}</span>
+                  </span>
+                </div>
+              );
+            })}
+            <div style={{ fontSize:10, color:C.muted, lineHeight:1.6 }}>直線是建議比例。需要＝食物、交通、家居、教育、醫療、保費、訂閱；其他支出算想要；沒花掉的算儲蓄。</div>
           </Card>
           
           <div style={{ display:"flex", gap:8, marginBottom:20 }}>
