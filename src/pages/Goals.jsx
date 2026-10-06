@@ -10,9 +10,6 @@ export default function GoalsPage({
 }) {
   const [showArchivedGoals, setShowArchivedGoals] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
-  const [showAllocSettings, setShowAllocSettings] = useState(false);
-  const [showStrategies, setShowStrategies] = useState(false);
-  const hasEmergencyFund = (goals||[]).some(g => g.isEmergencyFund);
 
   const GoalCard = ({ g, compact }) => {
     const goalUseMv = g.useMv != null ? g.useMv : useMvForAssets;
@@ -150,57 +147,6 @@ export default function GoalsPage({
             釘選（📌）的目標會顯示在總覽頁最上方；設定同一個「分類」的目標會合併顯示在一個大框裡。
           </div>
 
-          {/* ── 智慧分流預設值：收起來時一行摘要，展開後每一項一列「名稱＋說明＋右邊輸入框」── */}
-          {(() => {
-            const investAcc = accs.find(a => a.id === allocSettings.defaultInvestAccId);
-            const summary = [
-              allocSettings.defaultIncome ? `收入 ${fmt(allocSettings.defaultIncome)}` : null,
-              allocSettings.defaultLivingCap ? `生活費 ${fmt(allocSettings.defaultLivingCap)}` : null,
-              allocSettings.defaultInvestAmt ? `投資 ${fmt(allocSettings.defaultInvestAmt)}` : null,
-            ].filter(Boolean).join("・") || "還沒設定";
-            const numField = (key) => (
-              <input key={`${key}_${allocSettings[key]||0}`} type="text" inputMode="decimal" defaultValue={allocSettings[key] || ""} placeholder="0"
-                onChange={e => { e.target.value = e.target.value.replace(/[^\d.]/g, ""); }}
-                onBlur={e => setAllocSettings({ [key]: +e.target.value || 0 })}
-                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ ...iSt, width:110, textAlign:"right", padding:"7px 10px", fontSize:14, fontWeight:800 }} />
-            );
-            const pickStyle = { ...iSt, width:130, padding:"7px 8px", fontSize:12, fontWeight:700 };
-            const rows = [
-              { icon:"💵", title:"每月收入", sub:"智慧分流沒填收入時用這個", right:numField("defaultIncome") },
-              { icon:"🍜", title:"生活費上限", sub:"年度預測的固定支出會用到", right:numField("defaultLivingCap") },
-              { icon:"📊", title:"每月投資", sub:"只記錄，不自動轉帳", right:numField("defaultInvestAmt") },
-              { icon:"🏦", title:"證券帳戶", sub:investAcc ? "投資預設存到這裡" : "選填", right:(
-                <select value={allocSettings.defaultInvestAccId||""} onChange={e => setAllocSettings({ defaultInvestAccId:e.target.value })} style={pickStyle}>
-                  <option value="">不指定</option>
-                  {accs.filter(a=>a.type==="investment").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>) },
-              { icon:"📌", title:"從哪個月開始規劃", sub:"留空＝從本月開始", right:(
-                <input type="month" value={allocSettings.planStartYm||""} onChange={e => setAllocSettings({ planStartYm:e.target.value })} style={pickStyle} />) },
-            ];
-            return (
-              <Card style={{ padding:0, marginBottom:16, overflow:"hidden" }}>
-                <button onClick={() => setShowAllocSettings(p=>!p)} style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
-                  <span style={{ fontSize:18 }}>🧠</span>
-                  <span style={{ flex:1, minWidth:0 }}>
-                    <span style={{ display:"block", fontWeight:800, fontSize:14, color:C.text }}>智慧分流預設值</span>
-                    <span style={{ display:"block", fontSize:11, color:C.muted, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{summary}</span>
-                  </span>
-                  <span style={{ fontSize:11, color:C.muted }}>{showAllocSettings?"▲":"▼"}</span>
-                </button>
-                {showAllocSettings && rows.map(r => (
-                  <div key={r.title} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderTop:`1px solid ${C.border}` }}>
-                    <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{r.icon}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{r.title}</div>
-                      <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>{r.sub}</div>
-                    </div>
-                    {r.right}
-                  </div>
-                ))}
-              </Card>
-            );
-          })()}
 
           {(!goals || goals.length === 0) && (
             <Card style={{ padding:20, textAlign:"center", marginBottom:16 }}>
@@ -248,55 +194,6 @@ export default function GoalsPage({
             );
           })()}
 
-          {/* ── 理財策略：偏參考資料／較少用的功能，移到目標清單下面，把最上面的版面留給實際目標 ── */}
-          <Card style={{ padding:16, marginTop:16, marginBottom:16 }}>
-            <button onClick={() => setShowStrategies(p=>!p)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              <span style={{ fontWeight:900, fontSize:14, color:C.text }}>📚 {tr("理財策略")}</span>
-              <span style={{ fontSize:12, color:C.muted }}>{showStrategies?"▲":"▼"}</span>
-            </button>
-            {showStrategies && (
-              <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:12 }}>
-                <div style={{ padding:12, borderRadius:12, background:C.bg, border:`1px solid ${C.border}` }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>🚨 緊急預備金</div>
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:10, lineHeight:1.6 }}>
-                    建議先存 3-6 個月的生活費，當意外狀況的緩衝，跟旅費、3C 這種「想要型」目標分開看待。
-                  </div>
-                  {hasEmergencyFund ? (
-                    <div style={{ fontSize:11, color:C.teal }}>✅ 已經有這個目標了，在上面的清單可以看到</div>
-                  ) : (
-                    <div style={{ display:"flex", gap:8 }}>
-                      <button onClick={() => confirm(tr("用「生活費預算 × 3個月」建立一個優先級最高的緊急預備金目標？"), () => createEmergencyFund(3))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("建立 3 個月份")}</button>
-                      <button onClick={() => confirm(tr("用「生活費預算 × 6個月」建立一個優先級最高的緊急預備金目標？"), () => createEmergencyFund(6))} style={{ flex:1, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("建立 6 個月份")}</button>
-                    </div>
-                  )}
-                </div>
-                <div style={{ padding:12, borderRadius:12, background:C.bg, border:`1px solid ${C.border}` }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>🪣 多桶理財法</div>
-                  <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>
-                    依時間長短分桶：短期（1年內要用）、中期（3-5年）、長期（退休/財富累積）。新增或編輯目標時，「分類」欄位可以直接填「短期」「中期」「長期」，同分類的目標會在上面自動合併成一個大框，方便你照時間長短管理。
-                  </div>
-                </div>
-                <div style={{ padding:12, borderRadius:12, background:C.bg, border:`1px solid ${C.border}` }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>0️⃣ 零基預算</div>
-                  <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>
-                    每一塊錢都要有明確去處，分配到剩 0 為止——上面的「🧠 智慧分流」本來就是照這個邏輯運作的：收入先扣投資、生活費，剩下依序分給各個目標，分不完的才進「剩餘資金」，不會憑空消失。
-                  </div>
-                </div>
-                <div style={{ padding:12, borderRadius:12, background:C.bg, border:`1px solid ${C.border}` }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>📊 50/30/20 法則</div>
-                  <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>
-                    收入分成需要50%／想要30%／儲蓄20%。這個月實際的比例，可以到「圖表」頁最上面看。
-                  </div>
-                </div>
-                <div style={{ padding:12, borderRadius:12, background:C.bg, border:`1px solid ${C.border}` }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:4 }}>❄️ 債務雪球／雪崩法</div>
-                  <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>
-                    這個還沒做——因為現在的「往來帳」記的是代墊/應收應付，不是真正的貸款/信用卡分期債務管理，需要一個新的功能才能好好做這個，之後有需要再跟我說。
-                  </div>
-                </div>
-              </div>
-            )}
-          </Card>
 
           {(goals||[]).some(g => isGoalArchived(g)) && (
             <div style={{ marginTop:8 }}>
