@@ -166,6 +166,9 @@ function loadData() {
   } catch { return DEF; }
 }
 function saveData(d) { try { localStorage.setItem(DATA_KEY, JSON.stringify(d)); } catch {} }
+/* 雲端同步用：有還沒成功上傳的修改時記下帳號 uid；以及這台裝置最後一次跟雲端對齊時，雲端那份的時間戳 */
+const CLOUD_DIRTY_KEY = "finzen_cloudDirty";
+const cloudSyncedAtKey = (uid) => `finzen_cloudSyncedAt_${uid}`;
 function checkVer() {
   const prev = localStorage.getItem(VER_KEY);
   if (prev !== APP_VER) { localStorage.setItem(VER_KEY, APP_VER); return prev ? "✨ 新功能：計算機 🧮、底部導航改中文、現有持股登錄功能！" : null; }
@@ -627,14 +630,48 @@ export default function App() {
   const uidRef = useRef(null);
   const dRef = useRef(d);
   useEffect(() => { dRef.current = d; }, [d]);
+  /* 為什麼會掉資料：以前改完資料要等 1.5 秒才上傳雲端，這中間關掉 App 就沒傳上去；
+     下次打開一登入，又無條件用雲端那份（舊的）蓋掉本機，剛剛改的就不見了。
+     現在的做法：
+     1. 只要有還沒成功上傳的修改，就在 localStorage 記一個「髒」標記（記帳號 uid）
+     2. 切到背景／關掉頁面時，馬上把還沒傳的資料送出去，不等 1.5 秒
+     3. 下次登入時，如果這台裝置有髒標記，代表本機比雲端新，改成用本機的去更新雲端，而不是被雲端蓋掉
+     4. 上傳失敗會自動重試，不會默默當作成功 */
   const syncTimerRef = useRef(null);
+  const pendingSyncRef = useRef(null); // 還沒成功上傳的最新一份資料
+  const flushCloudSyncRef = useRef(null);
+  const flushCloudSync = useCallback(async () => {
+    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null; }
+    const uid = uidRef.current, data = pendingSyncRef.current;
+    if (!uid || !data) return;
+    pendingSyncRef.current = null;
+    try {
+      const at = await saveCloudData(uid, data);
+      localStorage.setItem(cloudSyncedAtKey(uid), String(at));
+      if (!pendingSyncRef.current) { localStorage.removeItem(CLOUD_DIRTY_KEY); setSyncStatus("synced"); }
+    } catch (e) {
+      console.error("寫入雲端資料失敗，10 秒後重試", e);
+      if (!pendingSyncRef.current) pendingSyncRef.current = data; // 期間沒有更新的修改，就把這份放回去等重試
+      setSyncStatus("error");
+      if (!syncTimerRef.current) syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 10000);
+    }
+  }, []);
+  flushCloudSyncRef.current = flushCloudSync;
   const queueCloudSync = useCallback((data) => {
     if (!uidRef.current) return;
+    localStorage.setItem(CLOUD_DIRTY_KEY, uidRef.current);
+    pendingSyncRef.current = data;
     setSyncStatus("pending");
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(() => {
-      saveCloudData(uidRef.current, data).then(() => setSyncStatus("synced")).catch(() => setSyncStatus("error"));
-    }, 1500);
+    syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 1500);
+  }, []);
+  /* 手機切到別的 App、關分頁、鎖螢幕時，立刻把還沒傳的資料送出去 */
+  useEffect(() => {
+    const flushNow = () => { if (pendingSyncRef.current) flushCloudSyncRef.current(); };
+    const onVis = () => { if (document.visibilityState === "hidden") flushNow(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", flushNow);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", flushNow); };
   }, []);
   useEffect(() => {
     // 從 Google/Apple 登入頁導回來時，先把導回結果撈一次；如果失敗，直接把原因秀出來，不要默默吞掉
@@ -648,15 +685,37 @@ export default function App() {
     });
     const unsub = watchAuth(async (u) => {
       if (u) {
-        uidRef.current = u.uid;
-        const cloud = await loadCloudData(u.uid);
-        if (cloud) {
-          // 雲端已經有資料（例如換手機登入）：用雲端的蓋過本機
-          setD(cloud);
-          saveData(cloud);
+        // 讀雲端資料，失敗的話重試幾次（剛打開 App 時網路常常還沒準備好）
+        let cloud = null;
+        for (let i = 0; i < 3 && !cloud; i++) {
+          try { cloud = await loadCloudData(u.uid); }
+          catch (e) { console.error("讀取雲端資料失敗", e); if (i < 2) await new Promise(r => setTimeout(r, 1500 * (i + 1))); }
+        }
+        if (!cloud) {
+          // 一直讀不到：千萬不能把本機資料傳上去（可能是舊的，會蓋掉雲端），這次先只用本機、暫停同步
+          uidRef.current = null;
+          setSyncStatus("offline");
+          alert("讀取雲端資料失敗，這次先用這台裝置上的資料，暫時不會同步。網路恢復後重新整理頁面就會再試一次。");
         } else {
-          // 第一次登入：把這台裝置目前的資料當作雲端的起始版本上傳上去
-          await saveCloudData(u.uid, dRef.current);
+          uidRef.current = u.uid;
+          const localDirty = localStorage.getItem(CLOUD_DIRTY_KEY) === u.uid;
+          const lastSyncedAt = Number(localStorage.getItem(cloudSyncedAtKey(u.uid)) || 0);
+          let useLocal = !cloud.data; // 第一次登入、雲端還沒有資料：把這台裝置的資料當作雲端起始版本
+          if (cloud.data && localDirty) {
+            // 這台裝置上次有修改還沒傳上去。雲端如果在那之後沒被別台裝置改過，本機就是最新的，直接用本機；
+            // 兩邊都有改的話，讓使用者自己選
+            useLocal = cloud.updatedAt <= lastSyncedAt || window.confirm("這台裝置有還沒同步的修改，但雲端也有其他裝置更新過的資料。\n\n按「確定」保留這台裝置的資料（會蓋掉雲端）\n按「取消」改用雲端的資料（這台裝置沒同步的修改會不見）");
+          }
+          if (useLocal) {
+            queueCloudSync(dRef.current);
+            await flushCloudSyncRef.current();
+          } else {
+            localStorage.removeItem(CLOUD_DIRTY_KEY);
+            localStorage.setItem(cloudSyncedAtKey(u.uid), String(cloud.updatedAt));
+            setD(cloud.data);
+            saveData(cloud.data);
+            setSyncStatus("synced");
+          }
         }
         setCloudUser(u);
       } else {
@@ -670,7 +729,10 @@ export default function App() {
   const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
   const doAppleLogin = useCallback(() => loginWithApple().catch(e => alert("登入失敗：" + e.message)), []);
   const doAnonLogin = useCallback(() => loginAnonymously().catch(e => alert("登入失敗：" + e.message)), []);
-  const doCloudLogout = useCallback(() => logoutFirebase(), []);
+  const doCloudLogout = useCallback(async () => {
+    await flushCloudSyncRef.current(); // 登出前先把還沒傳的資料送出去
+    return logoutFirebase();
+  }, []);
   /* Email／密碼登入：回傳 {ok, error} 而不是直接 alert，讓畫面上可以顯示訊息 */
   const doEmailRegister = useCallback(async (email, password) => {
     try { await registerWithEmail(email, password); return { ok:true }; }
@@ -695,6 +757,9 @@ export default function App() {
   }, []);
   /* 「清空所有資料」專用：只砍掉雲端那份，不要像上面那個一樣又把（還沒清空的）本機資料重新傳回去，不然清空等於沒清 */
   const wipeAllData = useCallback(async () => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    pendingSyncRef.current = null; // 清空前把排隊中的上傳取消，不然清完又被傳回去
+    localStorage.removeItem(CLOUD_DIRTY_KEY);
     if (uidRef.current) await deleteCloudData(uidRef.current);
     localStorage.removeItem(DATA_KEY);
     alert("資料已完全清除");
@@ -1410,16 +1475,24 @@ export default function App() {
           const raw = await r.text();
           let d; try { const j = JSON.parse(raw); d = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
           const v7result = d?.quoteResponse?.result?.[0];
-          if (v7result?.regularMarketPrice) return { price: v7result.regularMarketPrice, name: v7result.shortName || v7result.longName || ticker, sym };
+          if (v7result?.regularMarketPrice) return { price: v7result.regularMarketPrice, name: v7result.shortName || v7result.longName || ticker, sym, chgPct: v7result.regularMarketChangePercent };
           const meta = d?.chart?.result?.[0]?.meta;
-          if (meta?.regularMarketPrice) return { price: meta.regularMarketPrice, name: meta.shortName || meta.longName || ticker, sym };
+          if (meta?.regularMarketPrice) {
+            // range=2d 時 chartPreviousClose 是「前兩天」的收盤，不能拿來算漲跌；改用日K裡倒數第二根的收盤（也就是昨收）
+            const closes = (d.chart.result[0].indicators?.quote?.[0]?.close || []).filter(v => v != null);
+            const prev = closes.length >= 2 ? closes[closes.length - 2] : null;
+            return { price: meta.regularMarketPrice, name: meta.shortName || meta.longName || ticker, sym, chgPct: prev ? Math.round((meta.regularMarketPrice - prev) / prev * 10000) / 100 : undefined };
+          }
         } catch { continue; }
       }
     }
     return null;
   }, []);
 
-  const fetchAllPrices = useCallback(async (stockList) => {
+  /* live=true（手動按「更新報價」）：每一檔都即時查一次，不只靠後端排程那份 stock_prices.json——
+     那份要等 GitHub 排程跑才會更新，實際上常常隔一兩個小時才跑一次，按了按鈕價格也不會變。
+     即時查不到的才保留 stock_prices.json 的價格當備援。 */
+  const fetchAllPrices = useCallback(async (stockList, { live = false } = {}) => {
     const list = stockList || stocks;
     if (!list || list.length === 0) return;
     // stock_prices.json 只有固定追蹤的一小群熱門股票（不是你實際持有的股票清單），
@@ -1439,14 +1512,14 @@ export default function App() {
           stillMissing.push(s);
           return s;
         }));
-        remaining = stillMissing;
+        remaining = live ? list : stillMissing;
       }
     } catch {}
     // 靜態清單裡沒有涵蓋到的股票（你實際持有、但不在那份固定追蹤清單裡），逐檔即時抓
     for (const st of remaining) {
       try {
         const res = await fetchPrice(st.ticker, st.market);
-        if (res?.price) upd("stocks", p => p.map(s => s.id===st.id ? {...s, curPrice:res.price, name:res.name||s.name, lastUpdated:new Date().toLocaleTimeString("zh-TW")} : s));
+        if (res?.price) upd("stocks", p => p.map(s => s.id===st.id ? {...s, curPrice:res.price, name:res.name||s.name, lastUpdated:new Date().toLocaleTimeString("zh-TW"), ...(res.chgPct != null ? { _extra:{ ...(s._extra||{}), chgPct:res.chgPct } } : {})} : s));
       } catch (e) {
         console.error(`抓 ${st.ticker} 報價失敗`, e); // 單一檔股票抓失敗不該讓後面的股票都抓不到，所以這裡接住錯誤繼續跑下一檔
       }
@@ -1960,7 +2033,7 @@ export default function App() {
   const [growthBucket, setGrowthBucket] = useState(null);
   const [offsetGoal, setOffsetGoal] = useState(null);
   const [depositGoal, setDepositGoal] = useState(null);
-  const refreshWatchStocks = useCallback(async () => {
+  const refreshWatchStocks = useCallback(async ({ live = false } = {}) => {
     const list = (dRef.current?.watchStocks) || watchStocks; // 用 dRef 讀最新狀態，避免剛加入一支股票、閉包還沒更新就抓不到那支新加的
     if (!list.length) return;
     setLoadingWatch(true);
@@ -1981,6 +2054,7 @@ export default function App() {
           needsLiveLookup.push(w);
           return w;
         }));
+        if (live) needsLiveLookup.splice(0, needsLiveLookup.length, ...list); // 手動更新：每一檔都即時查
       } else {
         needsLiveLookup.push(...list);
       }
@@ -1989,7 +2063,7 @@ export default function App() {
         if (!w?.ticker) continue;
         try {
           const res = await fetchPrice(w.ticker, w.market);
-          if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name } : x));
+          if (res?.price) upd("watchStocks", p => (p||[]).map(x => x.id===w.id ? { ...x, curPrice:res.price, name:res.name||x.name, ...(res.chgPct != null ? { _extra:{ ...(x._extra||{}), chgPct:res.chgPct } } : {}) } : x));
         } catch (e) { console.error(`抓 ${w.ticker} 報價失敗`, e); }
         await new Promise(r => setTimeout(r, 200));
       }

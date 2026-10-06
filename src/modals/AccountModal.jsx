@@ -185,8 +185,8 @@ function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, 
           <div style={{ fontSize:11, color:C.muted }}>{isAnon ? "匿名帳號（沒有信箱，換裝置無法登入回來）" : cloudUser.email}</div>
         </div>
       </div>
-      <div style={{ fontSize:11, color:syncStatus==="error"?C.expense:C.teal, marginBottom:16 }}>
-        {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : "✅ 已同步到雲端"}
+      <div style={{ fontSize:11, color:syncStatus==="error"||syncStatus==="offline"?C.expense:C.teal, marginBottom:16 }}>
+        {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : syncStatus === "offline" ? "⚠️ 讀不到雲端資料，暫停同步，重新整理頁面會再試一次" : "✅ 已同步到雲端"}
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>

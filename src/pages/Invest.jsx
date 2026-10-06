@@ -55,7 +55,7 @@ export default function InvestPage({
           {invTab === "dashboard" && (
             <div>
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
-                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
+                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
               </div>
 
               <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
@@ -215,7 +215,7 @@ export default function InvestPage({
 
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:12, color:C.muted }}>{tr("持股")} {new Set(stSum.filter(s=>s.totalSh>0).map(s=>`${s.ticker}_${s.market}`)).size} {tr("檔")} · {tr("市值")} {fmt(stTotMv > 0 ? stTotMv : stTotCost)}</div>
-                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(), refreshWatchStocks()]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
+                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
               </div>
 
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", borderRadius:10, background:`${C.accent}12`, border:`1px solid ${C.accent}33`, marginBottom:16 }}>
@@ -434,7 +434,7 @@ export default function InvestPage({
             <div>
               <WatchStockAdder addWatchStock={addWatchStock} refreshWatchStocks={refreshWatchStocks} C={C} iSt={iSt} tr={tr} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
-                <button onClick={() => { refreshWatchStocks(); fetchAllPrices(); }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
+                <button onClick={() => { refreshWatchStocks({ live:true }); fetchAllPrices(undefined, { live:true }); }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
               </div>
               {watchStocks.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>{tr("還沒有自選股，上面加一支想追蹤的股票吧")}</div>
