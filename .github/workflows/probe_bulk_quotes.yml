@@ -2,7 +2,7 @@ name: 探測批次股價來源（臨時）
 on:
   push:
     branches: [ "claude/**" ]
-    paths: [ "probe_bulk_quotes.py", ".github/workflows/probe_bulk_quotes.yml" ]
+    paths: [ "fetch_all_quotes.py", ".github/workflows/probe_bulk_quotes.yml" ]
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -10,4 +10,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: python probe_bulk_quotes.py
+      - run: python fetch_all_quotes.py && du -sh public/quotes && ls -la public/quotes public/quotes/us | head -40 && head -c 400 public/quotes/tw.json && echo && head -c 300 public/quotes/us/A.json && for f in public/quotes/tw.json public/quotes/us/A.json; do echo "$f gzip: $(gzip -c $f | wc -c)"; done

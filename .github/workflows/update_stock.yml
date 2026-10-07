@@ -32,6 +32,9 @@ jobs:
       - name: 執行更新腳本（股價 + 匯率）
         run: python update_stock_prices.py
 
+      - name: 全市場報價（台股＋美股，只放進網站、不存進 git）
+        run: python fetch_all_quotes.py || echo "全市場報價抓取失敗，這次網站沿用不到新資料，不影響部署"
+
       - name: 推送更新（存回 repo 留紀錄，跟部署與否無關）
         run: |
           git config user.name "github-actions[bot]"
