@@ -9,8 +9,8 @@
       （免費、不用連信用卡，專案會留在 Spark 方案）→ 照精靈跑完
    ══════════════════════════════════════════════════════ */
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { getAuth, connectAuthEmulator, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, runTransaction, onSnapshot } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
 // TODO：把這裡換成你自己 Firebase 專案設定頁複製出來的物件
@@ -33,6 +33,11 @@ if (isConfigured) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    // 只在本機開發測試時（npm run dev 加上 VITE_FIREBASE_EMULATOR=1）連到本機模擬器，正式網站不會用到
+    if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATOR) {
+      connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+      connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    }
     googleProvider = new GoogleAuthProvider();
     appleProvider = new OAuthProvider("apple.com");
   } catch (e) {
@@ -139,6 +144,33 @@ export async function saveCloudData(uid, data) {
   const updatedAt = Date.now();
   await setDoc(doc(db, "users", uid), { appData: data, updatedAt });
   return updatedAt;
+}
+
+/* 只在「雲端還是上次同步的那一版」時才寫入（用 transaction 確認），避免把別台裝置剛存的新資料整包蓋掉。
+   回傳 { ok:true, updatedAt }；雲端已經被別台裝置改過的話回傳 { ok:false, remote:{ data, updatedAt } }，讓外面先合併再重試 */
+export async function saveCloudDataIfUnchanged(uid, data, expectedUpdatedAt) {
+  if (!db) return { ok: true, updatedAt: 0 };
+  const ref = doc(db, "users", uid);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const remoteAt = snap.exists() ? (snap.data().updatedAt || 0) : 0;
+    if (snap.exists() && snap.data().appData && remoteAt !== expectedUpdatedAt) {
+      return { ok: false, remote: { data: snap.data().appData, updatedAt: remoteAt } };
+    }
+    const updatedAt = Math.max(Date.now(), remoteAt + 1);
+    tx.set(ref, { appData: data, updatedAt });
+    return { ok: true, updatedAt };
+  });
+}
+
+/* 即時監聽雲端資料：別台裝置一存檔，這台開著的 App 馬上收到，不會拿著舊資料繼續用。回傳取消監聽的函式 */
+export function watchCloudData(uid, cb) {
+  if (!db) return () => {};
+  return onSnapshot(doc(db, "users", uid), (snap) => {
+    if (snap.metadata.hasPendingWrites || !snap.exists()) return; // 自己還在送出中的寫入不用理
+    const v = snap.data();
+    if (v.appData) cb({ data: v.appData, updatedAt: v.updatedAt || 0 });
+  }, (e) => console.error("監聽雲端資料失敗", e));
 }
 
 /* 刪除這個帳號在雲端存的資料（本機資料不會動） */

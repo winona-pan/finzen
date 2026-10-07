@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
+import { mergeAppData } from "./syncMerge";
+import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, saveCloudDataIfUnchanged, watchCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
@@ -171,7 +172,10 @@ const isGoalSpendTxn = (t) => !!t.goalId || t.tags === "#願望兌現" || t.tags
 function saveData(d) { try { localStorage.setItem(DATA_KEY, JSON.stringify(d)); } catch {} }
 /* 雲端同步用：有還沒成功上傳的修改時記下帳號 uid；以及這台裝置最後一次跟雲端對齊時，雲端那份的時間戳 */
 const CLOUD_DIRTY_KEY = "finzen_cloudDirty";
-const cloudSyncedAtKey = (uid) => `finzen_cloudSyncedAt_${uid}`;
+/* 上次跟雲端對齊時的那一版資料＋雲端時間戳（三方合併的基準），每個帳號各存一份 */
+const cloudBaseKey = (uid) => `finzen_cloudBase_${uid}`;
+function loadCloudBase(uid) { try { const v = JSON.parse(localStorage.getItem(cloudBaseKey(uid)) || "null"); return v && v.data ? v : { data:null, at:0 }; } catch { return { data:null, at:0 }; } }
+function saveCloudBase(uid, data, at) { try { localStorage.setItem(cloudBaseKey(uid), JSON.stringify({ data, at })); } catch {} }
 function checkVer() {
   const prev = localStorage.getItem(VER_KEY);
   if (prev !== APP_VER) { localStorage.setItem(VER_KEY, APP_VER); return prev ? "✨ 新功能：計算機 🧮、底部導航改中文、現有持股登錄功能！" : null; }
@@ -633,37 +637,55 @@ export default function App() {
   const uidRef = useRef(null);
   const dRef = useRef(d);
   useEffect(() => { dRef.current = d; }, [d]);
-  /* 為什麼會掉資料：以前改完資料要等 1.5 秒才上傳雲端，這中間關掉 App 就沒傳上去；
-     下次打開一登入，又無條件用雲端那份（舊的）蓋掉本機，剛剛改的就不見了。
-     現在的做法：
-     1. 只要有還沒成功上傳的修改，就在 localStorage 記一個「髒」標記（記帳號 uid）
-     2. 切到背景／關掉頁面時，馬上把還沒傳的資料送出去，不等 1.5 秒
-     3. 下次登入時，如果這台裝置有髒標記，代表本機比雲端新，改成用本機的去更新雲端，而不是被雲端蓋掉
-     4. 上傳失敗會自動重試，不會默默當作成功 */
+  /* 雲端同步。曾經掉資料的兩個原因與對應做法：
+     A. 改完要等 1.5 秒才上傳，期間關掉 App 就沒傳上去，下次打開又被雲端舊資料蓋掉
+        → 有沒傳的修改就記「髒」標記；切背景／關頁面／登出時立刻上傳；下次登入看到髒標記就合併，不直接蓋掉
+     B. 兩台裝置都開著時，資料比較舊的那台一有變動（連自動更新股價都算），就把整包舊資料傳上去，蓋掉另一台剛記的
+        → 上傳時用 transaction 確認雲端還是上次同步那一版，被別台改過就先「三方合併」（syncMerge.js）再上傳；
+          另外即時監聽雲端，別台一存檔，開著的這台馬上更新 */
   const syncTimerRef = useRef(null);
-  const pendingSyncRef = useRef(null); // 還沒成功上傳的最新一份資料
+  const pendingSyncRef = useRef(false); // 有沒有還沒成功上傳的修改（要傳的永遠是最新的 dRef.current）
+  const syncingRef = useRef(false);
+  const baseRef = useRef({ data:null, at:0 });
+  const cloudUnsubRef = useRef(null);
   const flushCloudSyncRef = useRef(null);
+  const setBase = (uid, data, at) => { baseRef.current = { data, at }; saveCloudBase(uid, data, at); };
+  const applyLocal = (data) => { dRef.current = data; setD(data); saveData(data); };
   const flushCloudSync = useCallback(async () => {
     if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null; }
-    const uid = uidRef.current, data = pendingSyncRef.current;
-    if (!uid || !data) return;
-    pendingSyncRef.current = null;
+    const uid = uidRef.current;
+    if (!uid || !pendingSyncRef.current) return;
+    if (syncingRef.current) { syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 500); return; } // 上一次還在傳，等它傳完再傳
+    syncingRef.current = true;
+    pendingSyncRef.current = false;
     try {
-      const at = await saveCloudData(uid, data);
-      localStorage.setItem(cloudSyncedAtKey(uid), String(at));
+      for (let attempt = 0; ; attempt++) {
+        const toSave = dRef.current;
+        const res = await saveCloudDataIfUnchanged(uid, toSave, baseRef.current.at);
+        if (res.ok) { setBase(uid, toSave, res.updatedAt); break; }
+        // 雲端被別台裝置改過：拿上次同步的版本當基準，把兩邊的修改合併後再傳
+        const merged = mergeAppData(baseRef.current.data, dRef.current, res.remote.data);
+        setBase(uid, res.remote.data, res.remote.updatedAt);
+        applyLocal(merged);
+        if (attempt >= 4) throw new Error("一直跟其他裝置同時寫入，稍後再試");
+      }
       if (!pendingSyncRef.current) { localStorage.removeItem(CLOUD_DIRTY_KEY); setSyncStatus("synced"); }
+      else syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 300); // 傳的期間又有新修改
     } catch (e) {
       console.error("寫入雲端資料失敗，10 秒後重試", e);
-      if (!pendingSyncRef.current) pendingSyncRef.current = data; // 期間沒有更新的修改，就把這份放回去等重試
+      pendingSyncRef.current = true;
       setSyncStatus("error");
       if (!syncTimerRef.current) syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 10000);
+    } finally {
+      syncingRef.current = false;
     }
   }, []);
   flushCloudSyncRef.current = flushCloudSync;
   const queueCloudSync = useCallback((data) => {
     if (!uidRef.current) return;
+    dRef.current = data;
     localStorage.setItem(CLOUD_DIRTY_KEY, uidRef.current);
-    pendingSyncRef.current = data;
+    pendingSyncRef.current = true;
     setSyncStatus("pending");
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 1500);
@@ -676,6 +698,22 @@ export default function App() {
     window.addEventListener("pagehide", flushNow);
     return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", flushNow); };
   }, []);
+  /* 別台裝置存檔時，這台馬上收到：沒有自己的未上傳修改就直接換成雲端的；有的話先合併，之後再上傳合併結果 */
+  const onRemoteChange = useCallback((uid, remote) => {
+    if (uidRef.current !== uid || remote.updatedAt <= baseRef.current.at) return; // 比較舊的，不用理
+    if (JSON.stringify(remote.data) === JSON.stringify(dRef.current)) { setBase(uid, remote.data, remote.updatedAt); return; } // 自己剛傳上去的那一版
+    if (pendingSyncRef.current || syncingRef.current) {
+      const merged = mergeAppData(baseRef.current.data, dRef.current, remote.data);
+      setBase(uid, remote.data, remote.updatedAt);
+      applyLocal(merged);
+      pendingSyncRef.current = true;
+      if (!syncTimerRef.current) syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 300);
+    } else {
+      setBase(uid, remote.data, remote.updatedAt);
+      applyLocal(remote.data);
+      setSyncStatus("synced");
+    }
+  }, []);
   useEffect(() => {
     // 從 Google/Apple 登入頁導回來時，先把導回結果撈一次；如果失敗，直接把原因秀出來，不要默默吞掉
     checkRedirectResult().catch(e => {
@@ -687,6 +725,7 @@ export default function App() {
       alert(`登入失敗：${msg}`);
     });
     const unsub = watchAuth(async (u) => {
+      if (cloudUnsubRef.current) { cloudUnsubRef.current(); cloudUnsubRef.current = null; }
       if (u) {
         // 讀雲端資料，失敗的話重試幾次（剛打開 App 時網路常常還沒準備好）
         let cloud = null;
@@ -701,24 +740,26 @@ export default function App() {
           alert("讀取雲端資料失敗，這次先用這台裝置上的資料，暫時不會同步。網路恢復後重新整理頁面就會再試一次。");
         } else {
           uidRef.current = u.uid;
+          baseRef.current = loadCloudBase(u.uid);
           const localDirty = localStorage.getItem(CLOUD_DIRTY_KEY) === u.uid;
-          const lastSyncedAt = Number(localStorage.getItem(cloudSyncedAtKey(u.uid)) || 0);
-          let useLocal = !cloud.data; // 第一次登入、雲端還沒有資料：把這台裝置的資料當作雲端起始版本
-          if (cloud.data && localDirty) {
-            // 這台裝置上次有修改還沒傳上去。雲端如果在那之後沒被別台裝置改過，本機就是最新的，直接用本機；
-            // 兩邊都有改的話，讓使用者自己選
-            useLocal = cloud.updatedAt <= lastSyncedAt || window.confirm("這台裝置有還沒同步的修改，但雲端也有其他裝置更新過的資料。\n\n按「確定」保留這台裝置的資料（會蓋掉雲端）\n按「取消」改用雲端的資料（這台裝置沒同步的修改會不見）");
-          }
-          if (useLocal) {
+          if (!cloud.data) {
+            // 第一次登入、雲端還沒有資料：把這台裝置的資料當作雲端起始版本
+            baseRef.current = { data:null, at:0 };
             queueCloudSync(dRef.current);
             await flushCloudSyncRef.current();
+          } else if (localDirty) {
+            // 這台裝置上次有修改還沒傳上去：跟雲端合併（兩邊新記的都會留下），再把合併結果傳上去
+            const merged = cloud.updatedAt === baseRef.current.at ? dRef.current : mergeAppData(baseRef.current.data, dRef.current, cloud.data);
+            setBase(u.uid, cloud.data, cloud.updatedAt);
+            applyLocal(merged);
+            queueCloudSync(merged);
+            await flushCloudSyncRef.current();
           } else {
-            localStorage.removeItem(CLOUD_DIRTY_KEY);
-            localStorage.setItem(cloudSyncedAtKey(u.uid), String(cloud.updatedAt));
-            setD(cloud.data);
-            saveData(cloud.data);
+            setBase(u.uid, cloud.data, cloud.updatedAt);
+            applyLocal(cloud.data);
             setSyncStatus("synced");
           }
+          cloudUnsubRef.current = watchCloudData(u.uid, (remote) => onRemoteChange(u.uid, remote));
         }
         setCloudUser(u);
       } else {
@@ -727,7 +768,7 @@ export default function App() {
       }
       setAuthLoading(false);
     });
-    return unsub;
+    return () => { unsub(); if (cloudUnsubRef.current) cloudUnsubRef.current(); };
   }, []);
   const doCloudLogin = useCallback(() => loginWithGoogle().catch(e => alert("登入失敗：" + e.message)), []);
   const doAppleLogin = useCallback(() => loginWithApple().catch(e => alert("登入失敗：" + e.message)), []);
@@ -756,13 +797,16 @@ export default function App() {
   const doDeleteCloudData = useCallback(async () => {
     if (!uidRef.current) return;
     await deleteCloudData(uidRef.current);
-    await saveCloudData(uidRef.current, dRef.current); // 刪除後立刻用本機現況重新當作雲端起始版本，避免下次登入變成空的
+    const at = await saveCloudData(uidRef.current, dRef.current); // 刪除後立刻用本機現況重新當作雲端起始版本，避免下次登入變成空的
+    setBase(uidRef.current, dRef.current, at);
   }, []);
   /* 「清空所有資料」專用：只砍掉雲端那份，不要像上面那個一樣又把（還沒清空的）本機資料重新傳回去，不然清空等於沒清 */
   const wipeAllData = useCallback(async () => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    pendingSyncRef.current = null; // 清空前把排隊中的上傳取消，不然清完又被傳回去
+    pendingSyncRef.current = false; // 清空前把排隊中的上傳取消，不然清完又被傳回去
+    if (cloudUnsubRef.current) { cloudUnsubRef.current(); cloudUnsubRef.current = null; }
     localStorage.removeItem(CLOUD_DIRTY_KEY);
+    if (uidRef.current) localStorage.removeItem(cloudBaseKey(uidRef.current));
     if (uidRef.current) await deleteCloudData(uidRef.current);
     localStorage.removeItem(DATA_KEY);
     alert("資料已完全清除");
