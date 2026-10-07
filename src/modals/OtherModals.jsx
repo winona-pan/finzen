@@ -618,7 +618,7 @@ function StrategiesSheet({ goals, createEmergencyFund, confirm, close, setTab, C
       ? <div style={{ fontSize:11, color:C.teal, marginTop:8 }}>✓ {tr("已經建立了")}</div>
       : <div style={{ display:"flex", gap:8, marginTop:10 }}>
           {[3, 6].map(n => (
-            <button key={n} onClick={() => confirm(tr(`用「生活費預算 × ${n}個月」建立一個優先級最高的緊急預備金目標？`), () => createEmergencyFund(n))} style={{ flex:1, padding:9, borderRadius:10, background:`${C.accent}18`, border:"none", color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr(`建立 ${n} 個月份`)}</button>
+            <button key={n} onClick={() => confirm(tr(`用「生活費預算 × ${n}個月」建立一個優先級最高的緊急預備金目標？`), () => createEmergencyFund(n), tr("建立"))} style={{ flex:1, padding:9, borderRadius:10, background:`${C.accent}18`, border:"none", color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr(`建立 ${n} 個月份`)}</button>
           ))}
         </div> },
     { icon:"📊", title:tr("50/30/20 法則"), body:tr("收入分成需要 50%、想要 30%、儲蓄 20%。"), extra: link(tr("看這個月的比例"), () => go("charts")) },

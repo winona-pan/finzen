@@ -101,7 +101,7 @@ function LoggedOutView({ doCloudLogin, doAppleLogin, doAnonLogin, doEmailRegiste
       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
         <Btn onClick={doCloudLogin}>使用 Google 帳號登入</Btn>
         <Btn v="secondary" onClick={doAppleLogin}>使用 Apple 登入</Btn>
-        <button onClick={() => confirm("匿名登入沒有帳號/密碼，換瀏覽器或清除瀏覽器資料後就沒辦法登入回這個帳號，資料等於救不回來。真的要用匿名登入嗎？", doAnonLogin)}
+        <button onClick={() => confirm("匿名登入沒有帳號/密碼，換瀏覽器或清除瀏覽器資料後就沒辦法登入回這個帳號，資料等於救不回來。真的要用匿名登入嗎？", doAnonLogin, "用匿名登入", true)}
           style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"none", border:`1px dashed ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, cursor:"pointer" }}>
           先不綁帳號，用匿名登入試試看
         </button>
@@ -193,13 +193,13 @@ function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, 
         <div style={{ padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
           <div style={{ fontSize:12, fontWeight:700, color:C.text, marginBottom:6 }}>登出</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>這台裝置的資料還是會留著，只是不再同步。</div>
-          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定登出嗎？", doCloudLogout)}>登出</Btn>
+          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定登出嗎？", doCloudLogout, "登出", true)}>登出</Btn>
         </div>
 
         <div style={{ padding:12, borderRadius:12, background:`${C.warn}10`, border:`1px solid ${C.warn}33` }}>
           <div style={{ fontSize:12, fontWeight:700, color:C.warn, marginBottom:6 }}>清除雲端備份的資料</div>
           <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>只刪雲端那份備份，這台裝置本機的資料完全不會動；刪除後系統會馬上用這台裝置目前的資料重新備份一份上去。</div>
-          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定清除雲端備份的資料嗎？", () => doDeleteCloudData())}>清除雲端備份</Btn>
+          <Btn v="secondary" style={{ width:"100%" }} onClick={() => confirm("確定清除雲端備份的資料嗎？", () => doDeleteCloudData(), "清除雲端資料", true)}>清除雲端備份</Btn>
         </div>
       </div>
     </div>
