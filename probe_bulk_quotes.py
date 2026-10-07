@@ -1,35 +1,21 @@
-"""臨時探測腳本（第二輪）：上櫃清單、盤中即時一次能查幾檔（測完會刪掉）"""
-import json, time, urllib.request, gzip, http.client
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "application/json, text/plain, */*", "Accept-Encoding": "gzip"}
-def get(url, timeout=60):
+"""臨時探測腳本（第三輪）：上櫃清單換方法、上櫃盤中即時（測完會刪掉）"""
+import json, subprocess, time
+def curl(url, extra=()):
     t = time.time()
-    try:
-        req = urllib.request.Request(url, headers=UA)
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            try: raw = r.read()
-            except http.client.IncompleteRead as e: return "incomplete", e.partial, time.time()-t
-            if r.headers.get("Content-Encoding") == "gzip": raw = gzip.decompress(raw)
-            return r.status, raw, time.time() - t
-    except Exception as e:
-        return str(e)[:120], b"", time.time() - t
-def show(name, url):
-    st, raw, dt = get(url)
-    print(f"\n=== {name}: status={st} size={len(raw)/1024:.0f}KB time={dt:.1f}s")
+    r = subprocess.run(["curl", "-sS", "--compressed", "-m", "90", "--retry", "2", "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36", *extra, url], capture_output=True)
+    return r.returncode, r.stdout, time.time() - t, r.stderr.decode()[:150]
+def show(name, url, extra=()):
+    rc, raw, dt, err = curl(url, extra)
+    print(f"\n=== {name}: rc={rc} size={len(raw)/1024:.0f}KB time={dt:.1f}s {err}")
     try:
         j = json.loads(raw)
-        if isinstance(j, list): print("rows:", len(j), "sample:", json.dumps(j[0], ensure_ascii=False)[:350]); return j
-        if "msgArray" in j: print("rows:", len(j["msgArray"]), "sample:", json.dumps(j["msgArray"][-1], ensure_ascii=False)[:350]); return j["msgArray"]
-        print("keys", list(j.keys())[:10], json.dumps(j, ensure_ascii=False)[:400]); return j
-    except Exception as e:
-        print("parse fail", e, raw[:200])
-# 上櫃：gzip 再試一次；以及較小的「公司基本資料」清單
-show("TPEx 上櫃 日收盤（gzip）", "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes")
-show("TPEx 上櫃 盤後行情（舊版）", "https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&o=json")
-show("證交所 ISIN 上櫃清單", "https://isin.twse.com.tw/isin/C_public.jsp?strMode=4")
-twse = show("TWSE 上市 全部日收盤", "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL") or []
-codes = [r["Code"] for r in twse][:400]
-for n in (50, 100, 200):
-    q = "|".join(f"tse_{c}.tw" for c in codes[:n])
-    rows = show(f"盤中即時 一次 {n} 檔", "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + q)
-    time.sleep(2)
-show("GitHub Pages 目前網站", "https://winona-pan.github.io/finzen/stock_prices.json")
+        if isinstance(j, list): print("rows:", len(j), "sample:", json.dumps(j[0], ensure_ascii=False)[:300]); return j
+        if "msgArray" in j: print("rows:", len(j["msgArray"]), "sample:", json.dumps(j["msgArray"][0], ensure_ascii=False)[:300]); return j["msgArray"]
+        print(json.dumps(j, ensure_ascii=False)[:300])
+    except Exception as e: print("parse fail", e, raw[:150])
+otc = show("TPEx 日收盤（curl）", "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes") or []
+show("TPEx 本益比清單", "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis")
+show("TPEx 上櫃公司基本資料", "https://www.tpex.org.tw/openapi/v1/mopsfe_company_basic_info")
+show("TWSE 本益比清單（上市，比較小）", "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL")
+codes = [r.get("SecuritiesCompanyCode") or r.get("Code") for r in otc][:100] or ["6488","8069","5347","3105","6547"]
+show("上櫃 盤中即時 一次 100 檔", "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=" + "|".join(f"otc_{c}.tw" for c in codes))
