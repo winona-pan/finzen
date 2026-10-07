@@ -4,7 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  updateGoalRecurringSchedule, tr, accFieldLabel,
+  updateGoalRecurringSchedule, tr, accFieldLabel, updMulti, chargeFromAccField, CatPicker,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -396,18 +396,11 @@ export default function TxnModals({
           />
         )}
 
-        {modal === "wishOffset" && offsetGoal && (() => {
-          const g = offsetGoal;
-          const current = goalCurrentAmount(g);
-          const isWishlist = g.goalType === "wishlist";
-          return <Sheet title={isWishlist ? `🎁 ${g.name} 已實現願望` : `💸 ${g.name} 支出記錄`} onClose={close}>
-            <div style={{ padding:14, borderRadius:12, background:`${C.teal}12`, border:`1px solid ${C.teal}44`, marginBottom:14 }}>
-              <div style={{ fontSize:12, color:C.teal }}>{isWishlist ? "願望池累積金額" : "這個目標存下的錢，還剩"}</div>
-              <div style={{ fontSize:22, fontWeight:900, color:C.teal }}>{fmt(current)}</div>
-            </div>
-            <WishOffsetForm g={g} current={current} accs={accs} buckets={buckets} confirm={confirm} close={close} upd={upd} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Fld={Fld} Sl={Sl} CalcInp={CalcInp} Btn={Btn} tr={tr} />
-          </Sheet>;
-        })()}
+        {modal === "wishOffset" && offsetGoal && (
+          <GoalSpendSheet g={offsetGoal} current={goalCurrentAmount(offsetGoal)} txns={txns} accs={accs} buckets={buckets} cats={cats} ceMap={ceMap} AT={AT}
+            upd={upd} updMulti={updMulti} chargeFromAccField={chargeFromAccField} accFieldLabel={accFieldLabel} addCustomCE={addCustomCE}
+            confirm={confirm} close={close} C={C} iSt={iSt} fmt={fmt} TODAY={TODAY} Sheet={Sheet} Sl={Sl} Fld={Fld} Inp={Inp} CalcInp={CalcInp} CatPicker={CatPicker} Btn={Btn} tr={tr} />
+        )}
 
         {modal === "goalDeposit" && depositGoal && (() => {
           const g = depositGoal;
@@ -736,7 +729,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
       {isLaterStart
         ? <button onClick={() => setAllocSettings({ planStartYm:"" })} style={{ ...linkBtn, color:C.teal }}>📌 {tr("從")} {ymLabel(allocSettings.planStartYm)} {tr("開始")}・{tr("取消")}</button>
         : <button onClick={startNextMonthPlan} style={linkBtn}>{tr("下個月開始")}</button>}
-      <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll)} style={linkBtn}>{tr("清空")}</button>
+      <button onClick={() => confirm(tr("確定清空這裡目前的收入細項、投資分流、生活費覆寫，重新輸入？"), resetAll, tr("確認清空"))} style={linkBtn}>{tr("清空")}</button>
       <button onClick={() => { close(); setTimeout(() => setModal("yearlyForecast"), 50); }} style={linkBtn}>{tr("年度預測")} →</button>
       <button onClick={() => setShowDefaults(p=>!p)} style={linkBtn}>⚙️ {tr("預設值")} {showDefaults?"▲":"▼"}</button>
       <button onClick={() => setShowHelp(p=>!p)} style={linkBtn}>{tr("說明")} {showHelp?"▲":"▼"}</button>
@@ -780,36 +773,96 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
 }
 
 /* ── 願望對沖表單：記一筆消費，用願望池對沖，不干擾生活費常態分析 ── */
-function WishOffsetForm({ g, current, accs, buckets, confirm, close, upd, C, iSt, fmt, TODAY, Fld, Sl, CalcInp, Btn, tr }) {
+/* ── 花目標的錢：跟一般記帳一樣填分類、說明、帳戶、日期，可以連續記好幾筆（例如旅行的機票、住宿、餐費分開記）。
+   每一筆都會帶 goalId 並標 #目標支出（願望池沿用 #願望兌現），在記帳清單會顯示目標標籤，
+   也不會被算進生活費平均、安全水位、50/30/20 這些日常開銷統計 ── */
+function GoalSpendSheet({ g, current, txns, accs, buckets, cats, ceMap, AT, upd, updMulti, chargeFromAccField, accFieldLabel, addCustomCE, confirm, close, C, iSt, fmt, TODAY, Sheet, Sl, Fld, Inp, CalcInp, CatPicker, Btn, tr }) {
   const isWishlist = g.goalType === "wishlist";
-  const [price, setPrice] = useState(String(Math.round(current)));
+  const tag = isWishlist ? "#願望兌現" : "#目標支出";
   const linkedBucket = buckets.find(b => (g.bucketIds||[]).includes(b.id));
   const linkedAcc = accs.find(a => (g.accIds||[]).includes(a.id));
-  return (
-    <div>
-      <CalcInp label={isWishlist ? "實際購買金額" : "這筆支出金額（可以分好幾次記，不用一次花完）"} value={price} onChange={setPrice} />
-      <div style={{ fontSize:11, color:C.muted, marginBottom:14, lineHeight:1.6 }}>
-        會記一筆支出（標記為{isWishlist?"願望兌現":"目標支出"}，不會拉高你的「生活費自適應學習」平均值，也不會讓「生活區安全水位」被算成超支），{linkedBucket ? `並從子帳戶「${linkedBucket.name}」和它所屬的帳戶扣除對應金額` : linkedAcc ? `並從「${linkedAcc.name}」扣除對應金額` : "帳戶餘額不會自動變動，因為這個目標沒有連結特定帳戶／子帳戶"}。
-      </div>
-      <Btn style={{ width:"100%" }} onClick={() => {
-        const amt = +price || 0;
-        if (amt <= 0) return;
-        confirm(`${tr("確定記錄")}「${g.name}」${isWishlist?tr("已實現"):tr("支出")}，${tr("花費")} ${fmt(amt)}？`, () => {
-          const parentOfBucket = linkedBucket ? accs.find(a=>a.id===linkedBucket.accId) : null;
-          const chargeAcc = linkedAcc || parentOfBucket;
-          const accField = linkedBucket ? `bucket:${linkedBucket.id}` : (linkedAcc ? linkedAcc.name : "");
-          upd("txns", p => [...p, { id:Date.now(), type:"expense", cat:"其他", amt, desc:`${isWishlist?"🎁 願望兌現":"💸 目標支出"}：${g.name}`, acc:accField, date:TODAY, tags:"#願望兌現" }]);
-          if (linkedBucket) upd("buckets", p => (p||[]).map(b => b.id===linkedBucket.id ? { ...b, allocated:Math.max(0, b.allocated-amt) } : b));
-          if (chargeAcc) {
-            if (chargeAcc.type === "credit") upd("accs", p => p.map(a => a.id===chargeAcc.id ? { ...a, payable:(a.payable||0)+amt } : a));
-            else upd("accs", p => p.map(a => a.id===chargeAcc.id ? { ...a, bal:a.bal-amt } : a));
-          }
-          if (isWishlist) upd("goals", p => p.map(x => x.id===g.id ? { ...x, wishPurchased:true } : x));
-          close();
-        }, "確認記錄");
-      }}>{isWishlist ? "🎁 記錄已實現" : "💸 記錄這筆支出"}</Btn>
+  const defaultAcc = linkedBucket ? `bucket:${linkedBucket.id}` : (linkedAcc ? linkedAcc.name : "");
+  // 這個目標已經記過的花費：新資料看 goalId，舊資料（只有金額那版）看說明裡的目標名稱
+  const spent = txns.filter(t => t.type === "expense" && (t.goalId === g.id || (!t.goalId && t.tags === "#願望兌現" && (t.desc||"").endsWith(`：${g.name}`))))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.id > a.id ? 1 : -1));
+  const spentTotal = spent.reduce((s, t) => s + t.amt, 0);
+  const lastCat = spent[0]?.cat;
+  const blank = () => ({ amt:"", cat: lastCat && lastCat !== "其他" ? lastCat : (cats.expense[0] || "其他"), desc:"", acc:defaultAcc, date:TODAY });
+  const [f, setF] = useState(blank);
+  const [savedMsg, setSavedMsg] = useState("");
+
+  const save = (markDone) => {
+    const amt = +f.amt || 0;
+    if (amt <= 0) return;
+    const txn = { id:Date.now(), type:"expense", cat:f.cat || "其他", amt, desc:f.desc.trim() || g.name, acc:f.acc, date:f.date || TODAY, tags:tag, goalId:g.id, goalName:g.name };
+    const doSave = () => {
+      updMulti({ txns: p => [...p, txn], ...(f.acc ? chargeFromAccField(f.acc, amt) : {}) });
+      if (isWishlist && markDone) upd("goals", p => p.map(x => x.id === g.id ? { ...x, wishPurchased:true } : x));
+      setSavedMsg(`✓ ${tr("已記錄")} ${f.desc.trim() || f.cat} ${fmt(amt)}`);
+      setF(p => ({ ...blank(), cat:p.cat, acc:p.acc, date:p.date })); // 連續記下一筆時保留分類、帳戶、日期
+      if (markDone) close();
+    };
+    if (amt > current && current > 0) confirm(`${tr("這筆")} ${fmt(amt)} ${tr("超過目標目前存下的")} ${fmt(current)}，${tr("確定要記嗎？")}`, doSave, tr("確認記錄"), true);
+    else doSave();
+  };
+
+  const accOptions = <>
+    <option value="">{tr("不扣帳戶餘額")}</option>
+    {accs.map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}
+    {buckets.length > 0 && <optgroup label={tr("子帳戶")}>{buckets.map(b => <option key={b.id} value={`bucket:${b.id}`}>{b.emoji} {accs.find(a=>a.id===b.accId)?.name}・{b.name}</option>)}</optgroup>}
+  </>;
+
+  return <Sheet title={`${g.emoji || "🎯"} ${g.name}・${tr("記錄花費")}`} onClose={close}>
+    {/* 這個目標的錢：存下多少、已經花多少 */}
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", padding:"14px 6px", borderRadius:18, background:C.card, marginBottom:16 }}>
+      {[[isWishlist ? tr("累積") : tr("還剩"), current, C.teal], [tr("已花"), spentTotal, C.text]].map(([l, v, c], i) => (
+        <div key={l} style={{ textAlign:"center", borderLeft:i>0?`1px solid ${C.border}`:"none" }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>{l}</div>
+          <div style={{ fontSize:18, fontWeight:900, color:c, marginTop:2 }}>{fmt(v)}</div>
+        </div>
+      ))}
     </div>
-  );
+
+    <CalcInp label={tr("金額")} value={f.amt} onChange={v => setF(p => ({ ...p, amt:v }))} />
+    <CatPicker value={f.cat} onChange={v => setF(p => ({ ...p, cat:v }))} cats={cats.expense} ce={ceMap} onAddCat={(v,e) => { upd("cats", p => ({ ...p, expense:[...p.expense, v] })); addCustomCE(v, e); }} />
+    <Inp label={tr("說明")} placeholder={isWishlist ? tr("例如：相機本體") : tr("例如：機票、住宿")} value={f.desc} onChange={e => setF(p => ({ ...p, desc:e.target.value }))} />
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+      <Sl label={tr("從哪裡扣")} value={f.acc} onChange={e => setF(p => ({ ...p, acc:e.target.value }))}>{accOptions}</Sl>
+      <Fld label={tr("日期")}><input type="date" value={f.date} onChange={e => setF(p => ({ ...p, date:e.target.value }))} style={iSt} /></Fld>
+    </div>
+    <div style={{ fontSize:10.5, color:C.muted, margin:"-4px 2px 12px", lineHeight:1.6 }}>
+      🎯 {tr("會標成目標花費，記帳清單看得到，但不算進生活費和 50/30/20。")}{defaultAcc ? "" : ` ${tr("這個目標沒有連結帳戶，記得選從哪裡扣。")}`}
+    </div>
+
+    <div style={{ display:"flex", gap:8 }}>
+      <Btn style={{ flex:1 }} onClick={() => save(false)}>＋ {tr("記一筆")}</Btn>
+      {isWishlist && !g.wishPurchased && <Btn style={{ flex:1, background:C.teal }} onClick={() => save(true)}>🎁 {tr("記錄並完成願望")}</Btn>}
+    </div>
+    {savedMsg && <div style={{ textAlign:"center", fontSize:11, fontWeight:700, color:C.teal, marginTop:8 }}>{savedMsg}・{tr("可以繼續記下一筆")}</div>}
+
+    {/* 已記錄的花費明細 */}
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"22px 2px 8px" }}>
+      <span style={{ fontSize:12, fontWeight:800, color:C.textSub }}>{tr("花費明細")}</span>
+      <span style={{ fontSize:10, color:C.muted }}>{spent.length} {tr("筆")}</span>
+    </div>
+    {spent.length === 0 ? (
+      <div style={{ fontSize:11, color:C.muted, padding:"12px 14px", borderRadius:16, background:C.card }}>{tr("還沒有記錄")}</div>
+    ) : (
+      <div style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
+        {spent.map((t, i) => (
+          <div key={t.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+            <div style={{ width:30, height:30, borderRadius:9, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, flexShrink:0 }}>{ceMap[t.cat] || "📦"}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:12.5, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.desc || t.cat}</div>
+              <div style={{ fontSize:10, color:C.muted }}>{t.date?.slice(5).replace("-", "/")}・{t.cat}{t.acc ? `・${accFieldLabel(t.acc)}` : ""}</div>
+            </div>
+            <span style={{ fontSize:13, fontWeight:800, color:C.expense }}>-{fmt(t.amt)}</span>
+          </div>
+        ))}
+      </div>
+    )}
+    <div style={{ fontSize:10, color:C.muted, textAlign:"center", marginTop:8 }}>{tr("要修改或刪除，到總覽的記帳清單點那一筆")}</div>
+  </Sheet>;
 }
 
 /* ── 把這個月多存的錢，直接存入某個目標的連結帳戶／子帳戶 ── */

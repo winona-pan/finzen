@@ -165,6 +165,9 @@ function loadData() {
     return { ...DEF, ...saved, rates: { ...DEF_RATES, ...(saved.rates || {}) }, cats: { expense: expCats, income: incCats } };
   } catch { return DEF; }
 }
+/* 花目標存下來的錢（旅費、買相機…）：舊資料用 #願望兌現 標記，新的會帶 goalId（並標 #目標支出）。
+   這些是事先存好的錢，不算進生活費平均、安全水位、50/30/20 等日常開銷統計 */
+const isGoalSpendTxn = (t) => !!t.goalId || t.tags === "#願望兌現" || t.tags === "#目標支出";
 function saveData(d) { try { localStorage.setItem(DATA_KEY, JSON.stringify(d)); } catch {} }
 /* 雲端同步用：有還沒成功上傳的修改時記下帳號 uid；以及這台裝置最後一次跟雲端對齊時，雲端那份的時間戳 */
 const CLOUD_DIRTY_KEY = "finzen_cloudDirty";
@@ -230,7 +233,7 @@ function InfoBtn({ msg }) {
 
 function ConfirmDialog({ msg, onOk, onCancel, okLabel }) {
   const label = okLabel || "確認刪除";
-  const isDanger = !okLabel || label.includes("刪除");
+  const isDanger = !okLabel || /刪除|清除|清空|移除/.test(label);
   return (
     <div style={{ position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.7)",backdropFilter:"blur(8px)" }}>
       <div style={{ background:C.surface,border:`1px solid ${C.borderL}`,borderRadius:20,padding:"28px 24px",maxWidth:320,width:"90%",textAlign:"center" }}>
@@ -810,7 +813,7 @@ export default function App() {
   }, [accs, buckets]);
   /* ── 疊加在既有「生活費」相關篩選條件後面用：排除手動標記「不列入生活費」的交易、以及來自「不算生活費」帳戶的花費，
      不動原本每個地方各自的邏輯（例如有些地方本來就排除願望兌現、有些沒有），單純多加這一層排除 ── */
-  const notLivingExcluded = useCallback((t) => t.tags !== "#不列入生活費" && !isLivingExcludedAcc(t.acc), [isLivingExcludedAcc]);
+  const notLivingExcluded = useCallback((t) => t.tags !== "#不列入生活費" && !isGoalSpendTxn(t) && !isLivingExcludedAcc(t.acc), [isLivingExcludedAcc]);
   const addBucket = useCallback((accId, name, emoji, allocated) => {
     upd("buckets", p => {
       const siblings = (p||[]).filter(b => b.accId === accId);
@@ -2340,7 +2343,7 @@ export default function App() {
     }
     const histVariable = !useAdaptiveLiving ? [] : months.map(({ y, m }) => {
       const ym = `${y}-${String(m).padStart(2, "0")}`;
-      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t))
+      return txns.filter(t => t.date.startsWith(ym) && t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
         .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     }).filter(v => v > 0);
     const adaptiveLiving = histVariable.length ? Math.round(histVariable.reduce((s,v)=>s+v,0) / histVariable.length) : (allocSettings.defaultLivingCap || 0);
@@ -2404,7 +2407,7 @@ export default function App() {
   /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現、手動標記不列入生活費的交易、不算生活費帳戶的花費）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
     const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
-    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t))
+    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
@@ -2434,7 +2437,7 @@ export default function App() {
         }
         budget = hist.length ? Math.round(hist.reduce((s,v)=>s+v,0)/hist.length) : (allocSettings.defaultLivingCap || 0);
       }
-      const spent = txns.filter(t => t.date.startsWith(ym) && t.type==="expense" && t.cat!=="帳戶調整" && t.tags!=="#願望兌現" && notLivingExcluded(t))
+      const spent = txns.filter(t => t.date.startsWith(ym) && t.type==="expense" && t.cat!=="帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
         .reduce((s,t)=>s+(t.proxyAmt?t.amt-t.proxyAmt:t.amt),0);
       return { ym, budget, spent, under: budget > 0 ? spent <= budget : null };
     }).filter(m => m.under !== null);
@@ -2463,7 +2466,7 @@ export default function App() {
   const budget502030 = useMemo(() => {
     const needCats = allocSettings.needCats && allocSettings.needCats.length ? allocSettings.needCats : NEED_CATS_DEFAULT;
     const wantCats = allocSettings.wantCats && allocSettings.wantCats.length ? allocSettings.wantCats : WANT_CATS_DEFAULT;
-    const expenseTxns = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現" && notLivingExcluded(t));
+    const expenseTxns = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t));
     const sumBy = (cats) => expenseTxns.filter(t => cats.includes(t.cat)).reduce((s,t) => s + (t.proxyAmt ? t.amt-t.proxyAmt : t.amt), 0);
     const needs = sumBy(needCats);
     const wants = sumBy(wantCats);
@@ -2617,7 +2620,7 @@ export default function App() {
 
     // 這個月支出前5大類別
     const catTotals = {};
-    moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && t.tags !== "#願望兌現").forEach(t => {
+    moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t)).forEach(t => {
       const amt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
       catTotals[t.cat] = (catTotals[t.cat]||0) + amt;
     });
@@ -2835,7 +2838,7 @@ export default function App() {
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
     nAcc, setNAcc, addAcc, payF, setPayF, doPayCred, doBuy, doSell, doInit, deleteTrade,
     nD, setND, D0, addDebt, settleDebt, setSettleDebt, editDebt, setEditDebt, settleAcc, setSettleAcc, settleCustomAmt, setSettleCustomAmt,
-    selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME,
+    selTxn, setSelTxn, selSub, setSelSub, selBill, setSelBill, saveTxn, delTxn, addCustomCE, CUR_NAME, updMulti, isGoalSpendTxn,
     sq, setSq, showSq, setShowSq, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, month,
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,

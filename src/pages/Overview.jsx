@@ -8,7 +8,7 @@ export default function OverviewPage({
   useMvForAssets, setNT, T0, descHistoryByCat, tagsHistory, month,
   selTxn, setSelTxn, delTxn, alertR, alertAmt, passiveMo, grpTxns, rl, prevMo, nextMo, totPools, totExpensePools,
   savingsTargets, setSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, showNextMonthReminder, goalCurrentAmount, goalDisplayAmount, guiltFreeGauge, allocSettings,
-  setEditGoal, getGoalSavingsTarget,
+  setEditGoal, getGoalSavingsTarget, isGoalSpendTxn,
   livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
   hideAmounts, tr, accFieldLabel,
   // 共用 UI atoms
@@ -226,9 +226,10 @@ export default function OverviewPage({
                             <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{t.cat}</span>
                             {t.proxyAmt > 0 && <Bdg color={C.warn}>{tr("含代墊")}</Bdg>}
                             {t.type === "adjust" && <Bdg color={C.muted}>{tr("調整")}</Bdg>}
+                            {isGoalSpendTxn(t) && <Bdg color={C.teal}>🎯 {t.goalName || tr("目標")}</Bdg>}
                           </div>
                           <div style={{ fontSize:12, color:C.textSub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                            {t.desc}{t.acc && <span style={{ color:C.muted }}> · {accFieldLabel(t.acc)}</span>}{t.tags && <span style={{ color:C.accentL }}> {t.tags}</span>}
+                            {t.desc}{t.acc && <span style={{ color:C.muted }}> · {accFieldLabel(t.acc)}</span>}{t.tags && !isGoalSpendTxn(t) && <span style={{ color:C.accentL }}> {t.tags}</span>}
                           </div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>

@@ -442,7 +442,7 @@ export default function InvestPage({
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {watchStocks.map(w => (
                     <Card key={w.id} style={{ padding:0, overflow:"hidden" }}>
-                      <SwipeRow onDelete={() => confirm(`${tr("移除自選股")}「${w.ticker}」？`, () => removeWatchStock(w.id))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
+                      <SwipeRow onDelete={() => confirm(`${tr("移除自選股")}「${w.ticker}」？`, () => removeWatchStock(w.id), tr("確認移除"))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
                         <div style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                           <div>
                             <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>

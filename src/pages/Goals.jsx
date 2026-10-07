@@ -38,7 +38,7 @@ export default function GoalsPage({
           </div>
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={() => upd("goals", p => p.map(x => x.id===g.id ? { ...x, pinned:!x.pinned } : x))} title="顯示在總覽頁" style={{ background:"none", border:"none", cursor:"pointer", color:g.pinned?C.accent:C.muted, fontSize:16 }}>{g.pinned?"📌":"📍"}</button>
-            <button onClick={() => confirm(`${tr("把")}「${g.name}」${tr("移到已封存？可以隨時從已封存清單恢復。")}`, () => setGoalArchived(g.id, true))} title={tr("封存")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>📦</button>
+            <button onClick={() => confirm(`${tr("把")}「${g.name}」${tr("移到已封存？可以隨時從已封存清單恢復。")}`, () => setGoalArchived(g.id, true), tr("確認封存"))} title={tr("封存")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>📦</button>
             <button onClick={() => { setEditGoal({...g}); setModal("editGoal"); }} style={{ background:"none", border:"none", cursor:"pointer", color:C.accentL, fontSize:16 }}>✏️</button>
             <button onClick={() => confirm(`${tr("刪除目標")}「${g.name}」？`, () => upd("goals", p => p.filter(x => x.id !== g.id)))} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, fontSize:16 }}>✕</button>
           </div>
@@ -70,6 +70,7 @@ export default function GoalsPage({
         ) : pct >= 100 && (
           <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10, background:`${C.teal}12`, border:`1px solid ${C.teal}33`, textAlign:"center" }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.teal, marginBottom:6 }}>🎉 已達成目標！</div>
+            {g.goalType === "wishlist" && <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ padding:"6px 14px", borderRadius:8, background:"none", border:`1px solid ${C.teal}`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer", marginRight:6 }}>🎁 記錄購買</button>}
             <button onClick={() => setGoalArchived(g.id, true)} style={{ padding:"6px 14px", borderRadius:8, background:C.teal, border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>📦 封存這個目標</button>
             <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>不封存也沒關係，會繼續留在這裡</div>
           </div>
@@ -105,7 +106,7 @@ export default function GoalsPage({
           return <div style={{ marginTop:4, fontSize:11, color:C.warn, textAlign:"center" }}>⚠️ 照目前規劃的節奏，到期時預估還會差 {fmt(stillShort)}</div>;
         })()}
         {g.goalType === "sinking" && current > 0 && (
-          <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>💸 花這筆錢了，記一筆支出（不算進生活費）</button>
+          <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>💸 記錄花費（機票、住宿…分開記）</button>
         )}
         {g.goalType !== "milestone" && ((g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0)) && (
           <button onClick={() => { setDepositGoal(g); setModal("goalDeposit"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:12, cursor:"pointer" }}>💰 這個月多存的錢，存入這個目標</button>
@@ -223,7 +224,7 @@ export default function GoalsPage({
                       </div>
                     </div>
                     {canOffset && (
-                      <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>{isWishlist ? "🎁 已實現願望，記一筆對沖" : "💸 開始花這筆錢了，記一筆支出（不算進生活費）"}</button>
+                      <button onClick={() => { setOffsetGoal(g); setModal("wishOffset"); }} style={{ width:"100%", marginTop:8, padding:8, borderRadius:8, background:`${C.teal}18`, border:`1px solid ${C.teal}44`, color:C.teal, fontWeight:700, fontSize:12, cursor:"pointer" }}>{isWishlist ? "🎁 記錄購買" : "💸 記錄花費"}</button>
                     )}
                   </Card>
                 );
