@@ -1,0 +1,13 @@
+name: 探測批次股價來源（臨時）
+on:
+  push:
+    branches: [ "claude/**" ]
+    paths: [ "probe_bulk_quotes.py", ".github/workflows/probe_bulk_quotes.yml" ]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: python probe_bulk_quotes.py
