@@ -81,9 +81,10 @@ def load_previous():
 
 
 def fetch_tw_lists():
-    """回傳 {代號: {"p":價, "c":漲跌%, "n":名稱, "m":"tse"/"otc"}}"""
+    """回傳 ({代號: {"p":價, "c":漲跌%, "n":名稱, "m":"tse"/"otc"}}, 上市資料的日期（民國 1151007 這種格式）)"""
     out = {}
     listed = fetch("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL") or []
+    listed_date = max((r.get("Date") or "" for r in listed), default="")
     for r in listed:
         code = (r.get("Code") or "").strip()
         if not TW_CODE_RE.match(code):
@@ -100,16 +101,23 @@ def fetch_tw_lists():
         p = num(r.get("Close"))
         out[code] = {"p": p, "c": pct_from_change(p, num(r.get("Change"))), "n": (r.get("CompanyName") or "").strip(), "m": "otc"}
         n_otc += 1
-    print(f"  📈 上櫃：{n_otc} 檔")
-    return out
+    print(f"  📈 上櫃：{n_otc} 檔（上市資料日期 {listed_date}）")
+    return out, listed_date
 
 
-def in_tw_session():
+def need_tw_realtime(listed_date):
+    """要不要另外查即時報價：
+    - 盤中（09:00～13:30，多留一點時間拿最後成交價）一定要
+    - 收盤後，證交所的「上市全部收盤」常常要到晚上才換成今天的，在那之前也要用即時報價補上今天的收盤價
+    其他時間（晚上已更新、假日）就不用，免得一直對證交所發請求"""
     t = now_tw()
     if t.weekday() >= 5:
         return False
     minutes = t.hour * 60 + t.minute
-    return 9 * 60 - 5 <= minutes <= 14 * 60 + 30  # 收盤後再跑一兩次，拿到最後成交價
+    if 9 * 60 - 5 <= minutes <= 13 * 60 + 45:
+        return True
+    today_roc = f"{t.year - 1911}{t:%m%d}"
+    return minutes > 13 * 60 + 45 and listed_date != today_roc
 
 
 def apply_tw_realtime(tw):
@@ -175,8 +183,8 @@ def main():
     print(f"🕐 全市場報價 {now_tw():%Y-%m-%d %H:%M}")
     prev_tw, prev_us = load_previous()
 
-    tw = fetch_tw_lists()
-    if tw and in_tw_session():
+    tw, listed_date = fetch_tw_lists()
+    if tw and need_tw_realtime(listed_date):
         apply_tw_realtime(tw)
     tw_out = compact(tw) if len(tw) > 500 else prev_tw  # 這次抓得太少（來源出問題），沿用網站上那份
     if tw_out is prev_tw:

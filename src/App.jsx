@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { mergeAppData } from "./syncMerge";
+import { getBulkQuotes } from "./bulkQuotes";
 import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, saveCloudDataIfUnchanged, watchCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
 
@@ -1542,27 +1543,36 @@ export default function App() {
   const fetchAllPrices = useCallback(async (stockList, { live = false } = {}) => {
     const list = stockList || stocks;
     if (!list || list.length === 0) return;
-    // stock_prices.json 只有固定追蹤的一小群熱門股票（不是你實際持有的股票清單），
-    // 所以就算這個檔案讀取成功，也只處理「剛好有在那份清單裡」的持股；沒對到的，都要落到下面逐檔即時抓
-    let remaining = list;
+    // ① stock_prices.json：固定追蹤的幾檔，有盤中高低點、成交量、法人資料
+    const jsonHit = new Map();
     try {
       const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
       const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
       if (res.ok) {
         const data = await res.json();
-        const stillMissing = [];
-        upd("stocks", p => p.map(s => {
-          if (!list.some(x => x.id === s.id)) return s; // 不在這次要更新的範圍內，原樣保留
+        list.forEach(s => {
           const keys = [`${s.ticker}.TW`, s.ticker, s.ticker.toUpperCase(), `${s.ticker}.US`];
           const item = keys.map(k => data[k]).find(v => v?.price);
-          if (item) return { ...s, curPrice:item.price, name:item.name||s.name, lastUpdated:item.updated||"", _extra: { high:item.high, low:item.low, vol:item.vol, chgPct:item.chgPct, institutional:item.institutional, institutional_date:item.institutional_date } };
-          stillMissing.push(s);
-          return s;
-        }));
-        remaining = live ? list : stillMissing;
+          if (item) jsonHit.set(s.id, item);
+        });
       }
     } catch {}
-    // 靜態清單裡沒有涵蓋到的股票（你實際持有、但不在那份固定追蹤清單裡），逐檔即時抓
+    // ② 全市場報價（quotes/）：所有台股、美股都有，只下載用得到的那幾份；不用再手動把持股加進追蹤清單
+    const notInJson = list.filter(s => !jsonHit.has(s.id));
+    // 台股全部在同一份 tw.json，順便也幫固定追蹤的那幾檔拿官方中文名（Yahoo 給的是英文）
+    const bulk = await getBulkQuotes([...notInJson, ...list.filter(s => jsonHit.has(s.id) && s.market !== "US")]);
+    const bulkTime = new Date().toLocaleTimeString("zh-TW");
+    if (jsonHit.size || bulk.size) upd("stocks", p => p.map(s => {
+      if (!list.some(x => x.id === s.id)) return s; // 不在這次要更新的範圍內，原樣保留
+      const item = jsonHit.get(s.id);
+      if (item) return { ...s, curPrice:item.price, name:(s.market !== "US" && bulk.get(`${s.market}:${s.ticker}`)?.name) || item.name || s.name, lastUpdated:item.updated||"", _extra: { high:item.high, low:item.low, vol:item.vol, chgPct:item.chgPct, institutional:item.institutional, institutional_date:item.institutional_date } };
+      const q = bulk.get(`${s.market}:${s.ticker}`);
+      // 台股用官方中文名；美股名稱很長，使用者自己取的名字優先
+      if (q) return { ...s, curPrice:q.price, name: s.market === "US" ? (s.name || q.name) : (q.name || s.name), lastUpdated:bulkTime, _extra:{ ...(s._extra||{}), chgPct:q.chgPct } };
+      return s;
+    }));
+    // ③ 兩邊都沒有的（剛上市、代號打錯…），或手動按「更新報價」要最即時的，才逐檔即時查
+    const remaining = live ? list : notInJson.filter(s => !bulk.has(`${s.market}:${s.ticker}`));
     for (const st of remaining) {
       try {
         const res = await fetchPrice(st.ticker, st.market);
@@ -2091,20 +2101,24 @@ export default function App() {
         const res = await fetch(`${base}stock_prices.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
         if (res.ok) data = await res.json();
       } catch {}
-      const needsLiveLookup = [];
-      if (data) {
-        upd("watchStocks", p => (p||[]).map(w => {
-          if (!w?.ticker) return w; // 保護一下，避免清單裡有壞掉/缺欄位的舊資料讓整批更新都失敗
-          const keys = [`${w.ticker}.TW`, w.ticker, w.ticker.toUpperCase(), `${w.ticker}.US`];
-          const item = keys.map(k => data[k]).find(v => v?.price);
-          if (item) return { ...w, curPrice:item.price, name:item.name||w.name, _extra:{ chgPct:item.chgPct } };
-          needsLiveLookup.push(w);
-          return w;
-        }));
-        if (live) needsLiveLookup.splice(0, needsLiveLookup.length, ...list); // 手動更新：每一檔都即時查
-      } else {
-        needsLiveLookup.push(...list);
-      }
+      const valid = list.filter(w => w?.ticker); // 保護一下，避免清單裡有壞掉/缺欄位的舊資料讓整批更新都失敗
+      const jsonHit = new Map();
+      if (data) valid.forEach(w => {
+        const keys = [`${w.ticker}.TW`, w.ticker, w.ticker.toUpperCase(), `${w.ticker}.US`];
+        const item = keys.map(k => data[k]).find(v => v?.price);
+        if (item) jsonHit.set(w.id, item);
+      });
+      // 全市場報價：自選股通常不在固定追蹤清單裡，從這裡補上（只下載用得到的那幾份）
+      const bulk = await getBulkQuotes(valid.filter(w => !jsonHit.has(w.id) || w.market !== "US"));
+      if (jsonHit.size || bulk.size) upd("watchStocks", p => (p||[]).map(w => {
+        if (!w?.ticker) return w;
+        const item = jsonHit.get(w.id);
+        if (item) return { ...w, curPrice:item.price, name:(w.market !== "US" && bulk.get(`${w.market}:${w.ticker}`)?.name) || item.name || w.name, _extra:{ chgPct:item.chgPct } };
+        const q = bulk.get(`${w.market}:${w.ticker}`);
+        if (q) return { ...w, curPrice:q.price, name: w.market === "US" ? (w.name || q.name) : (q.name || w.name), _extra:{ ...(w._extra||{}), chgPct:q.chgPct } };
+        return w;
+      }));
+      const needsLiveLookup = live ? valid : valid.filter(w => !jsonHit.has(w.id) && !bulk.has(`${w.market}:${w.ticker}`));
       // 靜態清單裡沒有的（自選股通常不在你原本的持股清單內），改用即時查詢逐一補上
       for (const w of needsLiveLookup) {
         if (!w?.ticker) continue;
