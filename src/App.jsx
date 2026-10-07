@@ -1883,6 +1883,37 @@ export default function App() {
 
   const stTotMv = useMemo(() => stSum.reduce((s, x) => s + x.mv, 0), [stSum]);
   const stTotCost = useMemo(() => stSum.reduce((s, x) => s + x.totalCost, 0), [stSum]);
+
+  /* ── 每日投資波動：每個交易日記一筆投資組合的快照（全部換算成台幣），用前後兩天相減畫出每天賺賠 ──
+     pnl＝未實現損益＋已實現損益：只用未實現的話，賣掉賺錢的股票那天會被算成「虧了」 */
+  const portfolioNow = useMemo(() => {
+    let mv = 0, cost = 0, realized = 0, ready = true, hasHoldings = false;
+    stSum.forEach(s => {
+      const cur = s.market === "US" ? "USD" : "TWD";
+      if (s.totalSh > 0) { hasHoldings = true; if (!(s.curPrice > 0)) ready = false; }
+      mv += toTWD(s.mv, cur, rates);
+      cost += toTWD(s.totalCost, cur, rates);
+      (s.trades || []).forEach(t => { if (t.type === "sell") realized += toTWD((t.price - s.avgCost) * t.shares - (t.fee || 0), cur, rates); });
+    });
+    return { mv: Math.round(mv), cost: Math.round(cost), pnl: Math.round(mv - cost + realized), ready, hasHoldings };
+  }, [stSum, rates]);
+  /* 快照記在哪一天：報價每個交易日 13:50 更新，所以 13:50 以前看到的是前一個交易日的收盤，記在前一個交易日 */
+  useEffect(() => {
+    if (authLoading || !portfolioNow.ready || !portfolioNow.hasHoldings) return;
+    const now = new Date(Date.now() + 8 * 3600 * 1000); // 台灣時間（用 UTC 欄位讀）
+    const afterUpdate = now.getUTCHours() * 60 + now.getUTCMinutes() >= 13 * 60 + 50;
+    if (!(now.getUTCDay() >= 1 && now.getUTCDay() <= 5 && afterUpdate)) now.setUTCDate(now.getUTCDate() - 1);
+    while (now.getUTCDay() === 0 || now.getUTCDay() === 6) now.setUTCDate(now.getUTCDate() - 1);
+    const date = now.toISOString().slice(0, 10);
+    const hist = d.portfolioHistory || [];
+    const last = hist[hist.length - 1];
+    const { mv, cost, pnl } = portfolioNow;
+    if (last && last.date === date && last.mv === mv && last.cost === cost && last.pnl === pnl) return; // 沒變
+    if (last && last.date < date && last.mv === mv && last.pnl === pnl) return; // 國定假日之類，價格完全沒動，不多記一筆
+    upd("portfolioHistory", p => [...(p || []).filter(x => x.date !== date), { id:date, date, mv, cost, pnl }]
+      .sort((a, b) => a.date.localeCompare(b.date)).slice(-400));
+  }, [portfolioNow, authLoading]);
+
   
   const totAssets = useMemo(() => {
     const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s, b) => {
@@ -2901,7 +2932,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund,
+    budget502030, createEmergencyFund, portfolioHistory: d.portfolioHistory || [],
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
