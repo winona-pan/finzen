@@ -2,7 +2,9 @@ name: 自動更新股價與匯率並部署網站
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # 每個交易日（週一到週五）台灣時間下午 1:50 跑一次：台股 1:30 收盤後拿當天收盤價，美股則是前一個交易日的收盤
+    # （GitHub 的 cron 用 UTC，台灣時間 13:50 = UTC 05:50；GitHub 排程常會晚個幾分鐘到半小時才真的開始跑）
+    - cron: '50 5 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +33,9 @@ jobs:
 
       - name: 執行更新腳本（股價 + 匯率）
         run: python update_stock_prices.py
+
+      - name: 全市場報價（台股＋美股，只放進網站、不存進 git）
+        run: python fetch_all_quotes.py || echo "全市場報價抓取失敗，這次網站沿用不到新資料，不影響部署"
 
       - name: 推送更新（存回 repo 留紀錄，跟部署與否無關）
         run: |

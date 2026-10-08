@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, ReferenceLine, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function InvestPage({ 
   C, tab, iSt, fmt, fmtPrice, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -15,7 +15,7 @@ export default function InvestPage({
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
-  dailyPnlHeatmap, sectorPie, updateStockMeta,
+  dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory,
   StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
@@ -100,6 +100,8 @@ export default function InvestPage({
                   </div>
                 </div>
               </Card>
+
+              <DailySwingCard history={portfolioHistory} C={C} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle} tr={tr} Card={Card} />
 
               <Card style={{ padding:20, marginBottom:16 }}>
                 <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>{tr("投組佔比")}</div>
@@ -634,5 +636,72 @@ function WatchStockAdder({ addWatchStock, refreshWatchStocks, C, iSt, tr }) {
         <button onClick={add} style={{ flexShrink:0, padding:"0 20px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:14, cursor:"pointer" }}>{tr("加入")}</button>
       </div>
     </div>
+  );
+}
+
+/* ── 每日投資波動：每個交易日一根柱子＝那天投資組合賺了或賠了多少（未實現＋已實現損益的變化，台幣）。
+   資料來自 App 每個交易日記的一筆快照，從開始記錄那天起才會有，前面的日子補不回來 ── */
+function DailySwingCard({ history, C, fmt, pnlColor, maskStyle, tr, Card }) {
+  const [range, setRange] = useState(30);
+  const hist = history || [];
+  const days = [];
+  for (let i = 1; i < hist.length; i++) {
+    const prev = hist[i - 1], cur = hist[i];
+    days.push({ date: cur.date, label: `${+cur.date.slice(5, 7)}/${+cur.date.slice(8)}`, change: cur.pnl - prev.pnl, pct: prev.mv > 0 ? (cur.pnl - prev.pnl) / prev.mv * 100 : null, mv: cur.mv });
+  }
+  const shown = days.slice(-range);
+  const latest = days[days.length - 1];
+  const total = shown.reduce((s, d) => s + d.change, 0);
+  const upDays = shown.filter(d => d.change > 0).length, downDays = shown.filter(d => d.change < 0).length;
+  const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+
+  return (
+    <Card style={{ padding:"16px 16px 12px", marginBottom:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:10 }}>
+        <span style={{ fontSize:12, fontWeight:900, color:C.muted, letterSpacing:"0.05em" }}>{tr("每日投資波動")}</span>
+        {days.length > 0 && (
+          <div style={{ display:"flex", gap:4 }}>
+            {[30, 90].map(n => (
+              <button key={n} onClick={() => setRange(n)} style={{ padding:"3px 9px", borderRadius:8, border:"none", fontSize:11, fontWeight:700, cursor:"pointer", background:range===n?C.accent:C.bg, color:range===n?"#fff":C.muted }}>{n}{tr("天")}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      {days.length === 0 ? (
+        <div style={{ fontSize:12, color:C.muted, lineHeight:1.7, padding:"6px 0 4px" }}>
+          {hist.length === 1 ? `${tr("已記錄")} ${hist[0].date}。` : ""}{tr("每個交易日下午報價更新後，會記一筆你的投資組合，從第二天起這裡就會出現每天賺賠的柱狀圖。")}
+        </div>
+      ) : (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:10, color:C.textSub }}>{latest.label} {tr("單日")}</div>
+              <div style={{ fontSize:20, fontWeight:900, color:pnlColor(latest.change, C), ...maskStyle }}>{signed(latest.change)}</div>
+              {latest.pct != null && <div style={{ fontSize:11, fontWeight:700, color:pnlColor(latest.change, C) }}>{latest.pct >= 0 ? "+" : ""}{latest.pct.toFixed(2)}%</div>}
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:10, color:C.textSub }}>{tr("近")} {shown.length} {tr("個交易日")}</div>
+              <div style={{ fontSize:20, fontWeight:900, color:pnlColor(total, C), ...maskStyle }}>{signed(total)}</div>
+              <div style={{ fontSize:11, color:C.muted }}>{tr("漲")} {upDays}・{tr("跌")} {downDays}</div>
+            </div>
+          </div>
+          <div style={{ height:150, ...maskStyle }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={shown} margin={{ top:4, right:4, left:4, bottom:0 }} barCategoryGap={shown.length > 40 ? 1 : 2}>
+                <XAxis dataKey="label" tick={{ fontSize:9, fill:C.muted }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={24} />
+                <YAxis hide domain={["auto", "auto"]} />
+                <ReferenceLine y={0} stroke={C.border} />
+                <Tooltip cursor={{ fill:`${C.text}10` }} contentStyle={{ background:C.surface || C.card, border:`1px solid ${C.border}`, borderRadius:10, fontSize:12 }} labelStyle={{ color:C.textSub }}
+                  formatter={(v, _n, item) => [`${signed(v)}${item.payload.pct != null ? `（${item.payload.pct >= 0 ? "+" : ""}${item.payload.pct.toFixed(2)}%）` : ""}`, tr("當日")]} />
+                <Bar dataKey="change" radius={[3, 3, 3, 3]} maxBarSize={18}>
+                  {shown.map(d => <Cell key={d.date} fill={pnlColor(d.change, C)} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ fontSize:10, color:C.muted, marginTop:6 }}>{tr("每根柱子＝當天投資組合損益的變化（含已實現），已換算台幣。")}</div>
+        </>
+      )}
+    </Card>
   );
 }

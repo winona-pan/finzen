@@ -24,6 +24,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 報價檔不存在 git 裡，每次部署都要重新產生，不然一推程式碼網站上的全市場報價就不見了
+      - name: 全市場報價（台股＋美股）
+        run: python fetch_all_quotes.py || echo "全市場報價抓取失敗，不影響部署"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
