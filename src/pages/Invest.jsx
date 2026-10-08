@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { translateText } from "../i18nRuntime";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ReferenceLine, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -14,7 +14,7 @@ export default function InvestPage({
   collapsed, toggleSection, setNT, T0, descHistoryByCat, tagsHistory,
   invTab, setInvTab, invPie, setInvPie, LEARN_DATA, MANUAL_DATA, EMOTIONS, emotionReview,
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
-  tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
+  tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl, fetchDailyHistory,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory, portfolioNow,
   dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce,
@@ -417,9 +417,7 @@ export default function InvestPage({
 
           {invTab === "perf" && (
             <PerfTab C={C} tr={tr} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle}
-              tradeStats={tradeStats} maxDrawdown={maxDrawdown} benchmarkData={benchmarkData} loadingBenchmark={loadingBenchmark} fetchBenchmarkCompare={fetchBenchmarkCompare}
-              emotionReview={emotionReview} dividendEst={dividendEst} loadingDiv={loadingDiv} fetchDividendEstimate={fetchDividendEstimate}
-              dividendAnnounce={dividendAnnounce} loadingDivAnn={loadingDivAnn} divAnnFetched={divAnnFetched} fetchDividendAnnounce={fetchDividendAnnounce} />
+              stSum={stSum} rates={rates} toTWD={toTWD} fetchDailyHistory={fetchDailyHistory} sectorPie={sectorPie} />
           )}
 
           {invTab === "watch" && (
@@ -710,146 +708,275 @@ function DailySwingCard({ history, C, fmt, pnlColor, maskStyle, tr, Card }) {
   );
 }
 
-/* ── 績效：這段原本被誤刪只剩大盤指數（大盤搬到「自選股」分頁），這裡補回真正的績效內容：
-   勝率與賺賠比、最大回撤、跟 0050 比較、股息、不同心態下的成績 ── */
-function PerfTab({ C, tr, fmt, pnlColor, maskStyle, tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, emotionReview,
-  dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce }) {
+/* ── 績效：打開就自動算，不用按「讀取」。資料來源都是每天自動更新的：
+   報價（每個交易日排程更新，含當日漲跌幅）、stock_history.json（每天更新的日線，含加權指數）。
+   四張卡：報酬一覽（跟大盤比）、誰在賺誰在拖、持股體檢（均線／距高點／停損）、風險體檢（回撤／波動／集中度） ── */
+const DAY_MS = 864e5;
+const twDate = (daysAgo = 0) => new Date(Date.now() + 8 * 3600e3 - daysAgo * DAY_MS).toISOString().slice(0, 10);
+// 某天（含）以前最後一個收盤價；hist 依日期排序
+function closeAt(hist, date) {
+  let lo = 0, hi = hist.length - 1, ans = null;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (hist[m].date <= date) { ans = hist[m].close; lo = m + 1; } else hi = m - 1; }
+  return ans;
+}
+function sharesAt(st, date) {
+  let sh = st.manualShares || 0;
+  (st.trades || []).forEach(t => { if (t.date && t.date <= date) sh += t.type === "buy" ? t.shares : t.type === "sell" ? -t.shares : 0; });
+  return Math.max(0, sh);
+}
+const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+function PerfTab({ C, tr, fmt, pnlColor, maskStyle, stSum, rates, toTWD, fetchDailyHistory, sectorPie }) {
+  const [hist, setHist] = useState({});   // stock id → [{date, close}]
+  const [idx, setIdx] = useState([]);     // 加權指數日線
+  const [loading, setLoading] = useState(true);
+  const [contribRange, setContribRange] = useState("month");
+
+  const yearAgo = twDate(400);
+  // 現在有持股，或近一年內有交易的（賣光的股票也要算進期間報酬）
+  const relevant = useMemo(() => stSum.filter(s => s.totalSh > 0 || (s.trades || []).some(t => t.date >= yearAgo)), [stSum, yearAgo]);
+  const held = useMemo(() => stSum.filter(s => s.totalSh > 0 && s.curPrice > 0), [stSum]);
+  const loadKey = relevant.map(s => `${s.market}:${s.ticker}`).join(",");
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    Promise.all([
+      Promise.all(relevant.map(s => fetchDailyHistory(s.ticker, s.market).then(h => [s.id, h]).catch(() => [s.id, []]))),
+      fetchDailyHistory("^TWII", "US").catch(() => []), // 指數代號不加 .TW，市場參數傳 US 只是為了不要被加上 .TW
+    ]).then(([pairs, ix]) => {
+      if (!alive) return;
+      setHist(Object.fromEntries(pairs.map(([id, h]) => [id, (h || []).filter(x => x.close > 0).sort((a, b) => a.date.localeCompare(b.date))])));
+      setIdx((ix || []).filter(x => x.close > 0).sort((a, b) => a.date.localeCompare(b.date)));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [loadKey]);
+
+  const cur = (s) => s.market === "US" ? "USD" : "TWD";
+  const twd = (v, s) => toTWD(v, cur(s), rates);
+  const signed = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(Math.round(v)))}`;
+  const pctTxt = (v, d = 1) => v == null || !isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`;
+
+  // 最近一個交易日的損益（報價裡的漲跌幅）
+  const dayGain = (s) => {
+    const chg = s._extra?.chgPct;
+    if (chg == null || !(s.curPrice > 0) || !(s.totalSh > 0)) return null;
+    return twd((s.curPrice - s.curPrice / (1 + chg / 100)) * s.totalSh, s);
+  };
+
+  /* 期間損益：期末市值 − 期初市值 − 期間淨投入（買進加、賣出減），報酬率分母＝期初市值＋期間買進 */
+  const periodGain = (s, start) => {
+    const h = hist[s.id] || [];
+    const sh0 = sharesAt(s, start);
+    const p0 = sh0 > 0 ? closeAt(h, start) : 0;
+    if (sh0 > 0 && p0 == null) return null; // 沒有歷史價格，算不出來
+    let netIn = 0, buysIn = 0;
+    (s.trades || []).forEach(t => {
+      if (!t.date || t.date <= start) return;
+      if (t.type === "buy") { const c = t.shares * t.price + (t.fee || 0); netIn += c; buysIn += c; }
+      else if (t.type === "sell") netIn -= t.shares * t.price - (t.fee || 0);
+    });
+    const mv0 = sh0 * p0, mvNow = s.totalSh * (s.curPrice || 0);
+    return { gain: twd(mvNow - mv0 - netIn, s), base: twd(mv0 + buysIn, s) };
+  };
+
+  const periods = useMemo(() => {
+    const y = new Date(Date.now() + 8 * 3600e3).getUTCFullYear();
+    const defs = [
+      { key:"week", label:tr("近一週"), start:twDate(7) },
+      { key:"month", label:tr("近一個月"), start:twDate(30) },
+      { key:"q", label:tr("近三個月"), start:twDate(91) },
+      { key:"ytd", label:tr("今年以來"), start:`${y - 1}-12-31` },
+    ];
+    const idxNow = idx.length ? idx[idx.length - 1].close : null;
+    return defs.map(d => {
+      let gain = 0, base = 0, missing = 0;
+      relevant.forEach(s => { const r = periodGain(s, d.start); if (!r) { missing++; return; } gain += r.gain; base += r.base; });
+      const i0 = closeAt(idx, d.start);
+      return { ...d, gain, pct: base > 0 ? gain / base : null, idxPct: idxNow && i0 ? idxNow / i0 - 1 : null, missing };
+    });
+  }, [relevant, hist, idx, rates]);
+
+  const today = useMemo(() => {
+    let gain = 0, mv = 0, n = 0;
+    held.forEach(s => { const g = dayGain(s); if (g == null) return; gain += g; mv += twd(s.mv, s); n++; });
+    return n ? { gain, pct: mv - gain > 0 ? gain / (mv - gain) : null } : null;
+  }, [held, rates]);
+  const idxDay = idx.length > 1 ? idx[idx.length - 1].close / idx[idx.length - 2].close - 1 : null;
+
+  /* 持股體檢：月線（20日）、季線（60日）、距一年高點、停損距離 */
+  const health = useMemo(() => held.map(s => {
+    const h = hist[s.id] || [];
+    const closes = h.map(x => x.close);
+    if (h.length && h[h.length - 1].date < twDate(0)) closes.push(s.curPrice); // 歷史只到昨天，補上今天的價
+    else if (closes.length) closes[closes.length - 1] = s.curPrice;
+    const p = s.curPrice;
+    const ma20 = closes.length >= 20 ? avg(closes.slice(-20)) : null;
+    const ma60 = closes.length >= 60 ? avg(closes.slice(-60)) : null;
+    const high = closes.length ? Math.max(...closes.slice(-250)) : null;
+    let tag, color;
+    if (ma20 == null || ma60 == null) { tag = tr("資料不足"); color = C.muted; }
+    else if (p < ma60) { tag = tr("跌破季線"); color = C.expense; }
+    else if (p < ma20) { tag = tr("跌破月線"); color = C.warn; }
+    else if (ma20 >= ma60) { tag = tr("多頭排列"); color = C.income; }
+    else { tag = tr("站回月線"); color = C.teal; }
+    const stop = s.stopLossPct && s.avgCost > 0 ? s.avgCost * (1 - s.stopLossPct / 100) : null;
+    return { s, p, ma20, ma60, tag, color, fromHigh: high ? p / high - 1 : null, ret: s.avgCost > 0 ? p / s.avgCost - 1 : null, stopGap: stop ? p / stop - 1 : null };
+  }), [held, hist]);
+
+  /* 風險體檢：用持股的日線重建「投組每日報酬」（時間加權，買進賣出不會被當成漲跌） */
+  const risk = useMemo(() => {
+    const ids = relevant.filter(s => (hist[s.id] || []).length > 1);
+    const start = twDate(365);
+    const dates = [...new Set(ids.flatMap(s => hist[s.id].filter(x => x.date >= start).map(x => x.date)))].sort();
+    const rets = [];
+    for (let i = 1; i < dates.length; i++) {
+      let v0 = 0, v1 = 0;
+      ids.forEach(s => {
+        const sh = sharesAt(s, dates[i - 1]); if (!sh) return;
+        const a = closeAt(hist[s.id], dates[i - 1]), b = closeAt(hist[s.id], dates[i]);
+        if (a == null || b == null) return;
+        v0 += twd(sh * a, s); v1 += twd(sh * b, s);
+      });
+      if (v0 > 0) rets.push({ date: dates[i], r: v1 / v0 - 1 });
+    }
+    if (rets.length < 20) return null;
+    let level = 1, peak = 1, maxDD = 0;
+    rets.forEach(x => { level *= 1 + x.r; peak = Math.max(peak, level); maxDD = Math.min(maxDD, level / peak - 1); });
+    const recent = rets.slice(-60).map(x => x.r);
+    const m = avg(recent);
+    const vol = Math.sqrt(avg(recent.map(r => (r - m) ** 2)));
+    const worst = rets.reduce((a, b) => b.r < a.r ? b : a);
+    return { curDD: level / peak - 1, maxDD, vol, worst };
+  }, [relevant, hist, rates]);
+
+  const totalMv = held.reduce((a, s) => a + twd(s.mv, s), 0);
+  const conc = useMemo(() => {
+    if (!totalMv) return null;
+    const top = held.map(s => ({ s, w: twd(s.mv, s) / totalMv })).sort((a, b) => b.w - a.w)[0];
+    const secTotal = (sectorPie || []).reduce((a, x) => a + x.value, 0);
+    const topSec = secTotal ? [...sectorPie].sort((a, b) => b.value - a.value)[0] : null;
+    return { top, topSec: topSec ? { name: topSec.name, w: topSec.value / secTotal } : null };
+  }, [held, sectorPie, totalMv, rates]);
+
+  const contrib = useMemo(() => held.map(s => ({
+    s, v: contribRange === "today" ? dayGain(s) : periodGain(s, twDate(contribRange === "month" ? 30 : 91))?.gain,
+  })).filter(x => x.v != null).sort((a, b) => b.v - a.v), [held, hist, contribRange, rates]);
+
   const card = { borderRadius:16, background:C.card, padding:"14px 16px", marginBottom:12 };
   const title = (t, right) => (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:8 }}>
       <span style={{ fontSize:13, fontWeight:800, color:C.text }}>{t}</span>{right}
     </div>
   );
-  const refreshBtn = (onClick, loading) => (
-    <button onClick={onClick} style={{ padding:"5px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{loading ? tr("讀取中…") : `🔄 ${tr("讀取")}`}</button>
-  );
-  const stat = (label, value, color, sub) => (
-    <div style={{ minWidth:0 }}>
-      <div style={{ fontSize:10.5, color:C.muted }}>{label}</div>
-      <div style={{ fontSize:20, fontWeight:900, color, marginTop:2, ...maskStyle }}>{value}</div>
-      {sub && <div style={{ fontSize:10.5, color:C.muted, marginTop:1, ...maskStyle }}>{sub}</div>}
-    </div>
-  );
+  const note = (t) => <div style={{ fontSize:10.5, color:C.muted, marginTop:8, lineHeight:1.6 }}>{t}</div>;
   const empty = (t) => <div style={{ fontSize:12, color:C.muted, padding:"6px 0 2px", lineHeight:1.6 }}>{t}</div>;
-  const ts = tradeStats || {};
+  const name = (s) => s.name || s.ticker;
+
+  if (!held.length && !relevant.length) return <div style={card}>{empty(tr("還沒有持股，買進後這裡會自動算報酬、跟大盤比較和風險"))}</div>;
 
   return (
     <div>
-      {/* 勝率與賺賠比 */}
+      {/* ① 報酬一覽 */}
       <div style={card}>
-        {title(tr("勝率與賺賠比"))}
-        {!ts.totalSells ? empty(tr("還沒有賣出紀錄，賣出後這裡會統計你的勝率和平均賺賠")) : <>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            {stat(tr("勝率"), `${ts.winRate.toFixed(0)}%`, ts.winRate >= 50 ? C.income : C.expense, `${ts.wins} ${tr("勝")}・${ts.losses} ${tr("敗")}`)}
-            {stat(tr("賺賠比"), ts.winLossRatio ? `${ts.winLossRatio.toFixed(2)} : 1` : "—", C.text, `${tr("平均賺")} ${fmt(Math.round(ts.avgWin || 0))}・${tr("平均賠")} ${fmt(Math.round(Math.abs(ts.avgLoss || 0)))}`)}
-          </div>
-          <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-            {ts.avgR != null ? <>
-              <div style={{ fontSize:10.5, color:C.muted }}>{tr("平均 R 值")}（{ts.rCount} {tr("筆有設停損")}）</div>
-              <div style={{ fontSize:16, fontWeight:900, color:ts.avgR >= 0 ? C.income : C.expense }}>{ts.avgR >= 0 ? "+" : ""}{ts.avgR.toFixed(2)} R</div>
-              <div style={{ fontSize:10.5, color:C.muted, marginTop:2, lineHeight:1.5 }}>{tr("賺賠相對於停損風險的倍數，+2R＝賺到當初願意承受虧損的 2 倍")}</div>
-            </> : <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{tr("在個股詳細頁設定「停損%」，之後賣出就會算 R 值")}</div>}
-          </div>
-          {ts.disciplinedCount > 0 && (
-            <div style={{ marginTop:10, padding:"8px 10px", borderRadius:10, background:ts.brokeStopCount > 0 ? `${C.warn}15` : `${C.teal}15`, fontSize:12, fontWeight:700, color:ts.brokeStopCount > 0 ? C.warn : C.teal }}>
-              {tr("停損紀律")}：{ts.disciplinedCount} {tr("筆有設停損，其中")} {ts.brokeStopCount} {tr("筆是跌破停損後才賣")}
-            </div>
-          )}
-        </>}
+        {title(tr("報酬一覽"), <span style={{ fontSize:10.5, color:C.muted }}>{tr("對照：加權指數")}</span>)}
+        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr auto auto", columnGap:10, rowGap:8, alignItems:"baseline", fontSize:12 }}>
+          {[{ key:"day", label:tr("最近交易日"), gain:today?.gain, pct:today?.pct, idxPct:idxDay }, ...periods].map(r => {
+            const beat = r.pct != null && r.idxPct != null ? r.pct - r.idxPct : null;
+            return [
+              <span key={r.key + "l"} style={{ color:C.textSub }}>{r.label}</span>,
+              <span key={r.key + "g"} style={{ textAlign:"right", fontWeight:800, color:pnlColor(r.gain || 0, C), ...maskStyle }}>{r.gain == null ? "—" : signed(r.gain)}</span>,
+              <span key={r.key + "p"} style={{ textAlign:"right", fontWeight:900, color:pnlColor(r.pct || 0, C), minWidth:56 }}>{pctTxt(r.pct)}</span>,
+              <span key={r.key + "i"} style={{ textAlign:"right", fontSize:10.5, minWidth:64, color:beat == null ? C.muted : beat >= 0 ? C.income : C.expense }}>
+                {beat == null ? (r.idxPct != null ? `${tr("大盤")} ${pctTxt(r.idxPct)}` : "—") : `${beat >= 0 ? tr("贏") : tr("輸")} ${Math.abs(beat * 100).toFixed(1)}%`}
+              </span>,
+            ];
+          })}
+        </div>
+        {loading && note(tr("讀取歷史價格中…"))}
+        {!loading && periods.some(p => p.missing) && note(tr("部分股票查不到歷史價格，期間報酬沒算到它們"))}
+        {note(tr("已扣掉期間內買進賣出的金額，只算漲跌真正賺賠；「贏/輸」是跟同期間加權指數漲跌幅相比"))}
       </div>
 
-      {/* 最大回撤 */}
+      {/* ② 誰在賺、誰在拖 */}
       <div style={card}>
-        {title(tr("最大回撤"))}
-        {maxDrawdown ? <>
-          <div style={{ fontSize:22, fontWeight:900, color:C.expense }}>−{maxDrawdown.pct.toFixed(1)}%</div>
-          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("資產從最高點往下掉最多的幅度")}（{maxDrawdown.source === "daily" ? tr("依每日市值") : tr("依每月資產估算")}）</div>
-        </> : empty(tr("資料還不夠；到「總覽 → 投資成長 → 每日」讀一次走勢就會有"))}
-      </div>
-
-      {/* 跟大盤比較 */}
-      <div style={card}>
-        {title(tr("跟大盤（0050）比"), refreshBtn(fetchBenchmarkCompare, loadingBenchmark))}
-        {benchmarkData.length > 1 ? (() => {
-          const last = benchmarkData[benchmarkData.length - 1] || {};
-          const diff = (last.portfolio ?? 0) - (last.benchmark ?? 0);
-          return <>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
-              {stat(tr("我的投組"), `${(last.portfolio ?? 0) >= 0 ? "+" : ""}${last.portfolio ?? 0}%`, pnlColor(last.portfolio ?? 0, C))}
-              {stat("0050", `${(last.benchmark ?? 0) >= 0 ? "+" : ""}${last.benchmark ?? 0}%`, C.textSub, diff >= 0 ? `${tr("贏大盤")} ${diff.toFixed(1)}%` : `${tr("輸大盤")} ${Math.abs(diff).toFixed(1)}%`)}
-            </div>
-            <div style={{ height:150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={benchmarkData} margin={{ top:4, right:4, bottom:0, left:-8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
-                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={40} />
-                  <Tooltip contentStyle={{ background:C.surface || C.card, border:`1px solid ${C.border}`, borderRadius:10, fontSize:12 }} formatter={(v, n) => [`${v}%`, n === "portfolio" ? tr("我的投組") : "0050"]} />
-                  <Line type="monotone" dataKey="portfolio" stroke={C.accent} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="benchmark" stroke={C.muted} strokeWidth={2} dot={false} strokeDasharray="4 3" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:6, fontSize:11, color:C.textSub }}>
-              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:2, background:C.accent }} />{tr("我的投組")}</span>
-              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:0, borderTop:`2px dashed ${C.muted}` }} />0050</span>
-            </div>
-          </>;
-        })() : empty(loadingBenchmark ? tr("讀取中…") : tr("按右上角「讀取」，比較你的投組和 0050 同期間的報酬"))}
-      </div>
-
-      {/* 股息 */}
-      <div style={card}>
-        {title(tr("股息（近一年實際配息估算）"), refreshBtn(fetchDividendEstimate, loadingDiv))}
-        {dividendEst.length > 0 ? <>
-          <div style={{ fontSize:20, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(dividendEst.reduce((s, x) => s + x.annualDiv, 0)))}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> / {tr("年")}</span></div>
-          <div style={{ marginTop:8 }}>
-            {dividendEst.map(x => (
-              <div key={x.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"6px 0", borderTop:`1px solid ${C.border}`, color:C.textSub }}>
-                <span>{x.ticker} {x.name}</span><span style={{ fontWeight:700, color:C.text, ...maskStyle }}>{fmt(Math.round(x.annualDiv))}</span>
-              </div>
+        {title(tr("誰在幫你賺、誰在拖累"), (
+          <div style={{ display:"flex", gap:4 }}>
+            {[["today", tr("今天")], ["month", tr("一個月")], ["q", tr("三個月")]].map(([k, l]) => (
+              <button key={k} onClick={() => setContribRange(k)} style={{ padding:"4px 8px", borderRadius:8, border:"none", fontSize:10.5, fontWeight:700, cursor:"pointer", background:contribRange === k ? C.accent : C.bg, color:contribRange === k ? "#fff" : C.muted }}>{l}</button>
             ))}
           </div>
-          <div style={{ fontSize:10.5, color:C.muted, marginTop:6 }}>{tr("用過去 12 個月實際配息 × 目前股數估算，美股已換算台幣；不是未來預測")}</div>
-        </> : empty(loadingDiv ? tr("讀取中…") : tr("按右上角「讀取」，估算持股一年大約能領多少股息"))}
+        ))}
+        {contrib.length === 0 ? empty(loading ? tr("讀取中…") : tr("算不出來：持股還沒有報價或歷史價格")) : (() => {
+          const maxAbs = Math.max(...contrib.map(x => Math.abs(x.v)), 1);
+          return contrib.map(({ s, v }) => (
+            <div key={s.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0" }}>
+              <span style={{ width:86, fontSize:12, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flexShrink:0 }}>{name(s)}</span>
+              <div style={{ flex:1, display:"flex", height:8 }}>
+                <div style={{ flex:1, display:"flex", justifyContent:"flex-end" }}>{v < 0 && <div style={{ width:`${Math.abs(v) / maxAbs * 100}%`, background:pnlColor(-1, C), borderRadius:"4px 0 0 4px" }} />}</div>
+                <div style={{ width:1, background:C.border }} />
+                <div style={{ flex:1 }}>{v > 0 && <div style={{ width:`${v / maxAbs * 100}%`, height:"100%", background:pnlColor(1, C), borderRadius:"0 4px 4px 0" }} />}</div>
+              </div>
+              <span style={{ width:78, textAlign:"right", fontSize:12, fontWeight:800, color:pnlColor(v, C), flexShrink:0, ...maskStyle }}>{signed(v)}</span>
+            </div>
+          ));
+        })()}
       </div>
 
+      {/* ③ 持股體檢 */}
       <div style={card}>
-        {title(tr("股利公告（證交所）"), refreshBtn(fetchDividendAnnounce, loadingDivAnn))}
-        {!divAnnFetched ? empty(loadingDivAnn ? tr("讀取中…") : tr("按右上角「讀取」，查上市持股公司已公告的現金股利"))
-          : dividendAnnounce.length === 0 ? empty(tr("沒有上市持股，或查不到資料（上櫃、美股不在這份公告裡）"))
-          : dividendAnnounce.map((x, i) => (
-            <div key={x.ticker} style={{ padding:"8px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
-              <div style={{ display:"flex", justifyContent:"space-between" }}>
-                <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{x.ticker} {x.name}</span>
-                {x.announced ? <span style={{ fontSize:13, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(x.estIncome))}</span> : <span style={{ fontSize:11, color:C.muted }}>{tr("尚未公告")}</span>}
-              </div>
-              {x.announced && <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>{x.year}{tr("年度")}・{tr("每股")} {x.cashDivPerShare} {tr("元")}・{x.distDate || tr("分派日未定")}</div>}
+        {title(tr("持股體檢"))}
+        {health.length === 0 ? empty(tr("還沒有持股報價")) : health.map((x, i) => (
+          <div key={x.s.id} style={{ padding:"9px 0", borderTop:i > 0 ? `1px solid ${C.border}` : "none" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:C.text, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{x.s.ticker} {name(x.s)}</span>
+              <span style={{ fontSize:11, fontWeight:800, color:x.color, background:`${x.color}18`, padding:"2px 8px", borderRadius:8, flexShrink:0 }}>{x.tag}</span>
             </div>
-          ))}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"2px 12px", fontSize:11, color:C.textSub, marginTop:4 }}>
+              <span>{tr("報酬")} <b style={{ color:pnlColor(x.ret || 0, C) }}>{pctTxt(x.ret)}</b></span>
+              <span>{tr("距一年高點")} <b style={{ color:C.text }}>{pctTxt(x.fromHigh)}</b></span>
+              {x.ma60 != null && <span>{tr("離季線")} <b style={{ color:C.text }}>{pctTxt(x.p / x.ma60 - 1)}</b></span>}
+              {x.stopGap != null && <span style={{ color:x.stopGap < 0 ? C.expense : C.textSub }}>{x.stopGap < 0 ? tr("已跌破停損") : <>{tr("距停損")} <b style={{ color:x.stopGap < 0.05 ? C.warn : C.text }}>{pctTxt(x.stopGap)}</b></>}</span>}
+            </div>
+          </div>
+        ))}
+        {note(tr("多頭排列＝站上月線(MA20)、季線(MA60)且月線在季線之上；跌破季線代表中期趨勢轉弱，是檢查持股理由的時機，不是自動賣出訊號"))}
       </div>
 
-      {/* 心態回顧 */}
+      {/* ④ 風險體檢 */}
       <div style={card}>
-        {title(tr("不同心態下的成績"))}
-        <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>{tr("買賣時標記當下心態，累積夠多筆就看得出「衝動下的單」和「計畫內的單」差多少")}</div>
-        {emotionReview.length === 0 ? empty(tr("還沒有標記過心態的交易")) : emotionReview.map((em, i) => {
-          const winRate = em.sellCount > 0 ? em.sellWin / em.sellCount * 100 : null;
-          const avgPnl = em.sellCount > 0 ? em.sellPnl / em.sellCount : null;
-          return (
-            <div key={em.key} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
-              <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{em.icon}</div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{em.label}</div>
-                <div style={{ fontSize:10.5, color:C.muted }}>{tr("買進")} {em.buyCount} {tr("次")}・{tr("賣出")} {em.sellCount} {tr("次")}</div>
-              </div>
-              <div style={{ textAlign:"right", flexShrink:0 }}>
-                <div style={{ fontSize:13, fontWeight:800, color:winRate == null ? C.muted : winRate >= 50 ? C.income : C.expense }}>{winRate == null ? "—" : `${tr("勝率")} ${winRate.toFixed(0)}%`}</div>
-                {avgPnl != null && <div style={{ fontSize:10.5, color:pnlColor(avgPnl, C), ...maskStyle }}>{tr("平均")} {avgPnl >= 0 ? "+" : "−"}{fmt(Math.abs(Math.round(avgPnl)))}</div>}
-              </div>
+        {title(tr("風險體檢"))}
+        {!risk ? empty(loading ? tr("讀取中…") : tr("歷史價格不夠（至少要一個月），之後會自動補上")) : <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>
+              <div style={{ fontSize:10.5, color:C.muted }}>{tr("一天正常波動")}</div>
+              <div style={{ fontSize:18, fontWeight:900, color:C.text, marginTop:2, ...maskStyle }}>±{fmt(Math.round(risk.vol * totalMv))}</div>
+              <div style={{ fontSize:10.5, color:C.muted }}>±{(risk.vol * 100).toFixed(1)}%（{tr("近60個交易日")}）</div>
             </div>
-          );
-        })}
+            <div>
+              <div style={{ fontSize:10.5, color:C.muted }}>{tr("目前離高點")}</div>
+              <div style={{ fontSize:18, fontWeight:900, color:risk.curDD < -0.1 ? C.expense : risk.curDD < -0.03 ? C.warn : C.income, marginTop:2 }}>{risk.curDD > -0.0005 ? tr("在高點") : pctTxt(risk.curDD)}</div>
+              <div style={{ fontSize:10.5, color:C.muted }}>{tr("一年內最大回撤")} {pctTxt(risk.maxDD)}</div>
+            </div>
+          </div>
+          <div style={{ fontSize:11, color:C.textSub, marginTop:10, lineHeight:1.6 }}>
+            {tr("一年內最慘的一天")}：{risk.worst.date}　<b style={{ color:C.expense }}>{pctTxt(risk.worst.r)}</b>
+            <span style={maskStyle}>（{tr("以現在市值約")} {signed(risk.worst.r * totalMv)}）</span>
+          </div>
+        </>}
+        {conc && <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}`, fontSize:12, color:C.textSub, lineHeight:1.8 }}>
+          {(() => {
+            const etf = (s) => /^00/.test(s.ticker) || s.autoSector === "ETF" || s.sector === "ETF";
+            const singleWarn = conc.top && !etf(conc.top.s) && conc.top.w > 0.3;
+            const secWarn = conc.topSec && conc.topSec.name !== "ETF" && conc.topSec.w > 0.5;
+            return <>
+              <div>{tr("最大持股")}：<b style={{ color:singleWarn ? C.warn : C.text }}>{name(conc.top.s)} {(conc.top.w * 100).toFixed(0)}%</b>{singleWarn && <span style={{ color:C.warn }}>　{tr("單一個股超過 30%，漲跌對你影響很大")}</span>}</div>
+              {conc.topSec && <div>{tr("最大產業")}：<b style={{ color:secWarn ? C.warn : C.text }}>{tr(conc.topSec.name)} {(conc.topSec.w * 100).toFixed(0)}%</b>{secWarn && <span style={{ color:C.warn }}>　{tr("超過一半押在同一個產業")}</span>}</div>}
+            </>;
+          })()}
+        </div>}
+        {note(tr("「一天正常波動」是大約三分之二的交易日會落在的範圍；如果這個數字讓你睡不著，代表部位對你來說太大了"))}
       </div>
     </div>
   );

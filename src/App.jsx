@@ -1986,14 +1986,21 @@ export default function App() {
   const [loadingDaily, setLoadingDaily] = useState(false);
 
   /* ── 抓取單一標的每日收盤價（近一年，日線）── */
+  // stock_history.json 一份就有全部追蹤股票，績效頁一次要好幾檔，10 分鐘內共用同一次下載，不要每檔都重抓一次
+  const histFileRef = useRef({ at:0, promise:null });
   const fetchDailyHistory = useCallback(async (ticker, market) => {
     const sym = market === "TW" ? `${ticker}.TW` : ticker;
     // 先試後端排程產生的資料，涵蓋到的股票不需要再靠瀏覽器即時去問 Yahoo
     try {
-      const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
-      const res = await fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(4000) });
-      if (res.ok) {
-        const data = await res.json();
+      const cacheHit = histFileRef.current.promise && Date.now() - histFileRef.current.at < 10 * 60 * 1000;
+      if (!cacheHit) {
+        const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+        histFileRef.current = { at:Date.now(), promise: fetch(`${base}stock_history.json?t=${Date.now()}`, { signal:AbortSignal.timeout(8000) })
+          .then(r => r.ok ? r.json() : null).catch(() => null) };
+      }
+      const data = await histFileRef.current.promise;
+      if (!data) histFileRef.current = { at:0, promise:null }; // 失敗不要快取，下次再試
+      if (data) {
         const key = market === "TW" ? ticker : ticker.toUpperCase();
         const daily = data[key]?.daily;
         if (daily && daily.length) {
@@ -3023,7 +3030,7 @@ export default function App() {
     chartData, chartRange, setChartRange, isSingleMo, allocPie, holdPie, invGrowth, assetView, setAssetView, changeData,
     dailyGrowth, loadingDaily, fetchDailyGrowth, EMOTIONS, emotionReview,
     watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
-    tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
+    tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl, fetchDailyHistory,
     watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
     dailyPnlHeatmap, sectorPie, updateStockMeta,
     incCat, expCat, chartView, setChartView, healthRange, setHealthRange,
