@@ -198,8 +198,19 @@ export async function askAdvisor(history, systemContext, grounded) {
   const chatHistory = [
     { role: "user", parts: [{ text: systemContext }] },
     { role: "model", parts: [{ text: "了解，我會根據這些資料回答你的問題。" }] },
-    ...history.slice(0, -1).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
   ];
+  /* Gemini 規定 user/model 一定要輪流出現：之前某一題問失敗（例如撞到額度）時，那句 user 留在紀錄裡卻沒有 model 回覆，
+     下一題就會變成 user 接 user 而整個被拒絕。這裡把沒被回答的問題略過，只送一問一答成對的歷史 */
+  for (const m of history.slice(0, -1)) {
+    const last = chatHistory[chatHistory.length - 1];
+    if (m.role === last.role) {
+      if (m.role === "user") last.parts = [{ text: m.text }];
+      else last.parts = [{ text: last.parts[0].text + "\n\n" + m.text }];
+    } else {
+      chatHistory.push({ role: m.role, parts: [{ text: m.text }] });
+    }
+  }
+  if (chatHistory[chatHistory.length - 1].role === "user") chatHistory.pop();
   const chat = model.startChat({ history: chatHistory });
   const lastMsg = history[history.length - 1];
   const result = await chat.sendMessage(lastMsg.text);

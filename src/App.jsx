@@ -571,7 +571,7 @@ function TWStockChart({ ticker }) {
             {hasMa && <>
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.accentL }}><span style={{ width:10, height:2, background:C.accentL, display:"inline-block" }} />MA5</div>
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.teal }}><span style={{ width:10, height:2, background:C.teal, display:"inline-block" }} />MA20</div>
-              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />季線(60日)</div>
+              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.warn }}><span style={{ width:10, height:2, background:C.warn, display:"inline-block" }} />MA60</div>
             </>}
           </div>
           <ResponsiveContainer width="100%" height={150}>
@@ -589,7 +589,7 @@ function TWStockChart({ ticker }) {
                 if (name==="close") return [Number(v).toFixed(2), translateText("價格")];
                 if (name==="ma5") return [Number(v).toFixed(2), "MA5"];
                 if (name==="ma20") return [Number(v).toFixed(2), "MA20"];
-                if (name==="ma60") return [Number(v).toFixed(2), translateText("季線")];
+                if (name==="ma60") return [Number(v).toFixed(2), "MA60"];
                 if (name==="range") { const p = entry?.payload; return [p ? translateText(`開${p.o} 高${p.h} 低${p.l} 收${p.c}`) : "", translateText("K線")]; }
                 return [v, name];
               }} />
