@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "last_updated": "2026-10-08 05:16:28",
+    "last_updated": "2026-10-08 08:56:24",
     "tw_count": 5,
     "us_count": 2,
     "institutional_date": "20261007"
@@ -19,7 +19,7 @@
       "dealer": -1462
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "0050.TW": {
     "price": 116.05,
@@ -35,7 +35,7 @@
       "dealer": -1462
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2330": {
     "price": 2585.0,
@@ -51,7 +51,7 @@
       "dealer": 250
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2330.TW": {
     "price": 2585.0,
@@ -67,7 +67,7 @@
       "dealer": 250
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "009816": {
     "price": 17.04,
@@ -83,7 +83,7 @@
       "dealer": -3391
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "009816.TW": {
     "price": 17.04,
@@ -99,7 +99,7 @@
       "dealer": -3391
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "VOO": {
     "price": 714.34,
@@ -109,17 +109,17 @@
     "chgPct": -0.26,
     "name": "Vanguard S&P 500 ETF",
     "market": "US",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "QQQ": {
     "price": 757.73,
-    "high": 758.2000122070312,
+    "high": 758.1500244140625,
     "low": 751.760009765625,
     "vol": 25184775,
     "chgPct": -0.25,
     "name": "Invesco QQQ Trust, Series 1",
     "market": "US",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "^TWII": {
     "price": 49806.37,
@@ -129,7 +129,7 @@
     "chgPct": 0.19,
     "name": "台灣加權指數",
     "market": "INDEX",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "^SOX": {
     "price": 13066.149,
@@ -139,7 +139,7 @@
     "chgPct": -1.15,
     "name": "費城半導體指數",
     "market": "INDEX",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "^GSPC": {
     "price": 7801.77,
@@ -149,7 +149,7 @@
     "chgPct": -0.22,
     "name": "S&P 500",
     "market": "INDEX",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2345": {
     "price": 2015.0,
@@ -165,7 +165,7 @@
       "dealer": -24
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2345.TW": {
     "price": 2015.0,
@@ -181,7 +181,7 @@
       "dealer": -24
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2368": {
     "price": 1245.0,
@@ -197,7 +197,7 @@
       "dealer": -118
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   },
   "2368.TW": {
     "price": 1245.0,
@@ -213,6 +213,6 @@
       "dealer": -118
     },
     "institutional_date": "20261007",
-    "updated": "2026-10-08 05:16"
+    "updated": "2026-10-08 08:56"
   }
 }
