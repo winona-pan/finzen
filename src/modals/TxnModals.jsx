@@ -4,7 +4,7 @@ export default function TxnModals({
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, expensePools, buckets,
   savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, financialSuggestion,
-  updateGoalRecurringSchedule, tr, accFieldLabel, updMulti, chargeFromAccField, CatPicker,
+  updateGoalRecurringSchedule, tr, accFieldLabel, updMulti, chargeFromAccField, CatPicker, livingBudgetFor, setLivingBudgetForMonth,
   goalCurrentAmount, isGoalArchived, allocSettings, setAllocSettings, computeAllocation, doAccountTransfer, doTransfer, offsetGoal, setOffsetGoal, depositGoal, setDepositGoal, guiltFreeGauge, updateBucket, passiveMo,
   getSweptAmount, addSweptAmount,
   incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable, getIncomeItems, setIncomeItems, setDefaultIncomeItems,
@@ -379,6 +379,7 @@ export default function TxnModals({
         {modal === "allocEngine" && (
           <AllocEngineSheet
             allocSettings={allocSettings} setAllocSettings={setAllocSettings} startNextMonthPlan={startNextMonthPlan}
+            livingBudgetFor={livingBudgetFor} setLivingBudgetForMonth={setLivingBudgetForMonth}
             computeAllocation={computeAllocation} financialSuggestion={financialSuggestion}
             getIncomeItems={getIncomeItems} setIncomeItems={setIncomeItems} setDefaultIncomeItems={setDefaultIncomeItems}
             accs={accs} buckets={buckets} setSavingsTarget={setSavingsTarget} applyGoalAllocation={applyGoalAllocation} resolveGoalDestinations={resolveGoalDestinations} getGoalSavingsTarget={getGoalSavingsTarget} doAccountTransfer={doAccountTransfer} curYm={curYm}
@@ -488,7 +489,7 @@ function SavingsTargetForm({ ym, target, accs, buckets, setSavingsTarget, remove
 }
 
 /* ── 智慧資金分流引擎：股票優先 → 各目標依優先級 → 生活費（自適應）→ 剩餘進預備金 ── */
-function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet, tr }) {
+function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan, livingBudgetFor, setLivingBudgetForMonth, computeAllocation, financialSuggestion, getIncomeItems, setIncomeItems, setDefaultIncomeItems, accs, buckets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, getGoalSavingsTarget, doAccountTransfer, curYm, confirm, close, setModal, C, iSt, fmt, Fld, Sl, CalcInp, Inp, Btn, Sheet, tr }) {
   /* 這個分流引擎現在操作的「目標月份」：如果有設定計畫起始月份且晚於這個月（例如這個月還不想開始規劃），就用那個月，不然就是這個月 */
   const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
   /* 收入細項：每一筆有金額＋要進哪個帳戶，月月可以不同，改了就存到「目標月份」的排程 */
@@ -525,6 +526,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     setInvestAllocsLocal([]);
     setAllocSettings({ investAllocs:[], investAmt:0, investAccId:"" });
     setLivingOverride(null);
+    setLivingBudgetForMonth(planStartYm, null);
     setGoalOverrides({});
   };
 
@@ -535,7 +537,8 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
 
   const alloc = computeAllocation(income, {
     investAmt,
-    livingAmt: livingOverride != null ? +livingOverride : null,
+    // 這個月另外設定過的生活費會存起來（總覽的生活水位、年度預測都用它），沒設定才用近幾個月平均／預設值
+    livingAmt: livingOverride != null && livingOverride !== "" ? +livingOverride : livingBudgetFor(planStartYm),
     goalOverrides: Object.fromEntries(Object.entries(goalOverrides).map(([k,v]) => [k, v===""?null:+v])),
   });
 
@@ -662,8 +665,11 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
           <button onClick={addInvestAlloc} style={{ ...linkBtn, color:C.accentL, fontWeight:700, fontSize:12, marginTop:8 }}>＋ {tr("新增投資")}</button>
         </div>
       )}
-      {row({ key:"living", icon:"🍜", title:tr("生活費"), sub: alloc.historyMonths > 0 ? `${tr("近")}${alloc.historyMonths}${tr("個月平均")}` : tr("還沒有記帳紀錄，自己填"),
-        right: amtInput(livingOverride ?? alloc.livingAmt, v => setLivingOverride(v)) })}
+      {row({ key:"living", icon:"🍜", title:tr("生活費"),
+        sub: livingBudgetFor(planStartYm) != null
+          ? <>{+planStartYm.slice(5)}{tr("月已自訂")}・<span onClick={e => { e.stopPropagation(); setLivingOverride(null); setLivingBudgetForMonth(planStartYm, null); }} style={{ color:C.accentL, cursor:"pointer" }}>{tr("恢復自動")}</span></>
+          : alloc.historyMonths > 0 ? `${tr("近")}${alloc.historyMonths}${tr("個月平均")}` : tr("還沒有記帳紀錄，自己填"),
+        right: amtInput(livingOverride ?? alloc.livingAmt, v => { setLivingOverride(v); setLivingBudgetForMonth(planStartYm, v === "" ? null : v); }) })}
       {allocGoals.map(g => {
         const isWish = alloc.wishlistAllocs.includes(g);
         const applied = getGoalSavingsTarget(planStartYm, g.id) != null;
@@ -708,6 +714,8 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     </div>
     <Btn style={{ width:"100%" }} disabled={applyMonths.length===0} onClick={() => {
       confirm(`${tr("確定把這份分流建議套用到")} ${applyMonths.join("、")}？${tr("只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字")}`, () => {
+        const livingSet = livingBudgetFor(planStartYm);
+        if (livingSet != null) applyMonths.forEach(ym => setLivingBudgetForMonth(ym, livingSet)); // 一起套用的月份，生活費也設成一樣
         applyMonths.forEach(ym => {
           [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
             // 一個目標可能同時分給好幾個子帳戶（g.splits），resolveGoalDestinations 會依比例／固定金額拆好；
