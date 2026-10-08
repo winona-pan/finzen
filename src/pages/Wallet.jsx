@@ -96,11 +96,7 @@ export default function WalletPage({
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
                 <span style={{ fontSize:11, color:C.textSub, ...maskStyle }}>{fmt(visA.reduce((s,a) => {
-                  if (a.type === "investment") {
-                    const stForAcc = stByAcc[a.name] || [];
-                    const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
-                    return s + toTWD(cost, a.cur, rates);
-                  }
+                  if (a.type === "investment") return s + (stByAcc[a.name] || []).reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
                   return s + toTWD(a.bal, a.cur, rates);
                 }, 0))}</span>
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
@@ -115,7 +111,9 @@ export default function WalletPage({
                 const stForAcc = stByAcc[a.name] || [];
                 return stForAcc.reduce((s,st)=>s+st.totalCost,0);
               };
-              const total = items.filter(a=>a.vis).reduce((s, a) => s + toTWD(accDisplayVal(a), a.cur, rates), 0);
+              // 持股成本每檔依市場換台幣（美股是美元），跟總資產淨值的算法一致
+              const accTwd = (a) => a.type !== "investment" ? toTWD(a.bal, a.cur, rates) : (stByAcc[a.name] || []).reduce((s,st)=>s+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
+              const total = items.filter(a=>a.vis).reduce((s, a) => s + accTwd(a), 0);
               if (!all.length) return null;
               const moveAcc = (id, dir) => {
                 const sorted = [...all], idx = sorted.findIndex(a => a.id === id), swapIdx = idx + dir;

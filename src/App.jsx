@@ -1934,22 +1934,22 @@ export default function App() {
   }, [portfolioNow, authLoading]);
 
   
+  /* 總資產＝現金＋金融卡（帳戶餘額）＋證券帳戶（持股成本；開了「總資產計入未實現損益」就用市值）。
+     證券帳戶不能用帳戶自己的 bal：買股票時錢是從銀行帳戶扣掉、變成股票，不會加進證券帳戶的 bal，
+     之前用 bal 算，每買一次股票總資產就憑空少一筆，也跟錢包下面「證券帳戶」那欄（持股成本）對不起來。
+     每檔股票依市場換台幣（美股是美元），不看帳戶幣別，台幣帳戶裡放美股（複委託）也不會算錯 */
   const totAssets = useMemo(() => {
-    // 隱藏的子帳戶要從總資產扣掉，但只扣「所屬帳戶本身有算進總資產」的：帳戶已經整個隱藏、
-    // 或證券帳戶改用股票市值計算（帳戶餘額整筆不算）時，再扣一次就變成重複扣
-    const mvMode = useMvForAssets && stTotMv > 0;
     const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s, b) => {
       const acc = visA.find(a => a.id === b.accId);
-      if (!acc || (mvMode && acc.type === "investment")) return s;
+      if (!acc || acc.type === "investment") return s; // 帳戶本身沒算進來、或證券帳戶（不看 bal）就不用扣
       return s + toTWD(b.allocated, acc.cur || "TWD", rates);
     }, 0);
-    const accBal = visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0) - excludedBucketTotal;
-    if (useMvForAssets && stTotMv > 0) {
-      const invAccBal = visA.filter(a => a.type==="investment").reduce((s,a) => s+toTWD(a.bal,a.cur,rates), 0);
-      return accBal - invAccBal + stTotMv;
-    }
-    return accBal;
-  }, [visA, rates, useMvForAssets, stTotMv, buckets, accs]);
+    const accBal = visA.filter(a => a.type !== "investment").reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0) - excludedBucketTotal;
+    const allNames = new Set(accs.map(a => a.name)), visNames = new Set(visA.map(a => a.name));
+    const stockVal = stSum.filter(st => st.totalSh > 0 && (visNames.has(st.acc) || !allNames.has(st.acc))) // 隱藏帳戶裡的不算；沒掛帳戶的照算
+      .reduce((s, st) => s + toTWD(useMvForAssets && st.mv > 0 ? st.mv : st.totalCost, st.market === "US" ? "USD" : "TWD", rates), 0);
+    return accBal + stockVal;
+  }, [visA, rates, useMvForAssets, stSum, buckets, accs]);
 
   const netWorth = totAssets - totDebt - totPay + totRec;
   const allocPie = useMemo(() => {
@@ -2361,14 +2361,15 @@ export default function App() {
     const hasSpecificScope = (g.accIds && g.accIds.length > 0) || (g.bucketIds && g.bucketIds.length > 0);
     if (!hasSpecificScope) {
       const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s,b) => {
-        const acc = accs.find(a=>a.id===b.accId);
-        return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
+        const acc = visA.find(a=>a.id===b.accId);
+        if (!acc || acc.type === "investment") return s; // 跟總資產淨值同一套：沒算進來的帳戶、證券帳戶不用扣
+        return s + toTWD(b.allocated, acc.cur||"TWD", rates);
       }, 0);
       const accBal = visA.reduce((s,a) => {
         if (a.type === "investment") {
           const stForAcc = stSum.filter(st=>st.acc===a.name);
-          const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-          const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+          const mv = stForAcc.reduce((ss,st)=>ss+toTWD(st.mv, st.market==="US"?"USD":"TWD", rates),0);
+          const cost = stForAcc.reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
           return s + (goalUseMv ? (mv>0?mv:cost) : cost);
         }
         return s + toTWD(a.bal, a.cur, rates);
@@ -2386,8 +2387,8 @@ export default function App() {
           return s + (goalUseMv ? (mv > 0 ? mv : gs.cost) : gs.cost);
         }
         const stForAcc = stSum.filter(st=>st.acc===a.name);
-        const mv = stForAcc.reduce((ss,st)=>ss+st.mv,0);
-        const cost = stForAcc.reduce((ss,st)=>ss+st.totalCost,0);
+        const mv = stForAcc.reduce((ss,st)=>ss+toTWD(st.mv, st.market==="US"?"USD":"TWD", rates),0);
+        const cost = stForAcc.reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
         return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
       }
       return s + toTWD(a.bal,a.cur,rates);
