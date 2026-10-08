@@ -15,7 +15,7 @@
 - 櫃買中心 openapi tpex_mainboard_daily_close_quotes：上櫃全部的代號、中文名、收盤價
 - 證交所 mis 即時報價：台股盤中時段，一次查 100 檔，把收盤價換成即時價
 - Nasdaq screener：美股全部個股、全部 ETF（延遲報價），個股順便帶 sector
-- 證交所 openapi t187ap03_L（上市）＋ isin.twse.com.tw 代碼查詢頁（上櫃、補上市漏的）：「產業別」
+- 證交所 openapi t187ap03_L（上市）＋ isin.twse.com.tw 代碼查詢頁（上櫃）：「產業別」
 """
 
 import json
@@ -37,7 +37,7 @@ def now_tw():
 def fetch(url, timeout=90):
     """用 curl 抓：櫃買中心那份 4MB 多的 JSON，用 Python urllib 讀常常讀到一半斷線，curl 比較穩"""
     try:
-        r = subprocess.run(["curl", "-sS", "--compressed", "-m", str(timeout), "--retry", "2", "-A", UA,
+        r = subprocess.run(["curl", "-sS", "--http1.1", "--compressed", "-m", str(timeout), "--retry", "2", "-A", UA,
                             "-H", "Accept: application/json, text/plain, */*", url], capture_output=True)
         if r.returncode != 0:
             print(f"    ❌ {url[:70]}: {r.stderr.decode()[:120]}")
@@ -205,7 +205,7 @@ def pick(row, *keys):
 def fetch_isin_industries(mode):
     """證交所 ISIN 代碼查詢頁（strMode=2 上市、4 上櫃）：HTML 表格，Big5 編碼，有「產業別」欄位（例如「半導體業」）"""
     try:
-        r = subprocess.run(["curl", "-sS", "--compressed", "-m", "90", "--retry", "2", "-A", UA,
+        r = subprocess.run(["curl", "-sS", "--http1.1", "--compressed", "-m", "90", "-A", UA,
                             f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"], capture_output=True)
         if r.returncode != 0:
             print(f"    ❌ ISIN strMode={mode}: {r.stderr.decode()[:120]}")
@@ -241,10 +241,10 @@ def fetch_tw_industries():
         code, ind = pick(r, "公司代號"), pick(r, "產業別")
         if code and ind:
             add(code, ind)
-    # 上櫃（櫃買中心 openapi 沒有好用的公司基本資料），以及上市漏掉的：ISIN 代碼查詢頁
-    for mode in (4, 2):
-        for code, ind in fetch_isin_industries(mode).items():
-            add(code, ind)
+    # 上櫃：櫃買中心 openapi 沒有好用的公司基本資料，改用 ISIN 代碼查詢頁
+    # （上市那份 ISIN 頁面很大，從 GitHub 抓常常超時，上市已經有 openapi 就不抓了）
+    for code, ind in fetch_isin_industries(4).items():
+        add(code, ind)
     print(f"  🏭 台股產業別：{len(out)} 檔")
     return out
 
@@ -268,6 +268,13 @@ def main():
     tw_out = compact(tw) if len(tw) > 500 else prev_tw  # 這次抓得太少（來源出問題），沿用網站上那份
     if tw_out is prev_tw:
         print("  ⚠️ 台股這次抓取不完整，沿用網站上現有的資料")
+    else:
+        # 上市、上櫃是兩個來源，只有其中一個失敗時，失敗那邊的股票沿用網站上那份，不要整批消失
+        for market, label in (("tse", "上市"), ("otc", "上櫃")):
+            if not any(v["m"] == market for v in tw.values()):
+                kept = {k: v for k, v in prev_tw.items() if k not in tw_out}
+                tw_out.update(kept)
+                print(f"  ⚠️ {label}這次沒抓到，沿用網站上現有的 {len(kept)} 檔")
 
     us = fetch_us()
     us_out = compact(us) if len(us) > 3000 else prev_us
