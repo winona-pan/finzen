@@ -15,7 +15,7 @@
 - 櫃買中心 openapi tpex_mainboard_daily_close_quotes：上櫃全部的代號、中文名、收盤價
 - 證交所 mis 即時報價：台股盤中時段，一次查 100 檔，把收盤價換成即時價
 - Nasdaq screener：美股全部個股、全部 ETF（延遲報價），個股順便帶 sector
-- 證交所 openapi t187ap03_L／櫃買中心 openapi mopsfe_t187ap03_O：上市、上櫃公司基本資料裡的「產業別」
+- 證交所 openapi t187ap03_L（上市）＋ isin.twse.com.tw 代碼查詢頁（上櫃、補上市漏的）：「產業別」
 """
 
 import json
@@ -202,23 +202,49 @@ def pick(row, *keys):
     return ""
 
 
-def fetch_tw_industries():
-    """{代號: 產業名}；兩份公司基本資料抓失敗就回傳空的，只是這次沒有自動分類，不影響報價"""
+def fetch_isin_industries(mode):
+    """證交所 ISIN 代碼查詢頁（strMode=2 上市、4 上櫃）：HTML 表格，Big5 編碼，有「產業別」欄位（例如「半導體業」）"""
+    try:
+        r = subprocess.run(["curl", "-sS", "--compressed", "-m", "90", "--retry", "2", "-A", UA,
+                            f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"], capture_output=True)
+        if r.returncode != 0:
+            print(f"    ❌ ISIN strMode={mode}: {r.stderr.decode()[:120]}")
+            return {}
+        html = r.stdout.decode("cp950", errors="ignore")
+    except Exception as e:
+        print(f"    ❌ ISIN strMode={mode}: {e}")
+        return {}
     out = {}
-    sources = [
-        "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",       # 上市
-        "https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap03_O",     # 上櫃
-    ]
-    for url in sources:
-        for r in fetch(url) or []:
-            code = pick(r, "公司代號", "SecuritiesCompanyCode", "CompanyCode", "Code")
-            ind = pick(r, "產業別", "SecuritiesIndustryCode", "IndustryCode", "Industry")
-            if not code or not ind:
-                continue
-            # 有的來源給代碼（"24"）、有的直接給名稱（"半導體業"），兩種都接
-            name = TW_INDUSTRY.get(ind.zfill(2)) if ind.isdigit() else ind.removesuffix("業")
-            if name:
-                out[code] = name
+    for tr in re.findall(r"<tr>(.*?)</tr>", html, re.S | re.I):
+        tds = [re.sub(r"<[^>]+>", "", td).strip() for td in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S | re.I)]
+        if len(tds) < 5:
+            continue
+        code = tds[0].split("\u3000")[0].strip()  # 「6488　環球晶」：代號跟名稱中間是全形空白
+        ind = tds[4]
+        if TW_CODE_RE.match(code) and ind:
+            out[code] = ind
+    return out
+
+
+def fetch_tw_industries():
+    """{代號: 產業名}；來源都抓失敗就回傳空的，只是這次沒有自動分類，不影響報價"""
+    out = {}
+
+    def add(code, ind):
+        # 有的來源給代碼（"24"）、有的直接給名稱（"半導體業"），兩種都接
+        name = TW_INDUSTRY.get(ind.zfill(2)) if ind.isdigit() else ind.removesuffix("工業").removesuffix("業")  # 「水泥工業」「半導體業」→ 跟代碼表同名
+        if name and code not in out:
+            out[code] = name
+
+    # 上市：證交所 openapi 公司基本資料（產業別是代碼）
+    for r in fetch("https://openapi.twse.com.tw/v1/opendata/t187ap03_L") or []:
+        code, ind = pick(r, "公司代號"), pick(r, "產業別")
+        if code and ind:
+            add(code, ind)
+    # 上櫃（櫃買中心 openapi 沒有好用的公司基本資料），以及上市漏掉的：ISIN 代碼查詢頁
+    for mode in (4, 2):
+        for code, ind in fetch_isin_industries(mode).items():
+            add(code, ind)
     print(f"  🏭 台股產業別：{len(out)} 檔")
     return out
 
