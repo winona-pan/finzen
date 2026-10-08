@@ -2993,7 +2993,7 @@ export default function App() {
         <div style={{ position:"absolute", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, paddingBottom:"env(safe-area-inset-bottom,0px)", zIndex:30 }}>
           <div style={{ display:"flex", justifyContent:"space-around", overflowX:"auto", WebkitOverflowScrolling:"touch", paddingLeft:4, paddingRight:4 }}>
             {[{ k:"overview", i:"📊", l:tr("nav_overview") }, { k:"wallet", i:"👛", l:tr("nav_wallet") }, { k:"charts", i:"📉", l:tr("nav_charts") }, { k:"notes", i:"👥", l:tr("nav_notes") }, { k:"invest", i:"📈", l:tr("nav_invest") }, { k:"settings", i:"☰", l:tr("nav_more") }].map(t => {
-              const active = tab === t.k || (t.k === "settings" && ["goals","subsbills","advisor","userGuide","account","language","theme"].includes(tab));
+              const active = tab === t.k || (t.k === "settings" && ["goals","subsbills","advisor","userGuide","account","language","theme","strategies"].includes(tab));
               return (
                 <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"1 1 0", minWidth:52, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
                   <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
