@@ -6,7 +6,7 @@
     public/quotes/tw.json          台股全部（約 2000 多檔，壓縮後幾十 KB）
     public/quotes/us/A.json …      美股依代號第一個字母分檔（每份約 20～40 KB）
     public/quotes/meta.json        更新時間、檔數
-  每一筆格式：代號: [現價, 漲跌幅%, 名稱]
+  每一筆格式：代號: [現價, 漲跌幅%, 名稱, 產業別]（產業別給 App 的產業分佈圖自動分類用，查不到是 null）
 - 這些檔案不存進 git（每個交易日都會變，存進去 repo 會越來越肥），只在部署時產生；
   某個來源這次抓失敗的話，沿用目前網站上的那一份，不會讓報價整個消失
 
@@ -14,7 +14,8 @@
 - 證交所 openapi STOCK_DAY_ALL：上市全部的代號、中文名、收盤價
 - 櫃買中心 openapi tpex_mainboard_daily_close_quotes：上櫃全部的代號、中文名、收盤價
 - 證交所 mis 即時報價：台股盤中時段，一次查 100 檔，把收盤價換成即時價
-- Nasdaq screener：美股全部個股、全部 ETF（延遲報價）
+- Nasdaq screener：美股全部個股、全部 ETF（延遲報價），個股順便帶 sector
+- 證交所 openapi t187ap03_L／櫃買中心 openapi mopsfe_t187ap03_O：上市、上櫃公司基本資料裡的「產業別」
 """
 
 import json
@@ -158,20 +159,68 @@ def fetch_us():
         sym = (r.get("symbol") or "").strip().replace("/", "-").upper()
         p = num(r.get("lastsale"))
         if sym and p:
-            out[sym] = {"p": p, "c": num(r.get("pctchange")), "n": clean_us_name(r.get("name"))}
+            out[sym] = {"p": p, "c": num(r.get("pctchange")), "n": clean_us_name(r.get("name")), "s": US_SECTOR.get((r.get("sector") or "").strip())}
     n_stock = len(out)
     etf = fetch("https://api.nasdaq.com/api/screener/etf?download=true") or {}
     for r in (((etf.get("data") or {}).get("data") or {}).get("rows") or []):
         sym = (r.get("symbol") or "").strip().replace("/", "-").upper()
         p = num(r.get("lastSalePrice"))
         if sym and p and sym not in out:
-            out[sym] = {"p": p, "c": num(r.get("percentageChange")), "n": (r.get("companyName") or "").strip()}
+            out[sym] = {"p": p, "c": num(r.get("percentageChange")), "n": (r.get("companyName") or "").strip(), "s": "ETF"}
     print(f"  🇺🇸 美股：個股 {n_stock} 檔、ETF {len(out) - n_stock} 檔")
     return out
 
 
 def compact(d):
-    return {k: [v["p"], None if v["c"] is None else round(v["c"], 2), v["n"]] for k, v in sorted(d.items()) if v.get("p")}
+    return {k: [v["p"], None if v["c"] is None else round(v["c"], 2), v["n"], v.get("s")] for k, v in sorted(d.items()) if v.get("p")}
+
+
+# 證交所／櫃買中心「產業別」代碼對照（公司基本資料裡給的是代碼）
+TW_INDUSTRY = {
+    "01": "水泥", "02": "食品", "03": "塑膠", "04": "紡織纖維", "05": "電機機械", "06": "電器電纜",
+    "08": "玻璃陶瓷", "09": "造紙", "10": "鋼鐵", "11": "橡膠", "12": "汽車", "14": "建材營造",
+    "15": "航運", "16": "觀光餐旅", "17": "金融保險", "18": "貿易百貨", "19": "綜合", "20": "其他",
+    "21": "化學", "22": "生技醫療", "23": "油電燃氣", "24": "半導體", "25": "電腦及週邊設備",
+    "26": "光電", "27": "通信網路", "28": "電子零組件", "29": "電子通路", "30": "資訊服務",
+    "31": "其他電子", "32": "文化創意", "33": "農業科技", "34": "電子商務", "35": "綠能環保",
+    "36": "數位雲端", "37": "運動休閒", "38": "居家生活", "80": "管理股票", "91": "存託憑證",
+}
+
+# Nasdaq screener 的 sector 是英文，統一翻成中文跟台股放在同一張圓餅圖
+US_SECTOR = {
+    "Technology": "科技", "Finance": "金融", "Health Care": "醫療保健", "Consumer Discretionary": "非必需消費",
+    "Consumer Staples": "必需消費", "Industrials": "工業", "Energy": "能源", "Utilities": "公用事業",
+    "Real Estate": "不動產", "Telecommunications": "通訊服務", "Basic Materials": "原物料", "Miscellaneous": "其他",
+}
+
+
+def pick(row, *keys):
+    for k in keys:
+        v = row.get(k)
+        if v not in (None, ""):
+            return str(v).strip()
+    return ""
+
+
+def fetch_tw_industries():
+    """{代號: 產業名}；兩份公司基本資料抓失敗就回傳空的，只是這次沒有自動分類，不影響報價"""
+    out = {}
+    sources = [
+        "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",       # 上市
+        "https://www.tpex.org.tw/openapi/v1/mopsfe_t187ap03_O",     # 上櫃
+    ]
+    for url in sources:
+        for r in fetch(url) or []:
+            code = pick(r, "公司代號", "SecuritiesCompanyCode", "CompanyCode", "Code")
+            ind = pick(r, "產業別", "SecuritiesIndustryCode", "IndustryCode", "Industry")
+            if not code or not ind:
+                continue
+            # 有的來源給代碼（"24"）、有的直接給名稱（"半導體業"），兩種都接
+            name = TW_INDUSTRY.get(ind.zfill(2)) if ind.isdigit() else ind.removesuffix("業")
+            if name:
+                out[code] = name
+    print(f"  🏭 台股產業別：{len(out)} 檔")
+    return out
 
 
 def shard_key(sym):
@@ -186,6 +235,10 @@ def main():
     tw, listed_date = fetch_tw_lists()
     if tw and need_tw_realtime(listed_date):
         apply_tw_realtime(tw)
+    industries = fetch_tw_industries()
+    for code, v in tw.items():
+        # 00 開頭的是 ETF／ETN，公司基本資料裡不會有
+        v["s"] = "ETF" if code.startswith("00") else industries.get(code)
     tw_out = compact(tw) if len(tw) > 500 else prev_tw  # 這次抓得太少（來源出問題），沿用網站上那份
     if tw_out is prev_tw:
         print("  ⚠️ 台股這次抓取不完整，沿用網站上現有的資料")

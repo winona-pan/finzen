@@ -30,7 +30,7 @@ const usShard = (sym) => { const c = sym[0]; return c >= "A" && c <= "Z" ? c : "
 const normUs = (t) => String(t || "").trim().toUpperCase().replace(/[./]/g, "-"); // BRK.B / BRK/B → BRK-B
 const normTw = (t) => String(t || "").trim().toUpperCase().replace(/\.(TW|TWO)$/, "");
 
-/* list: [{ ticker, market }] → Map「market:ticker」→ { price, chgPct, name } ；查不到的就不會在 Map 裡 */
+/* list: [{ ticker, market }] → Map「market:ticker」→ { price, chgPct, name, sector } ；查不到的就不會在 Map 裡 */
 export async function getBulkQuotes(list) {
   const out = new Map();
   const items = (list || []).filter(s => s && s.ticker);
@@ -41,7 +41,7 @@ export async function getBulkQuotes(list) {
     tw.length ? loadFile("tw.json") : null,
     ...[...new Set(us.map(s => usShard(normUs(s.ticker))))].map(k => loadFile(`us/${k}.json`)),
   ]);
-  const put = (s, row) => { if (row && row[0]) out.set(`${s.market}:${s.ticker}`, { price: row[0], chgPct: row[1], name: row[2] }); };
+  const put = (s, row) => { if (row && row[0]) out.set(`${s.market}:${s.ticker}`, { price: row[0], chgPct: row[1], name: row[2], sector: row[3] || null }); };
   if (twData) tw.forEach(s => put(s, twData[normTw(s.ticker)]));
   const usData = Object.assign({}, ...usParts.filter(Boolean));
   us.forEach(s => put(s, usData[normUs(s.ticker)]));

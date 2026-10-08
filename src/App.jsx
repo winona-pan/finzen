@@ -1565,12 +1565,15 @@ export default function App() {
     } catch {}
     // ② 全市場報價（quotes/）：所有台股、美股都有，只下載用得到的那幾份；不用再手動把持股加進追蹤清單
     const notInJson = list.filter(s => !jsonHit.has(s.id));
-    // 台股全部在同一份 tw.json，順便也幫固定追蹤的那幾檔拿官方中文名（Yahoo 給的是英文）
-    const bulk = await getBulkQuotes([...notInJson, ...list.filter(s => jsonHit.has(s.id) && s.market !== "US")]);
+    // 固定追蹤的那幾檔也一起查：台股順便拿官方中文名（Yahoo 給的是英文），所有股票都順便拿產業別
+    const bulk = await getBulkQuotes(list);
     const bulkTime = new Date().toLocaleTimeString("zh-TW");
     if (jsonHit.size || bulk.size) upd("stocks", p => p.map(s => {
       if (!list.some(x => x.id === s.id)) return s; // 不在這次要更新的範圍內，原樣保留
       const item = jsonHit.get(s.id);
+      // 產業別自動判斷存在 autoSector，使用者自己填的 sector 永遠優先，不會被蓋掉
+      const autoSector = bulk.get(`${s.market}:${s.ticker}`)?.sector;
+      if (autoSector && autoSector !== s.autoSector) s = { ...s, autoSector };
       if (item) return { ...s, curPrice:item.price, name:(s.market !== "US" && bulk.get(`${s.market}:${s.ticker}`)?.name) || item.name || s.name, lastUpdated:item.updated||"", _extra: { high:item.high, low:item.low, vol:item.vol, chgPct:item.chgPct, institutional:item.institutional, institutional_date:item.institutional_date } };
       const q = bulk.get(`${s.market}:${s.ticker}`);
       // 台股用官方中文名；美股名稱很長，使用者自己取的名字優先
@@ -2181,10 +2184,10 @@ export default function App() {
     return map;
   }, [txns]);
 
-  /* ── 產業/類股分佈（依手動標記的 sector）── */
+  /* ── 產業/類股分佈（手動標記的 sector 優先，沒填就用全市場報價自動判斷的 autoSector）── */
   const sectorPie = useMemo(() => {
     const map = {};
-    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || "未分類"; map[key] = (map[key] || 0) + (s.mv > 0 ? s.mv : s.totalCost); } });
+    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || s.autoSector || "未分類"; map[key] = (map[key] || 0) + (s.mv > 0 ? s.mv : s.totalCost); } });
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
   }, [stSum]);
 

@@ -347,8 +347,8 @@ export default function StockModals({
               </div>}
             </div>
 
-            <Fld label={tr("產業別（選填，用於資產配置圖）")}>
-              <input value={st.sector || ""} onChange={e => updateStockMeta(st.id, { sector:e.target.value })} placeholder={tr("例如：半導體、金融、ETF…")} style={iSt} />
+            <Fld label={tr("產業別（選填，不填會自動判斷）")}>
+              <input value={st.sector || ""} onChange={e => updateStockMeta(st.id, { sector:e.target.value })} placeholder={st.autoSector ? `${tr("自動判斷")}：${tr(st.autoSector)}` : tr("例如：半導體、金融、ETF…")} style={iSt} />
             </Fld>
 
             {totAssets > 0 && (() => {
