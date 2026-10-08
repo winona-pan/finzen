@@ -441,31 +441,42 @@ export default function InvestPage({
               {watchStocks.length === 0 ? (
                 <div style={{ textAlign:"center", padding:"30px 0", color:C.muted, fontSize:13 }}>{tr("還沒有自選股，上面加一支想追蹤的股票吧")}</div>
               ) : (
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {watchStocks.map(w => (
-                    <Card key={w.id} style={{ padding:0, overflow:"hidden" }}>
-                      <SwipeRow onDelete={() => confirm(`${tr("移除自選股")}「${w.ticker}」？`, () => removeWatchStock(w.id), tr("確認移除"))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
-                        <div style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <div>
-                            <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker} {w.name}</div>
-                            <div style={{ fontSize:11, color:C.muted }}>{w.market}</div>
-                          </div>
-                          <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmtPrice(w.curPrice, w.market === "US" ? "USD" : "TWD") : "—"}</div>
-                            {w._extra?.chgPct !== undefined && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
-                          </div>
-                        </div>
-                      </SwipeRow>
-                      {expandedWatch === w.id && (
-                        <div style={{ padding:14, paddingTop:0 }}>
-                          <div style={{ paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-                            <StockPriceChart ticker={w.ticker} market={w.market} theme={theme} />
-                          </div>
-                        </div>
-                      )}
-                    </Card>
-                  ))}
-                </div>
+                /* 分成台股、美股兩區；沒標市場的舊資料當台股（報價也是這樣查的） */
+                [{ key:"TW", label:`🇹🇼 ${tr("台股")}`, list: watchStocks.filter(w => w.market !== "US") },
+                 { key:"US", label:`🇺🇸 ${tr("美股")}`, list: watchStocks.filter(w => w.market === "US") }]
+                .filter(g => g.list.length > 0).map(g => (
+                  <div key={g.key} style={{ marginBottom:16 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"4px 2px 8px" }}>
+                      <span style={{ fontSize:13, fontWeight:800, color:C.textSub }}>{g.label}</span>
+                      <span style={{ fontSize:11, color:C.muted }}>{g.list.length} {tr("檔")}</span>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {g.list.map(w => (
+                        <Card key={w.id} style={{ padding:0, overflow:"hidden" }}>
+                          <SwipeRow onDelete={() => confirm(`${tr("移除自選股")}「${w.ticker}」？`, () => removeWatchStock(w.id), tr("確認移除"))} onClick={() => setExpandedWatch(p => p===w.id?null:w.id)}>
+                            <div style={{ padding:14, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ fontWeight:700, fontSize:14, color:C.text }}>{w.ticker}</div>
+                                {w.name && <div style={{ fontSize:11, color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{w.name}</div>}
+                              </div>
+                              <div style={{ textAlign:"right", flexShrink:0 }}>
+                                <div style={{ fontWeight:900, fontSize:15, color:C.text }}>{w.curPrice > 0 ? fmtPrice(w.curPrice, w.market === "US" ? "USD" : "TWD") : "—"}</div>
+                                {w._extra?.chgPct != null && <div style={{ fontSize:11, color:pnlColor(w._extra.chgPct, C) }}>{w._extra.chgPct>=0?"+":""}{w._extra.chgPct}%</div>}
+                              </div>
+                            </div>
+                          </SwipeRow>
+                          {expandedWatch === w.id && (
+                            <div style={{ padding:14, paddingTop:0 }}>
+                              <div style={{ paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                                <StockPriceChart ticker={w.ticker} market={w.market} theme={theme} />
+                              </div>
+                            </div>
+                          )}
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           )}

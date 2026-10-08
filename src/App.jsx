@@ -2406,6 +2406,13 @@ export default function App() {
     defaultIncomeItems:[] };
   const allocSettings = d.allocSettings ? { ...ALLOC_DEFAULT, ...d.allocSettings } : ALLOC_DEFAULT;
   const setAllocSettings = useCallback((patch) => upd("allocSettings", p => ({ ...ALLOC_DEFAULT, ...(p||{}), ...patch })), [upd]);
+  /* 指定月份的生活費預算（智慧分流裡改的就是這個）：沒設定就回傳 null，交給各處原本的預設邏輯 */
+  const livingBudgetFor = useCallback((ym) => { const v = (allocSettings.livingBudgetByMonth || {})[ym]; return v != null && v !== "" ? +v : null; }, [allocSettings]);
+  const setLivingBudgetForMonth = useCallback((ym, amt) => upd("allocSettings", p => {
+    const byMonth = { ...((p||{}).livingBudgetByMonth || {}) };
+    if (amt == null || amt === "") delete byMonth[ym]; else byMonth[ym] = Math.max(0, Math.round(+amt || 0));
+    return { ...ALLOC_DEFAULT, ...(p||{}), livingBudgetByMonth: byMonth };
+  }), [upd]);
   /* 這個月（或指定月份）預估收入細項：有存過就用存的，沒有就用預設收入項目樣板 */
   const getIncomeItems = useCallback((ym) => {
     const stored = (d.incomeSchedule||{})[ym]?.items;
@@ -2495,14 +2502,14 @@ export default function App() {
 
   /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現、手動標記不列入生活費的交易、不算生活費帳戶的花費）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
-    const livingBudget = allocSettings.livingBudgetOverride || financialSuggestion.avgVariable;
+    const livingBudget = livingBudgetFor(curYm) ?? (allocSettings.livingBudgetOverride || financialSuggestion.avgVariable);
     const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
     const hasAllocated = savingsTargets.some(x => x.ym === curYm);
     return { livingBudget: Math.round(livingBudget), spentSoFar: Math.round(spentSoFar), remaining, hasAllocated };
-  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount, notLivingExcluded]);
+  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount, notLivingExcluded, livingBudgetFor]);
 
   /* ── 生活費連續達標紀錄：回頭看每個「已結束」的月份，生活費有沒有守住，算出目前連續幾個月沒超支（current），
      以及史上最長連續紀錄（longest，用來解鎖獎勵徽章，中斷過也不會消失）。
@@ -2512,7 +2519,9 @@ export default function App() {
     const allYms = [...new Set(txns.map(t => t.date.slice(0,7)))].filter(ym => ym < curYm).sort();
     const monthly = allYms.map(ym => {
       let budget;
-      if (allocSettings.livingBudgetOverride) {
+      if (livingBudgetFor(ym) != null) {
+        budget = livingBudgetFor(ym); // 那個月在智慧分流裡設定過生活費，就用那個月自己的
+      } else if (allocSettings.livingBudgetOverride) {
         budget = allocSettings.livingBudgetOverride;
       } else {
         const dt = new Date(ym + "-01");
@@ -2536,7 +2545,7 @@ export default function App() {
     let current = 0;
     for (let i = monthly.length - 1; i >= 0; i--) { if (monthly[i].under) current++; else break; }
     return { current, longest, months: monthly };
-  }, [txns, allocSettings, curYm, notLivingExcluded]);
+  }, [txns, allocSettings, curYm, notLivingExcluded, livingBudgetFor]);
   const STREAK_MILESTONES = [3, 6, 12, 24];
   const DEFAULT_STREAK_REWARDS = {
     3: "犒賞自己一杯喜歡的飲料或一場電影 🎬",
@@ -2638,8 +2647,8 @@ export default function App() {
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const defaultRigid = livingAmt + investAmt;
-    const rigidFor = (ym) => { const ov = incomeSchedule[ym]?.rigidOverride; return ov != null ? ov : defaultRigid; };
+    // 某個月在智慧分流裡另外設定過生活費，那個月就用它自己的
+    const rigidFor = (ym) => { const ov = incomeSchedule[ym]?.rigidOverride; return ov != null ? ov : (livingBudgetFor(ym) ?? livingAmt) + investAmt; };
 
     const activeGoals = goals.filter(g => g.goalType === "sinking" && g.target > 0 && g.deadline && !isGoalArchived(g))
       .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, priority: g.priority==null?5:g.priority, target:g.target,
@@ -2819,10 +2828,9 @@ export default function App() {
     const investAmt = (allocSettings.investAllocs && allocSettings.investAllocs.length > 0)
       ? allocSettings.investAllocs.reduce((s,r)=>s+(+r.amt||0),0)
       : (allocSettings.investAmt || allocSettings.defaultInvestAmt || 0);
-    const defaultRigid = livingAmt + investAmt;
     return yearlySchedule.map(m => {
       const rigidOverride = incomeSchedule[m.ym]?.rigidOverride;
-      const rigid = rigidOverride != null ? rigidOverride : defaultRigid;
+      const rigid = rigidOverride != null ? rigidOverride : (livingBudgetFor(m.ym) ?? livingAmt) + investAmt;
       const sinkingBreakdown = yearlyGoalSchedule
         .map(g => ({ id:g.id, name:g.name, emoji:g.emoji, alloc: g.perMonth.find(pm=>pm.ym===m.ym)?.alloc || 0 }))
         .filter(x => x.alloc > 0);
@@ -2932,7 +2940,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund, portfolioHistory: d.portfolioHistory || [],
+    budget502030, createEmergencyFund, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
