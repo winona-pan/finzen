@@ -97,6 +97,15 @@ function getC(theme) { return THEMES[theme] || THEMES.dark; }
 const PIE = ["#f43f5e","#3b82f6","#4ade80","#fb923c","#06b6d4","#ec4899","#eab308","#14b8a6"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const TODAY = new Date(new Date().getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/* TODAY 是 App 開啟那一刻算的；手機上 App 常常放在背景好幾天，切回來時日期已經過了，
+   「今天」「這個月」、自動記帳、AI 顧問都會停在舊的那天。切回前景發現換日了就重新載入一次 */
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const now = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (now !== TODAY) window.location.reload();
+  });
+}
 /* 用本地時區組出 YYYY-MM-DD，不要用 toISOString()（那個會轉成 UTC，正時區會把日期往前推一天） */
 function toYmd(dt) { return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; }
 /* 生活費預算：2026年先固定用預設值（比較準），從2027年開始才改用近3個月自動學習平均 */
@@ -1890,8 +1899,9 @@ export default function App() {
     return {...st, totalSh, totalCost, avgCost, mv, upnl};
   }), [stocks]);
 
-  const stTotMv = useMemo(() => stSum.reduce((s, x) => s + x.mv, 0), [stSum]);
-  const stTotCost = useMemo(() => stSum.reduce((s, x) => s + x.totalCost, 0), [stSum]);
+  // 美股的 mv/totalCost 是美元，加總前一定要先換成台幣（之前直接相加，美股部位會被當成同樣數字的台幣，總資產就少算了）
+  const stTotMv = useMemo(() => stSum.reduce((s, x) => s + toTWD(x.mv, x.market === "US" ? "USD" : "TWD", rates), 0), [stSum, rates]);
+  const stTotCost = useMemo(() => stSum.reduce((s, x) => s + toTWD(x.totalCost, x.market === "US" ? "USD" : "TWD", rates), 0), [stSum, rates]);
 
   /* ── 每日投資波動：每個交易日記一筆投資組合的快照（全部換算成台幣），用前後兩天相減畫出每天賺賠 ──
      pnl＝未實現損益＋已實現損益：只用未實現的話，賣掉賺錢的股票那天會被算成「虧了」 */
@@ -1925,9 +1935,13 @@ export default function App() {
 
   
   const totAssets = useMemo(() => {
+    // 隱藏的子帳戶要從總資產扣掉，但只扣「所屬帳戶本身有算進總資產」的：帳戶已經整個隱藏、
+    // 或證券帳戶改用股票市值計算（帳戶餘額整筆不算）時，再扣一次就變成重複扣
+    const mvMode = useMvForAssets && stTotMv > 0;
     const excludedBucketTotal = buckets.filter(b => b.vis === false).reduce((s, b) => {
-      const acc = accs.find(a => a.id === b.accId);
-      return s + toTWD(b.allocated, acc?.cur || "TWD", rates);
+      const acc = visA.find(a => a.id === b.accId);
+      if (!acc || (mvMode && acc.type === "investment")) return s;
+      return s + toTWD(b.allocated, acc.cur || "TWD", rates);
     }, 0);
     const accBal = visA.reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0) - excludedBucketTotal;
     if (useMvForAssets && stTotMv > 0) {
@@ -1949,10 +1963,10 @@ export default function App() {
     stSum.filter(x=>x.totalSh>0).forEach(x => {
       const key = `${x.ticker}_${x.market}`;
       if (!map[key]) map[key] = { name:x.ticker, value:0 };
-      map[key].value += x.totalCost;
+      map[key].value += toTWD(x.totalCost, x.market === "US" ? "USD" : "TWD", rates);
     });
     return Object.values(map);
-  }, [stSum]);
+  }, [stSum, rates]);
 
   /* ── 累積投入成本走勢（不是市值！市值需要每天的真實股價，這裡只有買進當下的成本，
      用「今天的市值/成本比」套用回過去每一天算出來的市值曲線只是把成本曲線等比例縮放，會很誤導人，
@@ -2194,9 +2208,9 @@ export default function App() {
   /* ── 產業/類股分佈（手動標記的 sector 優先，沒填就用全市場報價自動判斷的 autoSector）── */
   const sectorPie = useMemo(() => {
     const map = {};
-    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || s.autoSector || "未分類"; map[key] = (map[key] || 0) + (s.mv > 0 ? s.mv : s.totalCost); } });
+    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || s.autoSector || "未分類"; map[key] = (map[key] || 0) + toTWD(s.mv > 0 ? s.mv : s.totalCost, s.market === "US" ? "USD" : "TWD", rates); } });
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
-  }, [stSum]);
+  }, [stSum, rates]);
 
   /* 股息相關：原本在「績效」分頁，之前某次上傳時連同畫面一起被刪掉了，這裡照原本的做法補回來 */
   /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
@@ -2302,6 +2316,8 @@ export default function App() {
   // 只是「目前持股」清單本來就不該再顯示已經出清的標的，不然會讓人以為還持有
   const stByAcc = useMemo(() => { const g = {}; stSum.filter(x => x.totalSh > 0).forEach(x => { (g[x.acc] || (g[x.acc] = [])).push(x); }); return g; }, [stSum]);
   const moTxns = useMemo(() => txns.filter(t => { const [y, m] = t.date.split("-").map(Number); return y === month.y && m === month.m; }), [txns, month]);
+  // 「真正的這個月」：moTxns 跟著畫面上選的月份走（翻到上個月看就變上個月），生活費儀表、AI 顧問要的是今天所在的月份
+  const curMoTxns = useMemo(() => txns.filter(t => t.date.slice(0, 7) === TODAY.slice(0, 7)), [txns]);
   const poolThisMo = useMemo(() => pools.filter(p => { const [py, pm] = p.date.split("-").map(Number); return py === month.y && pm === month.m; }).reduce((s, p) => s + (p.recognized || 0), 0), [pools, month]);
   const moInc = useMemo(() => moTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0), [moTxns]);
   const moExp = useMemo(() => moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0), [moTxns]);
@@ -2608,13 +2624,13 @@ export default function App() {
   /* ── 零罪惡感消費額度：生活費預算 - 已花費（排除願望兌現、手動標記不列入生活費的交易、不算生活費帳戶的花費）- 已掃入的月底餘額，本月若已套用過分流才顯示「安全」狀態 ── */
   const guiltFreeGauge = useMemo(() => {
     const livingBudget = livingBudgetFor(curYm) ?? (allocSettings.livingBudgetOverride || financialSuggestion.avgVariable);
-    const spentSoFar = moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
+    const spentSoFar = curMoTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t) && notLivingExcluded(t))
       .reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
     const sweptLeftover = getSweptAmount(curYm, "leftover");
     const remaining = Math.round(livingBudget - spentSoFar - sweptLeftover);
     const hasAllocated = savingsTargets.some(x => x.ym === curYm);
     return { livingBudget: Math.round(livingBudget), spentSoFar: Math.round(spentSoFar), remaining, hasAllocated };
-  }, [allocSettings, financialSuggestion, moTxns, savingsTargets, curYm, getSweptAmount, notLivingExcluded, livingBudgetFor]);
+  }, [allocSettings, financialSuggestion, curMoTxns, savingsTargets, curYm, getSweptAmount, notLivingExcluded, livingBudgetFor]);
 
   /* ── 生活費連續達標紀錄：回頭看每個「已結束」的月份，生活費有沒有守住，算出目前連續幾個月沒超支（current），
      以及史上最長連續紀錄（longest，用來解鎖獎勵徽章，中斷過也不會消失）。
@@ -2823,7 +2839,7 @@ export default function App() {
 
     // 這個月支出前5大類別
     const catTotals = {};
-    moTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t)).forEach(t => {
+    curMoTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整" && !isGoalSpendTxn(t)).forEach(t => {
       const amt = t.proxyAmt ? t.amt - t.proxyAmt : t.amt;
       catTotals[t.cat] = (catTotals[t.cat]||0) + amt;
     });
@@ -2833,9 +2849,14 @@ export default function App() {
     const activeSubs = (subs||[]).filter(s=>s.active).map(s => `${s.name} ${fmt(monthlyEquiv(s))}/月`).join("、");
     const activeBills = (bills||[]).filter(b=>b.active).map(b => `${b.name} ${fmt(monthlyEquiv(b))}/月`).join("、");
 
+    // 這個月（今天所在月份）收支；不用 moInc/moExp，那兩個跟著畫面選的月份走
+    const curInc = curMoTxns.filter(t => t.type === "income" && t.tags !== "#往來帳").reduce((s, t) => s + t.amt, 0);
+    const curExp = curMoTxns.filter(t => t.type === "expense" && t.cat !== "帳戶調整").reduce((s, t) => s + (t.proxyAmt ? t.amt - t.proxyAmt : t.amt), 0);
+
     // 投資組合
     const stockLines = (stSum||[]).filter(s=>s.totalSh>0).map(s =>
-      `- ${s.ticker}${s.name&&s.name!==s.ticker?`(${s.name})`:""}：${s.totalSh}股，成本 ${fmt(s.totalCost)}，市值 ${fmt(s.mv)}，${s.upnl>=0?"未實現獲利":"未實現虧損"} ${fmt(Math.abs(s.upnl))}`
+      // 美股換成台幣，不然 AI 會把美元數字當台幣
+      `- ${s.ticker}${s.name&&s.name!==s.ticker?`(${s.name})`:""}：${s.totalSh}股，成本 ${fmt(toTWD(s.totalCost, s.market==="US"?"USD":"TWD", rates))}，市值 ${fmt(toTWD(s.mv, s.market==="US"?"USD":"TWD", rates))}${s.curPrice?`（現價 ${s.curPrice}${s.market==="US"?" 美元":" 元"}${s.lastUpdated?`，報價時間 ${s.lastUpdated}`:""}）`:""}，${s.upnl>=0?"未實現獲利":"未實現虧損"} ${fmt(Math.abs(toTWD(s.upnl, s.market==="US"?"USD":"TWD", rates)))}`
     ).join("\n");
 
     // 往來帳（應收應付）
@@ -2851,8 +2872,8 @@ export default function App() {
       `現金＋活存：${fmt(cashBal)}`,
       stTotMv > 0 ? `投資市值：${fmt(stTotMv)}（成本 ${fmt(stTotCost)}，未實現損益 ${fmt(stTotMv-stTotCost)}）` : "目前沒有股票投資部位。",
       "",
-      "【這個月收支】",
-      `收入：${fmt(moInc)}，支出：${fmt(moExp)}，結餘：${fmt(moInc-moExp)}`,
+      `【這個月收支（${TODAY.slice(0,7)}）】`,
+      `收入：${fmt(curInc)}，支出：${fmt(curExp)}，結餘：${fmt(curInc-curExp)}`,
       topCats ? `支出前5大類別：${topCats}` : "這個月還沒有支出紀錄。",
       `生活費預算：${fmt(guiltFreeGauge.livingBudget)}，目前已花：${fmt(guiltFreeGauge.spentSoFar)}，${guiltFreeGauge.remaining>=0?`還可以花 ${fmt(guiltFreeGauge.remaining)}`:`已經超支 ${fmt(-guiltFreeGauge.remaining)}`}${financialSuggestion.historyMonths>0?`（生活費預算是近${financialSuggestion.historyMonths}個月平均自動算的）`:"（目前用的是設定頁的固定預設值，還沒開始用歷史平均自動學習）"}`,
       `50/30/20 比例：需要 ${budget502030.needPct}%、想要 ${budget502030.wantPct}%、儲蓄 ${budget502030.savePct}%`,
@@ -2878,7 +2899,7 @@ export default function App() {
     ].join("\n");
   }, [goals, isGoalArchived, goalCurrentAmount, fmt, moInc, moExp, guiltFreeGauge, budget502030, curSavingsTarget,
       moTxns, subs, bills, monthlyEquiv, subsMo, billsMo, stSum, debts, netWorth, totAssets, totDebt, totPay, totRec,
-      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion, goalDisplayAmount]);
+      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion, goalDisplayAmount, curMoTxns, rates]);
 
   /* AI 顧問對話：存在 localStorage，關掉 app 再打開還在，不會因為關掉聊天視窗或重新整理就消失 */
   const [advisorHistory, setAdvisorHistoryRaw] = useState(() => {
@@ -2906,7 +2927,13 @@ export default function App() {
     setAdvisorError(null);
     try {
       // 選英文的話請 AI 用英文回答（背景資料是中文，不特別說的話它會用中文回）
-      const ctx = lang === "en" ? advisorContext + "\n\nIMPORTANT: The user reads English. Always reply in clear, natural English, and use English names for categories and terms." : advisorContext;
+      /* 現在時間每次送出才算（不放進 useMemo，不然 App 開著跨日/跨小時會是舊的）：
+         沒告訴 AI 今天幾號，它只能猜，「這個月還剩幾天」「今天股市」這類回答就會對不上 */
+      const tw = new Date(Date.now() + 8 * 3600 * 1000);
+      const daysInMonth = new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth() + 1, 0)).getUTCDate();
+      const nowLine = `【現在時間】台灣時間 ${tw.getUTCFullYear()}年${tw.getUTCMonth() + 1}月${tw.getUTCDate()}日（星期${"日一二三四五六"[tw.getUTCDay()]}）${String(tw.getUTCHours()).padStart(2, "0")}:${String(tw.getUTCMinutes()).padStart(2, "0")}，這個月含今天還剩 ${daysInMonth - tw.getUTCDate() + 1} 天。回答裡提到日期、星期、剩幾天、台股是否開盤時以這個為準。股票現價是 App 最近一次抓到的報價，不一定是此刻的即時價。\n\n`;
+      const base = nowLine + advisorContext;
+      const ctx = lang === "en" ? base + "\n\nIMPORTANT: The user reads English. Always reply in clear, natural English, and use English names for categories and terms." : base;
       /* 「Load failed」(Safari) / 「Failed to fetch」(Chrome) 是連線中途斷掉，不是 AI 拒答：
          通常是網路切換、App 切到背景、或回答太長等太久。這種自動重試一次，多半第二次就成功 */
       const isNetErr = e => /load failed|failed to fetch|networkerror|network request failed/i.test(e?.message || "");
