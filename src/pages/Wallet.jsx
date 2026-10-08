@@ -95,10 +95,8 @@ export default function WalletPage({
                 <span style={{ fontSize:13, fontWeight:900, color:C.textSub }}>資產</span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }} onClick={(e) => { if (hideAmounts) { e.stopPropagation(); doPeek(); } }}>
-                <span style={{ fontSize:11, color:C.textSub, ...maskStyle }}>{fmt(visA.reduce((s,a) => {
-                  if (a.type === "investment") return s + (stByAcc[a.name] || []).reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
-                  return s + toTWD(a.bal, a.cur, rates);
-                }, 0))}</span>
+                {/* 直接用總資產（跟最上面「資產」同一個數字）：已扣掉「不計入資產」的子帳戶，證券帳戶依開關用成本或市值 */}
+                <span style={{ fontSize:11, color:C.textSub, ...maskStyle }}>{fmt(totAssets)}</span>
                 <span style={{ fontSize:14, color:C.muted, display:"inline-block", transform:collapsed["assets"]?"rotate(-90deg)":"rotate(0deg)", transition:"transform .2s" }}>▾</span>
               </div>
             </button>
