@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { translateText } from "../i18nRuntime";
 
 export default function TxnModals({ 
   C, modal, close, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -639,7 +640,7 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
     {sectionTitle("②", tr("分配"), <span style={{ fontSize:10, color:C.muted }}>{tr("數字可直接改")}</span>)}
     <div style={{ borderRadius:16, background:C.card, overflow:"hidden" }}>
       {row({ key:"invest", icon:"📊", title:tr("投資"),
-        sub: investAllocs.length ? `${investAllocs.length} ${tr("筆")}・${tr("只記錄，不自動轉帳")}` : tr("點這裡設定"),
+        sub: investAllocs.length ? `${translateText(`${investAllocs.length} 筆`)}・${tr("只記錄，不自動轉帳")}` : tr("點這裡設定"),
         onClick: () => setShowSettings(p => !p),
         right: <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ fontSize:14, fontWeight:800, color:C.text }}>{fmt(alloc.investAmt)}</span><span style={{ fontSize:10, color:C.muted }}>{showSettings?"▲":"▼"}</span></span> })}
       {showSettings && (
@@ -851,7 +852,7 @@ function GoalSpendSheet({ g, current, txns, accs, buckets, cats, ceMap, AT, upd,
     {/* 已記錄的花費明細 */}
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", margin:"22px 2px 8px" }}>
       <span style={{ fontSize:12, fontWeight:800, color:C.textSub }}>{tr("花費明細")}</span>
-      <span style={{ fontSize:10, color:C.muted }}>{spent.length} {tr("筆")}</span>
+      <span style={{ fontSize:10, color:C.muted }}>{translateText(`${spent.length} 筆`)}</span>
     </div>
     {spent.length === 0 ? (
       <div style={{ fontSize:11, color:C.muted, padding:"12px 14px", borderRadius:16, background:C.card }}>{tr("還沒有記錄")}</div>

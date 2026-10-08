@@ -4,6 +4,7 @@ import { mergeAppData } from "./syncMerge";
 import { getBulkQuotes } from "./bulkQuotes";
 import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, saveCloudDataIfUnchanged, watchCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
+import { setRuntimeLang, translateText } from "./i18nRuntime";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
 import OverviewPage  from "./pages/Overview";
@@ -585,11 +586,11 @@ function TWStockChart({ ticker }) {
               <YAxis yAxisId="price" hide domain={["auto","auto"]} />
               <YAxis yAxisId="pct" orientation="right" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v>0?"+":""}${v}%`} width={40} />
               <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name,entry)=>{
-                if (name==="close") return [Number(v).toFixed(2), "價格"];
+                if (name==="close") return [Number(v).toFixed(2), translateText("價格")];
                 if (name==="ma5") return [Number(v).toFixed(2), "MA5"];
                 if (name==="ma20") return [Number(v).toFixed(2), "MA20"];
-                if (name==="ma60") return [Number(v).toFixed(2), "季線"];
-                if (name==="range") { const p = entry?.payload; return [p ? `開${p.o} 高${p.h} 低${p.l} 收${p.c}` : "", "K線"]; }
+                if (name==="ma60") return [Number(v).toFixed(2), translateText("季線")];
+                if (name==="range") { const p = entry?.payload; return [p ? translateText(`開${p.o} 高${p.h} 低${p.l} 收${p.c}`) : "", translateText("K線")]; }
                 return [v, name];
               }} />
               {kline ? (
@@ -998,6 +999,7 @@ export default function App() {
   /* ── 語言：目前涵蓋底部導覽/常用按鈕/設定頁主要標題，還沒涵蓋每一頁的細節文字，沒翻到的地方會自動顯示繁體中文 ── */
   const [lang, setLang] = useState(() => localStorage.getItem("finzen_lang") || "zh");
   const changeLang = (l) => { localStorage.setItem("finzen_lang", l); setLang(l); };
+  setRuntimeLang(lang); // 畫面文字翻譯層（i18nRuntime.js）用的語言，要在畫子元件之前設好
   const tr = makeT(lang);
   const [modal, setModal] = useState(null);
   const [confirmDlg, setConfirmDlg] = useState(null);
@@ -2186,6 +2188,95 @@ export default function App() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
   }, [stSum]);
 
+  /* 股息相關：原本在「績效」分頁，之前某次上傳時連同畫面一起被刪掉了，這裡照原本的做法補回來 */
+  /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
+  const [dividendEst, setDividendEst] = useState([]);
+  const [loadingDiv, setLoadingDiv] = useState(false);
+  const fetchDividendEstimate = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0);
+    if (!held.length) { setDividendEst([]); return; }
+    setLoadingDiv(true);
+    try {
+      const results = await Promise.all(held.map(async s => {
+        const sym = s.market === "US" ? s.ticker : `${s.ticker}.TW`;
+        const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y&events=div`;
+        const proxies = [
+          (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+          (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        ];
+        for (const makeProxy of proxies) {
+          try {
+            const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
+            if (!r.ok) continue;
+            const raw = await r.text();
+            let d2; try { const j = JSON.parse(raw); d2 = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
+            const divs = d2?.chart?.result?.[0]?.events?.dividends;
+            if (!divs) return { ...s, lastDiv:0, annualDiv:0 };
+            const vals = Object.values(divs).map(x => x.amount).filter(Boolean);
+            if (!vals.length) return { ...s, lastDiv:0, annualDiv:0 };
+            const lastDiv = vals[vals.length - 1];
+            const annualDiv = vals.reduce((sum, v) => sum + v, 0);
+            return { ...s, lastDiv, annualDiv: toTWD(annualDiv * s.totalSh, s.market === "US" ? "USD" : "TWD", rates) }; // 美股配的是美元，換算台幣
+          } catch { continue; }
+        }
+        return { ...s, lastDiv:0, annualDiv:0 };
+      }));
+      setDividendEst(results.filter(x => x.annualDiv > 0));
+    } catch { setDividendEst([]); }
+    finally { setLoadingDiv(false); }
+  }, [stSum, rates]);
+
+  /* ── 股利公告（TWSE OpenAPI 官方資料，非估算）── */
+  const [dividendAnnounce, setDividendAnnounce] = useState([]);
+  const [loadingDivAnn, setLoadingDivAnn] = useState(false);
+  const [divAnnFetched, setDivAnnFetched] = useState(false);
+  const fetchDividendAnnounce = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0 && s.market !== "US");
+    if (!held.length) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+    setLoadingDivAnn(true);
+    const apiUrl = "https://openapi.twse.com.tw/v1/opendata/t187ap45_L";
+    const attempts = [
+      () => apiUrl,
+      () => `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,
+      () => `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+    ];
+    try {
+      let list = null;
+      for (const makeUrl of attempts) {
+        try {
+          const r = await fetch(makeUrl(), { signal:AbortSignal.timeout(10000) });
+          if (!r.ok) continue;
+          const raw = await r.text();
+          try {
+            const j = JSON.parse(raw);
+            list = Array.isArray(j) ? j : (j.contents ? JSON.parse(j.contents) : null);
+          } catch { continue; }
+          if (Array.isArray(list)) break;
+        } catch { continue; }
+      }
+      if (!list) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+      const tickers = new Set(held.map(s => s.ticker));
+      const matched = list.filter(row => tickers.has(row["公司代號"]));
+      const results = held.map(s => {
+        const row = matched.find(r => r["公司代號"] === s.ticker);
+        if (!row) return { ticker:s.ticker, name:s.name, announced:false };
+        const cashDiv = +row["盈餘分配之現金股利(元/股)"] || +row["現金股利(元/股)"] || 0;
+        return {
+          ticker:s.ticker, name:s.name, announced:true,
+          year: row["股利所屬年度"] || "",
+          distDate: row["董事會（擬議）股利分派日"] || row["股東會日期"] || "",
+          cashDivPerShare: cashDiv,
+          estIncome: cashDiv * s.totalSh,
+        };
+      });
+      setDividendAnnounce(results);
+      setDivAnnFetched(true);
+    } catch { setDividendAnnounce([]); setDivAnnFetched(true); }
+    finally { setLoadingDivAnn(false); }
+  }, [stSum]);
+
+
   const emotionReview = useMemo(() => {
     const map = {};
     EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
@@ -2422,7 +2513,7 @@ export default function App() {
     const stored = (d.incomeSchedule||{})[ym]?.items;
     if (stored && stored.length > 0) return stored;
     if (allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0) return allocSettings.defaultIncomeItems;
-    return allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : [];
+    return allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:translateText("零用錢"), amt:allocSettings.defaultIncome, accId:"" }] : [];
   }, [d.incomeSchedule, allocSettings]);
   const setIncomeItems = useCallback((ym, items) => {
     const total = (items||[]).reduce((s, it) => s + (+it.amt || 0), 0);
@@ -2613,7 +2704,7 @@ export default function App() {
     const months = [];
     const defaultIncomeItemsList = allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0
       ? allocSettings.defaultIncomeItems
-      : (allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : []);
+      : (allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:translateText("零用錢"), amt:allocSettings.defaultIncome, accId:"" }] : []);
     const defaultProjected = defaultIncomeItemsList.reduce((s, it) => s + (+it.amt || 0), 0);
     // 如果有設定「計畫起始月份」且晚於這個月，年度規劃就從那個月開始算，之前的月份（例如還沒開始規劃的當月）不列入
     const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
@@ -2804,7 +2895,9 @@ export default function App() {
     setAdvisorLoading(true);
     setAdvisorError(null);
     try {
-      const { text: reply, sources } = await askAdvisor(nextHistory, advisorContext, grounded);
+      // 選英文的話請 AI 用英文回答（背景資料是中文，不特別說的話它會用中文回）
+      const ctx = lang === "en" ? advisorContext + "\n\nIMPORTANT: The user reads English. Always reply in clear, natural English, and use English names for categories and terms." : advisorContext;
+      const { text: reply, sources } = await askAdvisor(nextHistory, ctx, grounded);
       setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
       setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
     } catch (e) {
@@ -2822,7 +2915,7 @@ export default function App() {
     } finally {
       setAdvisorLoading(false);
     }
-  }, [advisorHistory, advisorContext]);
+  }, [advisorHistory, advisorContext, lang]);
   const clearAdvisorHistory = useCallback(() => { setAdvisorHistory([]); setAdvisorError(null); }, []);
 
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
@@ -2944,7 +3037,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund, pageBack, openPage, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
+    budget502030, createEmergencyFund, pageBack, openPage, portfolioNow, dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { translateText } from "../i18nRuntime";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ReferenceLine, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function InvestPage({ 
@@ -15,7 +16,8 @@ export default function InvestPage({
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
-  dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory,
+  dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory, portfolioNow,
+  dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce,
   StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
@@ -40,66 +42,72 @@ export default function InvestPage({
     <>
       {tab === "invest" && (
         <div style={{ padding:"12px 16px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>📈</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("投資追蹤")}</span></div>
-            <div style={{ display:"flex", gap:6 }}>
-              <Btn sz="sm" v="secondary" onClick={() => setModal("initStock")}>📋 現有持股</Btn>
-              <Btn sz="sm" onClick={() => setModal("buyStock")}>＋ 買入</Btn>
-            </div>
-          </div>
-          
+          {/* ── 標題列＋買入／賣出：兩個一樣大的按鈕並排，不用再點進個股才能賣 ── */}
+          {(() => {
+            const held = stSum.filter(x => x.totalSh > 0);
+            const openSell = () => {
+              const st = held[0];
+              if (!st) return;
+              const hasPrice = st.curPrice > 0;
+              setSellF({ stockId:st.id, shares:String(st.totalSh), totalProceeds:hasPrice?String(Math.round(st.curPrice*st.totalSh)):"", fee:"", pnl:hasPrice?String(Math.round(Math.abs(st.upnl))):"", pnlType:st.upnl>=0?"income":"expense", returnAcc:"" });
+              setModal("sellStock");
+            };
+            const actBtn = { flex:1, padding:"12px 0", borderRadius:14, fontSize:14, fontWeight:800, cursor:"pointer", border:"none" };
+            return <>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>📈</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("投資追蹤")}</span></div>
+                <button onClick={() => setModal("initStock")} style={{ background:"none", border:"none", padding:"4px 2px", color:C.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>📋 {tr("登錄現有持股")}</button>
+              </div>
+              <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                <button onClick={() => setModal("buyStock")} style={{ ...actBtn, background:C.accent, color:"#fff" }}>＋ {tr("買入")}</button>
+                <button onClick={openSell} disabled={!held.length} style={{ ...actBtn, background:C.card, color:held.length?C.text:C.muted, opacity:held.length?1:0.6, cursor:held.length?"pointer":"default" }}>− {tr("賣出")}</button>
+              </div>
+            </>;
+          })()}
+
           <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
             {[{ v:"dashboard", l:tr("總覽") }, { v:"holdings", l:tr("持股") }, { v:"log", l:tr("交易記錄") }, { v:"perf", l:tr("績效") }, { v:"watch", l:tr("自選股") }, { v:"news", l:tr("新聞") }, { v:"learn", l:tr("學習") }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:"0 0 auto", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer", whiteSpace:"nowrap" }}>{t.l}</button>)}
           </div>
           
           {invTab === "dashboard" && (
             <div>
-              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
-                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
-              </div>
 
-              <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("投資市值")}</div>
-                    <div style={{ fontWeight:900, fontSize:20, color:C.accentL, ...maskStyle }}>{fmt(stTotMv > 0 ? stTotMv : stTotCost)}</div>
+              {/* ── 總覽卡：市值當主角，下面一排損益；台股＋美股都換算成台幣（以前美股是直接把美元數字加進去） ── */}
+              {(() => {
+                const mv = portfolioNow?.mv || 0, cost = portfolioNow?.cost || 0;
+                const shownMv = mv > 0 ? mv : cost;
+                const upnl = mv - cost;
+                const stat = (label, value, color) => (
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:10.5, color:C.muted }}>{label}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", ...maskStyle }}>{value}</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("即時現金")}</div>
-                    <div style={{ fontWeight:900, fontSize:20, color:C.teal, ...maskStyle }}>{fmt(cashBal)}</div>
-                  </div>
-                </div>
-
-                {stTotMv > 0 && stTotCost > 0 && (
-                  <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}`, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
-                    <div>
-                      <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("未實現損益")}</div>
-                      <div style={{ fontWeight:900, fontSize:16, color:pnlColor(stTotMv-stTotCost, C), ...maskStyle }}>
-                        {stTotMv-stTotCost >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(stTotMv-stTotCost))}
+                );
+                return (
+                  <Card style={{ padding:"16px 16px 14px", marginBottom:16, cursor:hideAmounts?"pointer":"default" }} onClick={() => hideAmounts && doPeek()}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:11, color:C.textSub, fontWeight:700 }}>{tr("投資市值")}</div>
+                        <div style={{ fontSize:26, fontWeight:900, color:C.text, letterSpacing:"-0.02em", marginTop:2, ...maskStyle }}>{fmt(shownMv)}</div>
+                        {mv > 0 && cost > 0 && (
+                          <div style={{ fontSize:13, fontWeight:800, color:pnlColor(upnl, C), marginTop:2, ...maskStyle }}>
+                            {upnl >= 0 ? "▲ +" : "▼ −"}{fmt(Math.abs(upnl))}<span style={{ fontWeight:700, marginLeft:6 }}>{upnl >= 0 ? "+" : ""}{(upnl / cost * 100).toFixed(2)}%</span>
+                          </div>
+                        )}
                       </div>
+                      <button onClick={async (e) => { e.stopPropagation(); setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }}
+                        style={{ flexShrink:0, padding:"6px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                        {loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}
+                      </button>
                     </div>
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("報酬率")}</div>
-                      <div style={{ fontWeight:900, fontSize:16, color:pnlColor(stTotMv-stTotCost, C), ...maskStyle }}>
-                        {stTotCost > 0 ? `${stTotMv-stTotCost >= 0 ? "+" : ""}${((stTotMv-stTotCost)/stTotCost*100).toFixed(2)}%` : "—"}
-                      </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginTop:14, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                      {stat(tr("投入成本"), fmt(cost), C.text)}
+                      {stat(tr("已實現損益"), tradeStats.totalSells > 0 ? `${totalRealizedPnl >= 0 ? "+" : "−"}${fmt(Math.abs(Math.round(totalRealizedPnl)))}` : "—", tradeStats.totalSells > 0 ? pnlColor(totalRealizedPnl, C) : C.muted)}
+                      {stat(tr("即時現金"), fmt(cashBal), C.text)}
                     </div>
-                  </div>
-                )}
-
-                <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}` }}>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("已實現損益")}</div>
-                    <div style={{ fontWeight:900, fontSize:16, color:pnlColor(totalRealizedPnl, C), ...maskStyle }}>
-                      {tradeStats.totalSells > 0 ? `${totalRealizedPnl >= 0 ? "▲ +" : "▼ "}${fmt(Math.abs(Math.round(totalRealizedPnl)))}` : "—"}
-                    </div>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("總資產淨值")}</div>
-                    <div style={{ fontWeight:900, fontSize:16, color:C.text, ...maskStyle }}>{fmt(netWorth != null ? netWorth : totAssets)}</div>
-                  </div>
-                </div>
-              </Card>
+                  </Card>
+                );
+              })()}
 
               <DailySwingCard history={portfolioHistory} C={C} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle} tr={tr} Card={Card} />
 
@@ -122,8 +130,8 @@ export default function InvestPage({
                               <LineChart data={invGrowth} margin={{ top:5, right:5, bottom:14, left:0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                                 <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(invGrowth.length / 6) - 1)} />
-                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} />
-                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v) => [fmt(v), "投入成本"]} />
+                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => translateText(`${(v/10000).toFixed(0)}萬`)} />
+                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v) => [fmt(v), translateText("投入成本")]} />
                                 <Line type="monotone" dataKey="cost" stroke={theme==="dark"?"#eee":"#222"} strokeWidth={2} dot={false} name="cost" />
                               </LineChart>
                             </ResponsiveContainer>
@@ -142,8 +150,8 @@ export default function InvestPage({
                               <LineChart data={dailyGrowth} margin={{ top:5, right:5, bottom:14, left:0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                                 <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.ceil(dailyGrowth.length/6)} />
-                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/10000).toFixed(0)}萬`} domain={["auto","auto"]} />
-                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "市值"]} />
+                                <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => translateText(`${(v/10000).toFixed(0)}萬`)} domain={["auto","auto"]} />
+                                <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), translateText("市值")]} />
                                 <Line type="linear" dataKey="mv" stroke={C.income} strokeWidth={2} dot={false} />
                               </LineChart>
                             </ResponsiveContainer>
@@ -158,7 +166,7 @@ export default function InvestPage({
                       )}
                     </div>
                   )
-                  : <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart></ResponsiveContainer>
+                  : <ResponsiveContainer width="100%" height={160}><PieChart><Pie data={invPie === "alloc" ? allocPie : holdPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{(invPie === "alloc" ? allocPie : holdPie).map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), translateText(String(n))]} /></PieChart></ResponsiveContainer>
                 }
 
                 {invPie !== "growth" && (
@@ -333,7 +341,7 @@ export default function InvestPage({
                 <Card style={{ padding:16, marginBottom:16 }}>
                   <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>產業/類股分佈</div>
                   <ResponsiveContainer width="100%" height={160}>
-                    <PieChart><Pie data={sectorPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{sectorPie.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), n]} /></PieChart>
+                    <PieChart><Pie data={sectorPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62} innerRadius={30}>{sectorPie.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8 }} formatter={(v, n) => [fmt(v), translateText(String(n))]} /></PieChart>
                   </ResponsiveContainer>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:10, justifyContent:"center" }}>
                     {sectorPie.map((item, i) => {
@@ -350,25 +358,6 @@ export default function InvestPage({
                 </Card>
               )}
 
-              {Object.keys(dailyPnlHeatmap).length > 0 && (
-                <Card style={{ padding:16 }}>
-                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(15, 1fr)", gap:3 }}>
-                    {Array.from({ length:90 }).map((_, i) => {
-                      const d = new Date(TODAY+"T00:00:00"); d.setDate(d.getDate() - (89 - i));
-                      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-                      const val = dailyPnlHeatmap[key] || 0;
-                      const intensity = Math.min(Math.abs(val) / 2000, 1);
-                      const bg = val > 0 ? `rgba(74,222,128,${0.15+intensity*0.7})` : val < 0 ? `rgba(244,63,94,${0.15+intensity*0.7})` : C.border;
-                      return <div key={i} title={`${key}: ${val>=0?"+":""}${Math.round(val)}`} style={{ aspectRatio:"1", borderRadius:3, background:bg }} />;
-                    })}
-                  </div>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:10, color:C.muted }}>
-                    <span>綠＝淨收入　紅＝淨支出</span>
-                    <span>顏色越深代表金額越大</span>
-                  </div>
-                </Card>
-              )}
             </div>
           )}
           
@@ -427,13 +416,17 @@ export default function InvestPage({
           })()}
 
           {invTab === "perf" && (
-            <div>
-              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
-            </div>
+            <PerfTab C={C} tr={tr} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle}
+              tradeStats={tradeStats} maxDrawdown={maxDrawdown} benchmarkData={benchmarkData} loadingBenchmark={loadingBenchmark} fetchBenchmarkCompare={fetchBenchmarkCompare}
+              emotionReview={emotionReview} dividendEst={dividendEst} loadingDiv={loadingDiv} fetchDividendEstimate={fetchDividendEstimate}
+              dividendAnnounce={dividendAnnounce} loadingDivAnn={loadingDivAnn} divAnnFetched={divAnnFetched} fetchDividendAnnounce={fetchDividendAnnounce} />
           )}
 
           {invTab === "watch" && (
             <div>
+              <div style={{ fontSize:12, fontWeight:800, color:C.textSub, margin:"0 2px 8px" }}>{tr("大盤指數")}</div>
+              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
+              <div style={{ fontSize:12, fontWeight:800, color:C.textSub, margin:"18px 2px 8px" }}>{tr("自選股")}</div>
               <WatchStockAdder addWatchStock={addWatchStock} refreshWatchStocks={refreshWatchStocks} C={C} iSt={iSt} tr={tr} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
                 <button onClick={() => { refreshWatchStocks({ live:true }); fetchAllPrices(undefined, { live:true }); }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
@@ -714,5 +707,150 @@ function DailySwingCard({ history, C, fmt, pnlColor, maskStyle, tr, Card }) {
         </>
       )}
     </Card>
+  );
+}
+
+/* ── 績效：這段原本被誤刪只剩大盤指數（大盤搬到「自選股」分頁），這裡補回真正的績效內容：
+   勝率與賺賠比、最大回撤、跟 0050 比較、股息、不同心態下的成績 ── */
+function PerfTab({ C, tr, fmt, pnlColor, maskStyle, tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, emotionReview,
+  dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce }) {
+  const card = { borderRadius:16, background:C.card, padding:"14px 16px", marginBottom:12 };
+  const title = (t, right) => (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+      <span style={{ fontSize:13, fontWeight:800, color:C.text }}>{t}</span>{right}
+    </div>
+  );
+  const refreshBtn = (onClick, loading) => (
+    <button onClick={onClick} style={{ padding:"5px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{loading ? tr("讀取中…") : `🔄 ${tr("讀取")}`}</button>
+  );
+  const stat = (label, value, color, sub) => (
+    <div style={{ minWidth:0 }}>
+      <div style={{ fontSize:10.5, color:C.muted }}>{label}</div>
+      <div style={{ fontSize:20, fontWeight:900, color, marginTop:2, ...maskStyle }}>{value}</div>
+      {sub && <div style={{ fontSize:10.5, color:C.muted, marginTop:1, ...maskStyle }}>{sub}</div>}
+    </div>
+  );
+  const empty = (t) => <div style={{ fontSize:12, color:C.muted, padding:"6px 0 2px", lineHeight:1.6 }}>{t}</div>;
+  const ts = tradeStats || {};
+
+  return (
+    <div>
+      {/* 勝率與賺賠比 */}
+      <div style={card}>
+        {title(tr("勝率與賺賠比"))}
+        {!ts.totalSells ? empty(tr("還沒有賣出紀錄，賣出後這裡會統計你的勝率和平均賺賠")) : <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {stat(tr("勝率"), `${ts.winRate.toFixed(0)}%`, ts.winRate >= 50 ? C.income : C.expense, `${ts.wins} ${tr("勝")}・${ts.losses} ${tr("敗")}`)}
+            {stat(tr("賺賠比"), ts.winLossRatio ? `${ts.winLossRatio.toFixed(2)} : 1` : "—", C.text, `${tr("平均賺")} ${fmt(Math.round(ts.avgWin || 0))}・${tr("平均賠")} ${fmt(Math.round(Math.abs(ts.avgLoss || 0)))}`)}
+          </div>
+          <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+            {ts.avgR != null ? <>
+              <div style={{ fontSize:10.5, color:C.muted }}>{tr("平均 R 值")}（{ts.rCount} {tr("筆有設停損")}）</div>
+              <div style={{ fontSize:16, fontWeight:900, color:ts.avgR >= 0 ? C.income : C.expense }}>{ts.avgR >= 0 ? "+" : ""}{ts.avgR.toFixed(2)} R</div>
+              <div style={{ fontSize:10.5, color:C.muted, marginTop:2, lineHeight:1.5 }}>{tr("賺賠相對於停損風險的倍數，+2R＝賺到當初願意承受虧損的 2 倍")}</div>
+            </> : <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{tr("在個股詳細頁設定「停損%」，之後賣出就會算 R 值")}</div>}
+          </div>
+          {ts.disciplinedCount > 0 && (
+            <div style={{ marginTop:10, padding:"8px 10px", borderRadius:10, background:ts.brokeStopCount > 0 ? `${C.warn}15` : `${C.teal}15`, fontSize:12, fontWeight:700, color:ts.brokeStopCount > 0 ? C.warn : C.teal }}>
+              {tr("停損紀律")}：{ts.disciplinedCount} {tr("筆有設停損，其中")} {ts.brokeStopCount} {tr("筆是跌破停損後才賣")}
+            </div>
+          )}
+        </>}
+      </div>
+
+      {/* 最大回撤 */}
+      <div style={card}>
+        {title(tr("最大回撤"))}
+        {maxDrawdown ? <>
+          <div style={{ fontSize:22, fontWeight:900, color:C.expense }}>−{maxDrawdown.pct.toFixed(1)}%</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("資產從最高點往下掉最多的幅度")}（{maxDrawdown.source === "daily" ? tr("依每日市值") : tr("依每月資產估算")}）</div>
+        </> : empty(tr("資料還不夠；到「總覽 → 投資成長 → 每日」讀一次走勢就會有"))}
+      </div>
+
+      {/* 跟大盤比較 */}
+      <div style={card}>
+        {title(tr("跟大盤（0050）比"), refreshBtn(fetchBenchmarkCompare, loadingBenchmark))}
+        {benchmarkData.length > 1 ? (() => {
+          const last = benchmarkData[benchmarkData.length - 1] || {};
+          const diff = (last.portfolio ?? 0) - (last.benchmark ?? 0);
+          return <>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+              {stat(tr("我的投組"), `${(last.portfolio ?? 0) >= 0 ? "+" : ""}${last.portfolio ?? 0}%`, pnlColor(last.portfolio ?? 0, C))}
+              {stat("0050", `${(last.benchmark ?? 0) >= 0 ? "+" : ""}${last.benchmark ?? 0}%`, C.textSub, diff >= 0 ? `${tr("贏大盤")} ${diff.toFixed(1)}%` : `${tr("輸大盤")} ${Math.abs(diff).toFixed(1)}%`)}
+            </div>
+            <div style={{ height:150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={benchmarkData} margin={{ top:4, right:4, bottom:0, left:-8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
+                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={40} />
+                  <Tooltip contentStyle={{ background:C.surface || C.card, border:`1px solid ${C.border}`, borderRadius:10, fontSize:12 }} formatter={(v, n) => [`${v}%`, n === "portfolio" ? tr("我的投組") : "0050"]} />
+                  <Line type="monotone" dataKey="portfolio" stroke={C.accent} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="benchmark" stroke={C.muted} strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:6, fontSize:11, color:C.textSub }}>
+              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:2, background:C.accent }} />{tr("我的投組")}</span>
+              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:0, borderTop:`2px dashed ${C.muted}` }} />0050</span>
+            </div>
+          </>;
+        })() : empty(loadingBenchmark ? tr("讀取中…") : tr("按右上角「讀取」，比較你的投組和 0050 同期間的報酬"))}
+      </div>
+
+      {/* 股息 */}
+      <div style={card}>
+        {title(tr("股息（近一年實際配息估算）"), refreshBtn(fetchDividendEstimate, loadingDiv))}
+        {dividendEst.length > 0 ? <>
+          <div style={{ fontSize:20, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(dividendEst.reduce((s, x) => s + x.annualDiv, 0)))}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> / {tr("年")}</span></div>
+          <div style={{ marginTop:8 }}>
+            {dividendEst.map(x => (
+              <div key={x.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"6px 0", borderTop:`1px solid ${C.border}`, color:C.textSub }}>
+                <span>{x.ticker} {x.name}</span><span style={{ fontWeight:700, color:C.text, ...maskStyle }}>{fmt(Math.round(x.annualDiv))}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:10.5, color:C.muted, marginTop:6 }}>{tr("用過去 12 個月實際配息 × 目前股數估算，美股已換算台幣；不是未來預測")}</div>
+        </> : empty(loadingDiv ? tr("讀取中…") : tr("按右上角「讀取」，估算持股一年大約能領多少股息"))}
+      </div>
+
+      <div style={card}>
+        {title(tr("股利公告（證交所）"), refreshBtn(fetchDividendAnnounce, loadingDivAnn))}
+        {!divAnnFetched ? empty(loadingDivAnn ? tr("讀取中…") : tr("按右上角「讀取」，查上市持股公司已公告的現金股利"))
+          : dividendAnnounce.length === 0 ? empty(tr("沒有上市持股，或查不到資料（上櫃、美股不在這份公告裡）"))
+          : dividendAnnounce.map((x, i) => (
+            <div key={x.ticker} style={{ padding:"8px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{x.ticker} {x.name}</span>
+                {x.announced ? <span style={{ fontSize:13, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(x.estIncome))}</span> : <span style={{ fontSize:11, color:C.muted }}>{tr("尚未公告")}</span>}
+              </div>
+              {x.announced && <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>{x.year}{tr("年度")}・{tr("每股")} {x.cashDivPerShare} {tr("元")}・{x.distDate || tr("分派日未定")}</div>}
+            </div>
+          ))}
+      </div>
+
+      {/* 心態回顧 */}
+      <div style={card}>
+        {title(tr("不同心態下的成績"))}
+        <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>{tr("買賣時標記當下心態，累積夠多筆就看得出「衝動下的單」和「計畫內的單」差多少")}</div>
+        {emotionReview.length === 0 ? empty(tr("還沒有標記過心態的交易")) : emotionReview.map((em, i) => {
+          const winRate = em.sellCount > 0 ? em.sellWin / em.sellCount * 100 : null;
+          const avgPnl = em.sellCount > 0 ? em.sellPnl / em.sellCount : null;
+          return (
+            <div key={em.key} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+              <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{em.icon}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{em.label}</div>
+                <div style={{ fontSize:10.5, color:C.muted }}>{tr("買進")} {em.buyCount} {tr("次")}・{tr("賣出")} {em.sellCount} {tr("次")}</div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                <div style={{ fontSize:13, fontWeight:800, color:winRate == null ? C.muted : winRate >= 50 ? C.income : C.expense }}>{winRate == null ? "—" : `${tr("勝率")} ${winRate.toFixed(0)}%`}</div>
+                {avgPnl != null && <div style={{ fontSize:10.5, color:pnlColor(avgPnl, C), ...maskStyle }}>{tr("平均")} {avgPnl >= 0 ? "+" : "−"}{fmt(Math.abs(Math.round(avgPnl)))}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

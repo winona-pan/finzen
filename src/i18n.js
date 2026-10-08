@@ -8,6 +8,8 @@
    沒被翻譯到的文字會自動顯示繁體中文（不會空白、不會壞掉）。
    ══════════════════════════════════════════════════════ */
 
+import { EN, EN_PATTERNS } from "./i18nEn";
+
 export const LANGUAGES = {
   zh: { name: "繁體中文", flag: "🇹🇼" },
   en: { name: "English", flag: "🇺🇸" },
@@ -50,14 +52,24 @@ const T = {
   settings_about: { zh:"關於", en:"About", ja:"アプリについて", ko:"정보", fr:"À propos", es:"Acerca de", de:"Über" },
 };
 
-/* t(key, lang)：先查語意化 key（T），查不到就把 key 當作原始中文文字直接查（D），
-   還是查不到就照原樣顯示中文，不會空白也不會壞掉。這樣新增翻譯不用先想 key 名稱，直接包原文字串就好。 */
+/* t(key, lang)：先查語意化 key（T），查不到就把 key 當作原始中文文字直接查：
+   英文先查 i18nEn.js（完整的英文字典），再查舊的 D，最後試句型（例如「再 3 個月」→「3 more months」）。
+   還是查不到就照原樣顯示中文，不會空白也不會壞掉。 */
 export function t(key, lang) {
   const entry = T[key];
   if (entry) return entry[lang] || entry.zh || key;
-  if (lang === "zh" || !lang) return key;
+  if (lang === "zh" || !lang || typeof key !== "string") return key;
+  if (lang === "en" && Object.prototype.hasOwnProperty.call(EN, key)) return EN[key];
   const d = D[key];
-  return (d && d[lang]) || key;
+  if (d && d[lang]) return d[lang];
+  if (lang === "en") {
+    for (const [re, rep] of EN_PATTERNS) {
+      const m = key.match(re);
+      // 句型函式的參數：括號抓到的各段，最後再多給一個翻譯函式（句子裡夾的中文片段也能翻）
+      if (m) return typeof rep === "function" ? rep(...m.slice(1), (x) => t(x, lang)) : key.replace(re, rep);
+    }
+  }
+  return key;
 }
 
 export function makeT(lang) {
