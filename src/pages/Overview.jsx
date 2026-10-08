@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { translateText } from "../i18nRuntime";
 
 export default function OverviewPage({ 
   C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
@@ -122,7 +123,7 @@ export default function OverviewPage({
                   <span style={{ fontSize:11, fontWeight:700, color:C.textSub }}>{tr("連續達標")}</span>
                 </div>
                 {livingStreak.current > 0 ? (
-                  <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", color:C.text }}>{livingStreak.current}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> {tr("個月")}</span></div>
+                  <div style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.02em", color:C.text }}>{livingStreak.current}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> {translateText(`${livingStreak.current}個月`).replace(/^\d+\s*/, "")}</span></div>
                 ) : (
                   <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{tr("這個月開始重新累積")}</div>
                 )}
@@ -136,7 +137,7 @@ export default function OverviewPage({
                         const achieved = livingStreak.longest >= m;
                         const sel = m === shownM;
                         return (
-                          <button key={m} onClick={() => { setSelMilestone(m); setEditingMilestone(null); }} title={`${m}${tr("個月")}`} style={{ width:20, height:20, padding:0, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, cursor:"pointer", color:C.textSub,
+                          <button key={m} onClick={() => { setSelMilestone(m); setEditingMilestone(null); }} title={translateText(`${m}個月`)} style={{ width:20, height:20, padding:0, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, cursor:"pointer", color:C.textSub,
                             border: sel ? `1.5px solid ${C.accent}` : "1.5px solid transparent",
                             background: achieved ? `${C.teal}22` : sel ? `${C.accent}18` : C.border, opacity: achieved || sel ? 1 : 0.6 }}>
                             {achieved ? "🏅" : m}
@@ -153,7 +154,7 @@ export default function OverviewPage({
                     ) : (
                       <div onClick={() => { setEditingMilestone(shownM); setMilestoneDraft(streakRewards[shownM]); }} style={{ marginTop:8, padding:"7px 8px", borderRadius:10, background: achievedShown ? `${C.teal}14` : C.bg, cursor:"pointer" }}>
                         <div style={{ fontSize:9.5, fontWeight:700, color: achievedShown ? C.teal : C.accentL }}>
-                          {achievedShown ? `🏅 ${shownM}${tr("個月")}・${tr("已達成")}` : `🎁 ${shownM}${tr("個月")}・${tr("再")} ${shownM - livingStreak.current} ${tr("個月")}`}
+                          {translateText(achievedShown ? `🏅 ${shownM}個月・已達成` : `🎁 ${shownM}個月・再 ${shownM - livingStreak.current} 個月`)}
                         </div>
                         <div style={{ fontSize:11, color:C.text, marginTop:2, lineHeight:1.4, display:"-webkit-box", WebkitLineClamp:3, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
                           {streakRewards[shownM]} <span style={{ fontSize:9, color:C.muted }}>✏️</span>
@@ -201,7 +202,7 @@ export default function OverviewPage({
                         </div>
                         <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, background:col, width:`${pct}%`, transition:"width .5s" }} /></div>
                         <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", fontSize:10, color:C.muted, marginTop:5 }}>
-                          <span>{tr("差")} {fmt(Math.max(0,g.target-cur))}{daysLeft!==null?` · ${tr("剩")}${daysLeft}${tr("天")}`:""}</span>
+                          <span>{tr("差")} {fmt(Math.max(0,g.target-cur))}{daysLeft!==null?` · ${translateText(`剩${daysLeft}天`)}`:""}</span>
                           {applied != null && <span style={{ fontSize:9, fontWeight:700, color:C.teal, background:`${C.teal}18`, padding:"1px 6px", borderRadius:8 }}>✅ {tr("已套用")}</span>}
                         </div>
                       </div>

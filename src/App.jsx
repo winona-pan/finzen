@@ -4,6 +4,7 @@ import { mergeAppData } from "./syncMerge";
 import { getBulkQuotes } from "./bulkQuotes";
 import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, saveCloudDataIfUnchanged, watchCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
+import { setRuntimeLang, translateText } from "./i18nRuntime";
 
 /* ── 引入所有分拆出去的子頁面與彈窗 ── */
 import OverviewPage  from "./pages/Overview";
@@ -585,11 +586,11 @@ function TWStockChart({ ticker }) {
               <YAxis yAxisId="price" hide domain={["auto","auto"]} />
               <YAxis yAxisId="pct" orientation="right" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${v>0?"+":""}${v}%`} width={40} />
               <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontSize:11 }} formatter={(v,name,entry)=>{
-                if (name==="close") return [Number(v).toFixed(2), "價格"];
+                if (name==="close") return [Number(v).toFixed(2), translateText("價格")];
                 if (name==="ma5") return [Number(v).toFixed(2), "MA5"];
                 if (name==="ma20") return [Number(v).toFixed(2), "MA20"];
-                if (name==="ma60") return [Number(v).toFixed(2), "季線"];
-                if (name==="range") { const p = entry?.payload; return [p ? `開${p.o} 高${p.h} 低${p.l} 收${p.c}` : "", "K線"]; }
+                if (name==="ma60") return [Number(v).toFixed(2), translateText("季線")];
+                if (name==="range") { const p = entry?.payload; return [p ? translateText(`開${p.o} 高${p.h} 低${p.l} 收${p.c}`) : "", translateText("K線")]; }
                 return [v, name];
               }} />
               {kline ? (
@@ -998,6 +999,7 @@ export default function App() {
   /* ── 語言：目前涵蓋底部導覽/常用按鈕/設定頁主要標題，還沒涵蓋每一頁的細節文字，沒翻到的地方會自動顯示繁體中文 ── */
   const [lang, setLang] = useState(() => localStorage.getItem("finzen_lang") || "zh");
   const changeLang = (l) => { localStorage.setItem("finzen_lang", l); setLang(l); };
+  setRuntimeLang(lang); // 畫面文字翻譯層（i18nRuntime.js）用的語言，要在畫子元件之前設好
   const tr = makeT(lang);
   const [modal, setModal] = useState(null);
   const [confirmDlg, setConfirmDlg] = useState(null);
@@ -2511,7 +2513,7 @@ export default function App() {
     const stored = (d.incomeSchedule||{})[ym]?.items;
     if (stored && stored.length > 0) return stored;
     if (allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0) return allocSettings.defaultIncomeItems;
-    return allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : [];
+    return allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:translateText("零用錢"), amt:allocSettings.defaultIncome, accId:"" }] : [];
   }, [d.incomeSchedule, allocSettings]);
   const setIncomeItems = useCallback((ym, items) => {
     const total = (items||[]).reduce((s, it) => s + (+it.amt || 0), 0);
@@ -2702,7 +2704,7 @@ export default function App() {
     const months = [];
     const defaultIncomeItemsList = allocSettings.defaultIncomeItems && allocSettings.defaultIncomeItems.length > 0
       ? allocSettings.defaultIncomeItems
-      : (allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:"零用錢", amt:allocSettings.defaultIncome, accId:"" }] : []);
+      : (allocSettings.defaultIncome > 0 ? [{ id:"inc_default", label:translateText("零用錢"), amt:allocSettings.defaultIncome, accId:"" }] : []);
     const defaultProjected = defaultIncomeItemsList.reduce((s, it) => s + (+it.amt || 0), 0);
     // 如果有設定「計畫起始月份」且晚於這個月，年度規劃就從那個月開始算，之前的月份（例如還沒開始規劃的當月）不列入
     const planStartYm = allocSettings.planStartYm && allocSettings.planStartYm > curYm ? allocSettings.planStartYm : curYm;
@@ -2893,7 +2895,9 @@ export default function App() {
     setAdvisorLoading(true);
     setAdvisorError(null);
     try {
-      const { text: reply, sources } = await askAdvisor(nextHistory, advisorContext, grounded);
+      // 選英文的話請 AI 用英文回答（背景資料是中文，不特別說的話它會用中文回）
+      const ctx = lang === "en" ? advisorContext + "\n\nIMPORTANT: The user reads English. Always reply in clear, natural English, and use English names for categories and terms." : advisorContext;
+      const { text: reply, sources } = await askAdvisor(nextHistory, ctx, grounded);
       setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
       setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
     } catch (e) {
@@ -2911,7 +2915,7 @@ export default function App() {
     } finally {
       setAdvisorLoading(false);
     }
-  }, [advisorHistory, advisorContext]);
+  }, [advisorHistory, advisorContext, lang]);
   const clearAdvisorHistory = useCallback(() => { setAdvisorHistory([]); setAdvisorError(null); }, []);
 
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */

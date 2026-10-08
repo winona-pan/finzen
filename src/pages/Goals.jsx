@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { getRuntimeLang } from "../i18nRuntime";
 
 export default function GoalsPage({
   C, tab, setTab, fmt, upd, setModal, confirm, TODAY,
@@ -49,7 +50,7 @@ export default function GoalsPage({
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:compact?11:12 }}>
           <span style={{ color:C.textSub }}>目前 {fmt(current)}</span>
           <span style={{ fontWeight:900, color:pct>=100?C.teal:col }}>{pct.toFixed(1)}%</span>
-          <span style={{ color:C.textSub }}>目標 {fmt(g.target)}</span>
+          <span style={{ color:C.textSub }}>{getRuntimeLang() === "en" ? "Target" : "目標"} {fmt(g.target)}</span>
         </div>
         {!compact && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
           {(g.accIds&&g.accIds.length>0)||(g.bucketIds&&g.bucketIds.length>0) ? `計算範圍：${[...accs.filter(a=>(g.accIds||[]).includes(a.id)).map(a=>a.name), ...buckets.filter(b=>(g.bucketIds||[]).includes(b.id)).map(b=>b.name)].join("、")}${g.accIds?.some(id=>accs.find(a=>a.id===id)?.type==="investment") ? `（${goalUseMv?"市值":"成本"}${g.recurringMode==="shares"&&g.shareTicker?`，只算標記給這個目標的 ${g.shareTicker} 股數`:"，帳戶內所有持股"}）` : ""}` : `總資產淨值 = 資產${useMvForAssets&&stTotMv>0?"（市值）":""} - 負債 + 應收 - 應付`}

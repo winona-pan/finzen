@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { translateText } from "../i18nRuntime";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function WalletModals({ 
@@ -542,8 +543,8 @@ export default function WalletModals({
                 <LineChart data={data} margin={{ top:5, right:5, bottom:14, left:0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                   <XAxis dataKey="m" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(data.length / 6) - 1)} />
-                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/10000).toFixed(1)}萬`} />
-                  <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[fmt(v),"金額"]} />
+                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v=>translateText(`${(v/10000).toFixed(1)}萬`)} />
+                  <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[fmt(v),translateText("金額")]} />
                   <Line type="monotone" dataKey="v" stroke={C.accent} strokeWidth={2.5} dot={{ r:3 }} />
                 </LineChart>
               </ResponsiveContainer>

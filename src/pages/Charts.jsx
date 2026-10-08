@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { translateText } from "../i18nRuntime";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function ChartsPage({ 
@@ -126,7 +127,7 @@ export default function ChartsPage({
                     <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={78} innerRadius={42}>
                       {data.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v, n) => [fmt(v), n]} />
+                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={(v, n) => [fmt(v), translateText(n)]} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ textAlign:"center", marginTop:-8, marginBottom:14 }}><div style={{ fontSize:11, color:C.textSub }}>Total</div><div style={{ fontWeight:900, fontSize:22, color:C.text }}>{fmt(total)}</div></div>
@@ -174,9 +175,9 @@ export default function ChartsPage({
                   <AreaChart data={chartData} margin={{ top:5, right:5, bottom:14, left:0 }}>
                     <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.35} /><stop offset="95%" stopColor={C.accent} stopOpacity={0} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(chartData.length / 8) - 1)} dy={4} />
-                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} domain={assetYDomain} />
-                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), "資產"]} />
+                    <XAxis dataKey="d" tickFormatter={v => translateText(String(v))} tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(chartData.length / 8) - 1)} dy={4} />
+                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => translateText(`${(v / 10000).toFixed(0)}萬`)} domain={assetYDomain} />
+                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [fmt(v), translateText("資產")]} />
                     <Area type="monotone" dataKey="assets" stroke={C.accent} strokeWidth={2.5} fill="url(#ag)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -184,9 +185,9 @@ export default function ChartsPage({
                 <ResponsiveContainer width="100%" height={150}>
                   <LineChart data={changeData} margin={{ top:5, right:5, bottom:14, left:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="d" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(changeData.length / 8) - 1)} />
-                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 10000).toFixed(0)}萬`} />
-                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [(v>=0?"+":"")+fmt(v), "淨變動"]} />
+                    <XAxis dataKey="d" tickFormatter={v => translateText(String(v))} tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.ceil(changeData.length / 8) - 1)} />
+                    <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => translateText(`${(v / 10000).toFixed(0)}萬`)} />
+                    <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v => [(v>=0?"+":"")+fmt(v), translateText("淨變動")]} />
                     <Line type="linear" dataKey="change" stroke={C.warn} strokeWidth={2.5} dot={{ r:3, fill:C.warn }} />
                   </LineChart>
                 </ResponsiveContainer>
