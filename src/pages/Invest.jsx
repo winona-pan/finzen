@@ -15,7 +15,7 @@ export default function InvestPage({
   watchlist, addToWatchlist, removeFromWatchlist, COOLDOWN_MS, recentTradeCount, TRADE_FREQ_WARN,
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
-  dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory,
+  dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory, portfolioNow,
   StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
@@ -40,66 +40,72 @@ export default function InvestPage({
     <>
       {tab === "invest" && (
         <div style={{ padding:"12px 16px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>📈</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("投資追蹤")}</span></div>
-            <div style={{ display:"flex", gap:6 }}>
-              <Btn sz="sm" v="secondary" onClick={() => setModal("initStock")}>📋 現有持股</Btn>
-              <Btn sz="sm" onClick={() => setModal("buyStock")}>＋ 買入</Btn>
-            </div>
-          </div>
-          
+          {/* ── 標題列＋買入／賣出：兩個一樣大的按鈕並排，不用再點進個股才能賣 ── */}
+          {(() => {
+            const held = stSum.filter(x => x.totalSh > 0);
+            const openSell = () => {
+              const st = held[0];
+              if (!st) return;
+              const hasPrice = st.curPrice > 0;
+              setSellF({ stockId:st.id, shares:String(st.totalSh), totalProceeds:hasPrice?String(Math.round(st.curPrice*st.totalSh)):"", fee:"", pnl:hasPrice?String(Math.round(Math.abs(st.upnl))):"", pnlType:st.upnl>=0?"income":"expense", returnAcc:"" });
+              setModal("sellStock");
+            };
+            const actBtn = { flex:1, padding:"12px 0", borderRadius:14, fontSize:14, fontWeight:800, cursor:"pointer", border:"none" };
+            return <>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:18 }}>📈</span><span style={{ fontWeight:900, fontSize:16, color:C.text }}>{tr("投資追蹤")}</span></div>
+                <button onClick={() => setModal("initStock")} style={{ background:"none", border:"none", padding:"4px 2px", color:C.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>📋 {tr("登錄現有持股")}</button>
+              </div>
+              <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+                <button onClick={() => setModal("buyStock")} style={{ ...actBtn, background:C.accent, color:"#fff" }}>＋ {tr("買入")}</button>
+                <button onClick={openSell} disabled={!held.length} style={{ ...actBtn, background:C.card, color:held.length?C.text:C.muted, opacity:held.length?1:0.6, cursor:held.length?"pointer":"default" }}>− {tr("賣出")}</button>
+              </div>
+            </>;
+          })()}
+
           <div style={{ display:"flex", gap:4, padding:4, borderRadius:14, background:C.surface, marginBottom:20, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
             {[{ v:"dashboard", l:tr("總覽") }, { v:"holdings", l:tr("持股") }, { v:"log", l:tr("交易記錄") }, { v:"perf", l:tr("績效") }, { v:"watch", l:tr("自選股") }, { v:"news", l:tr("新聞") }, { v:"learn", l:tr("學習") }].map(t => <button key={t.v} onClick={() => setInvTab(t.v)} style={{ flex:"0 0 auto", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:900, background:invTab === t.v ? C.accent : "transparent", color:invTab === t.v ? "#fff" : C.muted, border:"none", cursor:"pointer", whiteSpace:"nowrap" }}>{t.l}</button>)}
           </div>
           
           {invTab === "dashboard" && (
             <div>
-              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
-                <button onClick={async () => { setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}</button>
-              </div>
 
-              <Card style={{ padding:20, marginBottom:16, background:`linear-gradient(135deg,${C.surface},${C.bg})` }} onClick={() => hideAmounts && doPeek()}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("投資市值")}</div>
-                    <div style={{ fontWeight:900, fontSize:20, color:C.accentL, ...maskStyle }}>{fmt(stTotMv > 0 ? stTotMv : stTotCost)}</div>
+              {/* ── 總覽卡：市值當主角，下面一排損益；台股＋美股都換算成台幣（以前美股是直接把美元數字加進去） ── */}
+              {(() => {
+                const mv = portfolioNow?.mv || 0, cost = portfolioNow?.cost || 0;
+                const shownMv = mv > 0 ? mv : cost;
+                const upnl = mv - cost;
+                const stat = (label, value, color) => (
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:10.5, color:C.muted }}>{label}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", ...maskStyle }}>{value}</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:4 }}>{tr("即時現金")}</div>
-                    <div style={{ fontWeight:900, fontSize:20, color:C.teal, ...maskStyle }}>{fmt(cashBal)}</div>
-                  </div>
-                </div>
-
-                {stTotMv > 0 && stTotCost > 0 && (
-                  <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}`, marginBottom:12, cursor:hideAmounts?"pointer":"default" }}>
-                    <div>
-                      <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("未實現損益")}</div>
-                      <div style={{ fontWeight:900, fontSize:16, color:pnlColor(stTotMv-stTotCost, C), ...maskStyle }}>
-                        {stTotMv-stTotCost >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(stTotMv-stTotCost))}
+                );
+                return (
+                  <Card style={{ padding:"16px 16px 14px", marginBottom:16, cursor:hideAmounts?"pointer":"default" }} onClick={() => hideAmounts && doPeek()}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:11, color:C.textSub, fontWeight:700 }}>{tr("投資市值")}</div>
+                        <div style={{ fontSize:26, fontWeight:900, color:C.text, letterSpacing:"-0.02em", marginTop:2, ...maskStyle }}>{fmt(shownMv)}</div>
+                        {mv > 0 && cost > 0 && (
+                          <div style={{ fontSize:13, fontWeight:800, color:pnlColor(upnl, C), marginTop:2, ...maskStyle }}>
+                            {upnl >= 0 ? "▲ +" : "▼ −"}{fmt(Math.abs(upnl))}<span style={{ fontWeight:700, marginLeft:6 }}>{upnl >= 0 ? "+" : ""}{(upnl / cost * 100).toFixed(2)}%</span>
+                          </div>
+                        )}
                       </div>
+                      <button onClick={async (e) => { e.stopPropagation(); setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }}
+                        style={{ flexShrink:0, padding:"6px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                        {loadingHoldings ? tr("讀取中…") : `🔄 ${tr("更新報價")}`}
+                      </button>
                     </div>
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("報酬率")}</div>
-                      <div style={{ fontWeight:900, fontSize:16, color:pnlColor(stTotMv-stTotCost, C), ...maskStyle }}>
-                        {stTotCost > 0 ? `${stTotMv-stTotCost >= 0 ? "+" : ""}${((stTotMv-stTotCost)/stTotCost*100).toFixed(2)}%` : "—"}
-                      </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginTop:14, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                      {stat(tr("投入成本"), fmt(cost), C.text)}
+                      {stat(tr("已實現損益"), tradeStats.totalSells > 0 ? `${totalRealizedPnl >= 0 ? "+" : "−"}${fmt(Math.abs(Math.round(totalRealizedPnl)))}` : "—", tradeStats.totalSells > 0 ? pnlColor(totalRealizedPnl, C) : C.muted)}
+                      {stat(tr("即時現金"), fmt(cashBal), C.text)}
                     </div>
-                  </div>
-                )}
-
-                <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:`1px solid ${C.border}` }}>
-                  <div>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("已實現損益")}</div>
-                    <div style={{ fontWeight:900, fontSize:16, color:pnlColor(totalRealizedPnl, C), ...maskStyle }}>
-                      {tradeStats.totalSells > 0 ? `${totalRealizedPnl >= 0 ? "▲ +" : "▼ "}${fmt(Math.abs(Math.round(totalRealizedPnl)))}` : "—"}
-                    </div>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:11, color:C.textSub, marginBottom:2 }}>{tr("總資產淨值")}</div>
-                    <div style={{ fontWeight:900, fontSize:16, color:C.text, ...maskStyle }}>{fmt(netWorth != null ? netWorth : totAssets)}</div>
-                  </div>
-                </div>
-              </Card>
+                  </Card>
+                );
+              })()}
 
               <DailySwingCard history={portfolioHistory} C={C} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle} tr={tr} Card={Card} />
 
@@ -350,25 +356,6 @@ export default function InvestPage({
                 </Card>
               )}
 
-              {Object.keys(dailyPnlHeatmap).length > 0 && (
-                <Card style={{ padding:16 }}>
-                  <div style={{ fontSize:12, fontWeight:900, color:C.muted, marginBottom:10, letterSpacing:"0.05em" }}>每日損益熱力圖（近 90 天）</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(15, 1fr)", gap:3 }}>
-                    {Array.from({ length:90 }).map((_, i) => {
-                      const d = new Date(TODAY+"T00:00:00"); d.setDate(d.getDate() - (89 - i));
-                      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-                      const val = dailyPnlHeatmap[key] || 0;
-                      const intensity = Math.min(Math.abs(val) / 2000, 1);
-                      const bg = val > 0 ? `rgba(74,222,128,${0.15+intensity*0.7})` : val < 0 ? `rgba(244,63,94,${0.15+intensity*0.7})` : C.border;
-                      return <div key={i} title={`${key}: ${val>=0?"+":""}${Math.round(val)}`} style={{ aspectRatio:"1", borderRadius:3, background:bg }} />;
-                    })}
-                  </div>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:10, color:C.muted }}>
-                    <span>綠＝淨收入　紅＝淨支出</span>
-                    <span>顏色越深代表金額越大</span>
-                  </div>
-                </Card>
-              )}
             </div>
           )}
           

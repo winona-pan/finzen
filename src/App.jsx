@@ -2944,7 +2944,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund, pageBack, openPage, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
+    budget502030, createEmergencyFund, pageBack, openPage, portfolioNow, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
