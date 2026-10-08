@@ -2897,7 +2897,13 @@ export default function App() {
     try {
       // 選英文的話請 AI 用英文回答（背景資料是中文，不特別說的話它會用中文回）
       const ctx = lang === "en" ? advisorContext + "\n\nIMPORTANT: The user reads English. Always reply in clear, natural English, and use English names for categories and terms." : advisorContext;
-      const { text: reply, sources } = await askAdvisor(nextHistory, ctx, grounded);
+      /* 「Load failed」(Safari) / 「Failed to fetch」(Chrome) 是連線中途斷掉，不是 AI 拒答：
+         通常是網路切換、App 切到背景、或回答太長等太久。這種自動重試一次，多半第二次就成功 */
+      const isNetErr = e => /load failed|failed to fetch|networkerror|network request failed/i.test(e?.message || "");
+      let res;
+      try { res = await askAdvisor(nextHistory, ctx, grounded); }
+      catch (e) { if (!isNetErr(e)) throw e; res = await askAdvisor(nextHistory, ctx, grounded); }
+      const { text: reply, sources } = res;
       setAdvisorHistory(h => [...h, { role:"model", text:reply, sources }]);
       setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
     } catch (e) {
@@ -2906,6 +2912,8 @@ export default function App() {
       if (/429|quota|exceed/i.test(raw)) {
         friendly = "問太快了，撞到免費額度「每分鐘限制」，稍等一下下面的倒數結束再問；如果一天內常常撞到，可能是撞到「每天總量」上限（大概20次左右），過一段時間或明天再試，也可以考慮在 Firebase 開通付費方案（Blaze），費用是照實際用量算，個人使用通常很便宜。";
         setAdvisorCooldownUntil(Date.now() + ADVISOR_COOLDOWN_MS);
+      } else if (/load failed|failed to fetch|networkerror|network request failed/i.test(raw)) {
+        friendly = "連線中斷了，沒收到 AI 的回答（常見原因：網路不穩、切換 Wi-Fi/行動網路、或等待時把 App 切到背景）。已經自動重試過一次，網路穩定後再按一次送出就好。";
       } else if (/404|not found|no longer available/i.test(raw)) {
         friendly = "AI 模型設定可能過期了（Google 常常會更新/淘汰模型名稱），先跟開發者反應一下，需要更新程式裡的模型名稱。";
       } else {
