@@ -24,6 +24,7 @@ import UserGuidePage from "./pages/UserGuidePage";
 import AccountPage   from "./pages/AccountPage";
 import LanguagePage  from "./pages/LanguagePage";
 import ThemePage     from "./pages/ThemePage";
+import StrategiesPage from "./pages/StrategiesPage";
 
 /* ── Tokens：6 套主題色票，2026-09 全面重構——每套主題只用一組明確指定的色號，
    彼此之間刻意拉開色相差異，不再共用同一種曖昧的紫／靛藍，也不會看起來大同小異 ── */
@@ -986,6 +987,9 @@ export default function App() {
 
   /* ── tabs / modal ── */
   const [tab, setTab] = useState("overview");
+  /* 從哪一頁點進子頁面的（例如從圖表頁點進理財策略），子頁面的 ← 就回到那一頁 */
+  const [pageBack, setPageBack] = useState("settings");
+  const openPage = useCallback((t, from) => { setPageBack(from || "settings"); setTab(t); }, []);
   const [theme, setTheme] = useState(() => localStorage.getItem("finzen_theme") || "dark");
   C = getC(theme);
   themeMode = theme;
@@ -2940,7 +2944,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
+    budget502030, createEmergencyFund, pageBack, openPage, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
@@ -2963,7 +2967,7 @@ export default function App() {
       <div className="fz-shell" style={{ position:"relative", margin:"0 auto", height:"100dvh", overflow:"hidden", background:C.bg, color:C.text, fontFamily:"'Noto Sans TC',system-ui,sans-serif", display:"flex", flexDirection:"column" }}>
         
         {/* 頁面切換控制 */}
-        <div style={{ flex:1, minHeight:0, overflowY:"auto", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>
+        <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", paddingBottom:140, WebkitOverflowScrolling:"touch", paddingTop:"env(safe-area-inset-top, 44px)" }}>
           {tab === "overview" && <OverviewPage {...p} />}
           {tab === "wallet"   && <WalletPage {...p} />}
           {tab === "charts"   && <ChartsPage {...p} />}
@@ -2977,6 +2981,7 @@ export default function App() {
           {tab === "account" && <AccountPage {...p} />}
           {tab === "language" && <LanguagePage {...p} />}
           {tab === "theme" && <ThemePage {...p} />}
+          {tab === "strategies" && <StrategiesPage {...p} />}
         </div>
 
         {/* 記帳快速懸浮鈕：用 absolute 相對於上面這個已經置中、有最大寬度的外框定位，寬螢幕（平板/電腦）才不會飄到瀏覽器最右邊 */}
@@ -2990,7 +2995,7 @@ export default function App() {
             {[{ k:"overview", i:"📊", l:tr("nav_overview") }, { k:"wallet", i:"👛", l:tr("nav_wallet") }, { k:"charts", i:"📉", l:tr("nav_charts") }, { k:"notes", i:"👥", l:tr("nav_notes") }, { k:"invest", i:"📈", l:tr("nav_invest") }, { k:"settings", i:"☰", l:tr("nav_more") }].map(t => {
               const active = tab === t.k || (t.k === "settings" && ["goals","subsbills","advisor","userGuide","account","language","theme"].includes(tab));
               return (
-                <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"0 0 auto", minWidth:64, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
+                <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:"1 1 0", minWidth:52, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"10px 0", background:"none", border:"none", cursor:"pointer", color:active ? C.accent : C.muted }}>
                   <span style={{ fontSize:active ? 21 : 18 }}>{t.i}</span>
                   <span style={{ fontSize:11, fontWeight:700 }}>{t.l}</span>
                   {active && <div style={{ width:4, height:4, borderRadius:"50%", background:C.accent }} />}

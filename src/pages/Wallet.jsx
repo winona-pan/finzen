@@ -44,7 +44,7 @@ export default function WalletPage({
             <span style={{ fontSize:13, fontWeight:700, color:C.accentL }}>⠿ 拖曳調整順序</span>
             <button onClick={() => setWMode("normal")} style={{ padding:"6px 16px", borderRadius:10, background:C.accent, color:"#fff", border:"none", fontWeight:900, fontSize:14, cursor:"pointer" }}>✓ 完成</button>
           </div>}
-          <div style={{ position:"relative", padding:"20px 20px 28px", background:`linear-gradient(150deg,${C.surface} 0%,${C.bg} 100%)` }}>
+          <div style={{ position:"relative", overflow:"hidden", padding:"20px 20px 28px", background:`linear-gradient(150deg,${C.surface} 0%,${C.bg} 100%)` }}>
             <div style={{ position:"absolute", right:-30, top:-30, width:200, height:200, borderRadius:"50%", background:C.accent, filter:"blur(60px)", opacity:.07, pointerEvents:"none" }} />
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, position:"relative", zIndex:2 }}>
               <span style={{ fontWeight:900, fontSize:24, color:C.text }}>{tr("錢包")}</span>

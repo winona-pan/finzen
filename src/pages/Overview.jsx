@@ -26,6 +26,7 @@ export default function OverviewPage({
 
   /* ── 連續達標獎勵：點下一個里程碑的文字可以直接編輯成自己想要的獎勵 ── */
   const [editingMilestone, setEditingMilestone] = useState(null);
+  const [selMilestone, setSelMilestone] = useState(null);
   const [milestoneDraft, setMilestoneDraft] = useState("");
   const streakRewards = { ...DEFAULT_STREAK_REWARDS, ...(allocSettings.streakRewards||{}) };
   const nextMilestone = STREAK_MILESTONES.find(m => m > livingStreak.current) || null;
@@ -125,30 +126,42 @@ export default function OverviewPage({
                 ) : (
                   <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{tr("這個月開始重新累積")}</div>
                 )}
-                <div style={{ display:"flex", gap:4, marginTop:8, flexWrap:"wrap" }}>
-                  {STREAK_MILESTONES.map(m => {
-                    const achieved = livingStreak.longest >= m;
-                    const isNext = m === nextMilestone;
-                    return (
-                      <div key={m} title={`${m}${tr("個月")}`} style={{ width:18, height:18, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, background: achieved ? `${C.teal}22` : isNext ? `${C.accent}18` : C.border, opacity: achieved || isNext ? 1 : 0.5 }}>
-                        {achieved ? "🏅" : m}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ flex:1 }} />
-                {nextMilestone && (
-                  editingMilestone === nextMilestone ? (
-                    <input autoFocus value={milestoneDraft} onChange={e => setMilestoneDraft(e.target.value)}
-                      onBlur={() => { setStreakReward(nextMilestone, milestoneDraft.trim() || streakRewards[nextMilestone]); setEditingMilestone(null); }}
-                      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                      style={{ ...iSt, fontSize:10, padding:"4px 6px", marginTop:8 }} />
-                  ) : (
-                    <div onClick={() => { setEditingMilestone(nextMilestone); setMilestoneDraft(streakRewards[nextMilestone]); }} style={{ fontSize:10, color:C.muted, marginTop:8, cursor:"pointer", lineHeight:1.4 }}>
-                      🎁 {tr("再")}{nextMilestone - livingStreak.current}{tr("個月")} <span style={{ fontSize:9 }}>✏️</span>
+                {/* 里程碑：點圓圈看／改那一關的獎勵，預設顯示下一關 */}
+                {(() => {
+                  const shownM = (selMilestone && STREAK_MILESTONES.includes(selMilestone)) ? selMilestone : (nextMilestone || STREAK_MILESTONES[STREAK_MILESTONES.length-1]);
+                  const achievedShown = livingStreak.longest >= shownM;
+                  return <>
+                    <div style={{ display:"flex", gap:4, marginTop:8, flexWrap:"wrap" }}>
+                      {STREAK_MILESTONES.map(m => {
+                        const achieved = livingStreak.longest >= m;
+                        const sel = m === shownM;
+                        return (
+                          <button key={m} onClick={() => { setSelMilestone(m); setEditingMilestone(null); }} title={`${m}${tr("個月")}`} style={{ width:20, height:20, padding:0, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, cursor:"pointer", color:C.textSub,
+                            border: sel ? `1.5px solid ${C.accent}` : "1.5px solid transparent",
+                            background: achieved ? `${C.teal}22` : sel ? `${C.accent}18` : C.border, opacity: achieved || sel ? 1 : 0.6 }}>
+                            {achieved ? "🏅" : m}
+                          </button>
+                        );
+                      })}
                     </div>
-                  )
-                )}
+                    <div style={{ flex:1 }} />
+                    {editingMilestone === shownM ? (
+                      <input autoFocus value={milestoneDraft} onChange={e => setMilestoneDraft(e.target.value)}
+                        onBlur={() => { setStreakReward(shownM, milestoneDraft.trim() || streakRewards[shownM]); setEditingMilestone(null); }}
+                        onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        style={{ ...iSt, fontSize:11, padding:"5px 7px", marginTop:8 }} />
+                    ) : (
+                      <div onClick={() => { setEditingMilestone(shownM); setMilestoneDraft(streakRewards[shownM]); }} style={{ marginTop:8, padding:"7px 8px", borderRadius:10, background: achievedShown ? `${C.teal}14` : C.bg, cursor:"pointer" }}>
+                        <div style={{ fontSize:9.5, fontWeight:700, color: achievedShown ? C.teal : C.accentL }}>
+                          {achievedShown ? `🏅 ${shownM}${tr("個月")}・${tr("已達成")}` : `🎁 ${shownM}${tr("個月")}・${tr("再")} ${shownM - livingStreak.current} ${tr("個月")}`}
+                        </div>
+                        <div style={{ fontSize:11, color:C.text, marginTop:2, lineHeight:1.4, display:"-webkit-box", WebkitLineClamp:3, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
+                          {streakRewards[shownM]} <span style={{ fontSize:9, color:C.muted }}>✏️</span>
+                        </div>
+                      </div>
+                    )}
+                  </>;
+                })()}
               </div>
             )}
           </div>

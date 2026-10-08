@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function ChartsPage({ 
-  C, tab, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
+  C, tab, openPage, iSt, fmt, toTWD, pnlColor, upd, setModal, confirm, TODAY,
   accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies, buckets,
   stSum, stByAcc, stTotMv, stTotCost, visA, totAssets, netWorth, totDebt, totPay, totRec, cashBal,
   ceMap, CE, AT, PIE, hTxns, hInc, hExp, subsMo, billsMo,
@@ -85,7 +85,7 @@ export default function ChartsPage({
           <Card style={{ padding:"14px 16px", marginBottom:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 }}>
               <span style={{ fontWeight:900, fontSize:13, color:C.text }}>50/30/20 <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>本月</span></span>
-              <button onClick={() => setModal("strategies")} style={{ background:"none", border:"none", padding:0, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>📚 理財策略 ›</button>
+              <button onClick={() => openPage("strategies", "charts")} style={{ background:"none", border:"none", padding:0, color:C.accentL, fontWeight:700, fontSize:11, cursor:"pointer" }}>📚 理財策略 ›</button>
             </div>
             {[
               { l:"需要", target:50, pct:budget502030.needPct, v:budget502030.needs, c:C.accent },
