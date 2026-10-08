@@ -16,6 +16,7 @@ export default function InvestPage({
   tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, totalRealizedPnl,
   watchStocks, addWatchStock, removeWatchStock, refreshWatchStocks, loadingWatch,
   dailyPnlHeatmap, sectorPie, updateStockMeta, portfolioHistory, portfolioNow,
+  dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce,
   StockPriceChart,
   selStock, setSelStock, sellF, setSellF, buyF, setBuyF,
   setSettleDebt, setEditDebt, setSelPool, setSelAcc, selAcc,
@@ -414,13 +415,17 @@ export default function InvestPage({
           })()}
 
           {invTab === "perf" && (
-            <div>
-              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
-            </div>
+            <PerfTab C={C} tr={tr} fmt={fmt} pnlColor={pnlColor} maskStyle={maskStyle}
+              tradeStats={tradeStats} maxDrawdown={maxDrawdown} benchmarkData={benchmarkData} loadingBenchmark={loadingBenchmark} fetchBenchmarkCompare={fetchBenchmarkCompare}
+              emotionReview={emotionReview} dividendEst={dividendEst} loadingDiv={loadingDiv} fetchDividendEstimate={fetchDividendEstimate}
+              dividendAnnounce={dividendAnnounce} loadingDivAnn={loadingDivAnn} divAnnFetched={divAnnFetched} fetchDividendAnnounce={fetchDividendAnnounce} />
           )}
 
           {invTab === "watch" && (
             <div>
+              <div style={{ fontSize:12, fontWeight:800, color:C.textSub, margin:"0 2px 8px" }}>{tr("大盤指數")}</div>
+              <IndexBar C={C} tr={tr} StockPriceChart={StockPriceChart} theme={theme} />
+              <div style={{ fontSize:12, fontWeight:800, color:C.textSub, margin:"18px 2px 8px" }}>{tr("自選股")}</div>
               <WatchStockAdder addWatchStock={addWatchStock} refreshWatchStocks={refreshWatchStocks} C={C} iSt={iSt} tr={tr} />
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
                 <button onClick={() => { refreshWatchStocks({ live:true }); fetchAllPrices(undefined, { live:true }); }} style={{ padding:"5px 10px", borderRadius:8, background:C.card, border:`1px solid ${C.border}`, color:C.accentL, fontSize:11, cursor:"pointer" }}>{loadingWatch?tr("讀取中…"):`🔄 ${tr("更新報價")}`}</button>
@@ -701,5 +706,150 @@ function DailySwingCard({ history, C, fmt, pnlColor, maskStyle, tr, Card }) {
         </>
       )}
     </Card>
+  );
+}
+
+/* ── 績效：這段原本被誤刪只剩大盤指數（大盤搬到「自選股」分頁），這裡補回真正的績效內容：
+   勝率與賺賠比、最大回撤、跟 0050 比較、股息、不同心態下的成績 ── */
+function PerfTab({ C, tr, fmt, pnlColor, maskStyle, tradeStats, maxDrawdown, benchmarkData, loadingBenchmark, fetchBenchmarkCompare, emotionReview,
+  dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce }) {
+  const card = { borderRadius:16, background:C.card, padding:"14px 16px", marginBottom:12 };
+  const title = (t, right) => (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+      <span style={{ fontSize:13, fontWeight:800, color:C.text }}>{t}</span>{right}
+    </div>
+  );
+  const refreshBtn = (onClick, loading) => (
+    <button onClick={onClick} style={{ padding:"5px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>{loading ? tr("讀取中…") : `🔄 ${tr("讀取")}`}</button>
+  );
+  const stat = (label, value, color, sub) => (
+    <div style={{ minWidth:0 }}>
+      <div style={{ fontSize:10.5, color:C.muted }}>{label}</div>
+      <div style={{ fontSize:20, fontWeight:900, color, marginTop:2, ...maskStyle }}>{value}</div>
+      {sub && <div style={{ fontSize:10.5, color:C.muted, marginTop:1, ...maskStyle }}>{sub}</div>}
+    </div>
+  );
+  const empty = (t) => <div style={{ fontSize:12, color:C.muted, padding:"6px 0 2px", lineHeight:1.6 }}>{t}</div>;
+  const ts = tradeStats || {};
+
+  return (
+    <div>
+      {/* 勝率與賺賠比 */}
+      <div style={card}>
+        {title(tr("勝率與賺賠比"))}
+        {!ts.totalSells ? empty(tr("還沒有賣出紀錄，賣出後這裡會統計你的勝率和平均賺賠")) : <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {stat(tr("勝率"), `${ts.winRate.toFixed(0)}%`, ts.winRate >= 50 ? C.income : C.expense, `${ts.wins} ${tr("勝")}・${ts.losses} ${tr("敗")}`)}
+            {stat(tr("賺賠比"), ts.winLossRatio ? `${ts.winLossRatio.toFixed(2)} : 1` : "—", C.text, `${tr("平均賺")} ${fmt(Math.round(ts.avgWin || 0))}・${tr("平均賠")} ${fmt(Math.round(Math.abs(ts.avgLoss || 0)))}`)}
+          </div>
+          <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+            {ts.avgR != null ? <>
+              <div style={{ fontSize:10.5, color:C.muted }}>{tr("平均 R 值")}（{ts.rCount} {tr("筆有設停損")}）</div>
+              <div style={{ fontSize:16, fontWeight:900, color:ts.avgR >= 0 ? C.income : C.expense }}>{ts.avgR >= 0 ? "+" : ""}{ts.avgR.toFixed(2)} R</div>
+              <div style={{ fontSize:10.5, color:C.muted, marginTop:2, lineHeight:1.5 }}>{tr("賺賠相對於停損風險的倍數，+2R＝賺到當初願意承受虧損的 2 倍")}</div>
+            </> : <div style={{ fontSize:11, color:C.muted, lineHeight:1.6 }}>{tr("在個股詳細頁設定「停損%」，之後賣出就會算 R 值")}</div>}
+          </div>
+          {ts.disciplinedCount > 0 && (
+            <div style={{ marginTop:10, padding:"8px 10px", borderRadius:10, background:ts.brokeStopCount > 0 ? `${C.warn}15` : `${C.teal}15`, fontSize:12, fontWeight:700, color:ts.brokeStopCount > 0 ? C.warn : C.teal }}>
+              {tr("停損紀律")}：{ts.disciplinedCount} {tr("筆有設停損，其中")} {ts.brokeStopCount} {tr("筆是跌破停損後才賣")}
+            </div>
+          )}
+        </>}
+      </div>
+
+      {/* 最大回撤 */}
+      <div style={card}>
+        {title(tr("最大回撤"))}
+        {maxDrawdown ? <>
+          <div style={{ fontSize:22, fontWeight:900, color:C.expense }}>−{maxDrawdown.pct.toFixed(1)}%</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("資產從最高點往下掉最多的幅度")}（{maxDrawdown.source === "daily" ? tr("依每日市值") : tr("依每月資產估算")}）</div>
+        </> : empty(tr("資料還不夠；到「總覽 → 投資成長 → 每日」讀一次走勢就會有"))}
+      </div>
+
+      {/* 跟大盤比較 */}
+      <div style={card}>
+        {title(tr("跟大盤（0050）比"), refreshBtn(fetchBenchmarkCompare, loadingBenchmark))}
+        {benchmarkData.length > 1 ? (() => {
+          const last = benchmarkData[benchmarkData.length - 1] || {};
+          const diff = (last.portfolio ?? 0) - (last.benchmark ?? 0);
+          return <>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+              {stat(tr("我的投組"), `${(last.portfolio ?? 0) >= 0 ? "+" : ""}${last.portfolio ?? 0}%`, pnlColor(last.portfolio ?? 0, C))}
+              {stat("0050", `${(last.benchmark ?? 0) >= 0 ? "+" : ""}${last.benchmark ?? 0}%`, C.textSub, diff >= 0 ? `${tr("贏大盤")} ${diff.toFixed(1)}%` : `${tr("輸大盤")} ${Math.abs(diff).toFixed(1)}%`)}
+            </div>
+            <div style={{ height:150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={benchmarkData} margin={{ top:4, right:4, bottom:0, left:-8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
+                  <YAxis tick={{ fill:C.muted, fontSize:9 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={40} />
+                  <Tooltip contentStyle={{ background:C.surface || C.card, border:`1px solid ${C.border}`, borderRadius:10, fontSize:12 }} formatter={(v, n) => [`${v}%`, n === "portfolio" ? tr("我的投組") : "0050"]} />
+                  <Line type="monotone" dataKey="portfolio" stroke={C.accent} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="benchmark" stroke={C.muted} strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:6, fontSize:11, color:C.textSub }}>
+              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:2, background:C.accent }} />{tr("我的投組")}</span>
+              <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:14, height:0, borderTop:`2px dashed ${C.muted}` }} />0050</span>
+            </div>
+          </>;
+        })() : empty(loadingBenchmark ? tr("讀取中…") : tr("按右上角「讀取」，比較你的投組和 0050 同期間的報酬"))}
+      </div>
+
+      {/* 股息 */}
+      <div style={card}>
+        {title(tr("股息（近一年實際配息估算）"), refreshBtn(fetchDividendEstimate, loadingDiv))}
+        {dividendEst.length > 0 ? <>
+          <div style={{ fontSize:20, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(dividendEst.reduce((s, x) => s + x.annualDiv, 0)))}<span style={{ fontSize:12, fontWeight:600, color:C.muted }}> / {tr("年")}</span></div>
+          <div style={{ marginTop:8 }}>
+            {dividendEst.map(x => (
+              <div key={x.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"6px 0", borderTop:`1px solid ${C.border}`, color:C.textSub }}>
+                <span>{x.ticker} {x.name}</span><span style={{ fontWeight:700, color:C.text, ...maskStyle }}>{fmt(Math.round(x.annualDiv))}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:10.5, color:C.muted, marginTop:6 }}>{tr("用過去 12 個月實際配息 × 目前股數估算，美股已換算台幣；不是未來預測")}</div>
+        </> : empty(loadingDiv ? tr("讀取中…") : tr("按右上角「讀取」，估算持股一年大約能領多少股息"))}
+      </div>
+
+      <div style={card}>
+        {title(tr("股利公告（證交所）"), refreshBtn(fetchDividendAnnounce, loadingDivAnn))}
+        {!divAnnFetched ? empty(loadingDivAnn ? tr("讀取中…") : tr("按右上角「讀取」，查上市持股公司已公告的現金股利"))
+          : dividendAnnounce.length === 0 ? empty(tr("沒有上市持股，或查不到資料（上櫃、美股不在這份公告裡）"))
+          : dividendAnnounce.map((x, i) => (
+            <div key={x.ticker} style={{ padding:"8px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{x.ticker} {x.name}</span>
+                {x.announced ? <span style={{ fontSize:13, fontWeight:900, color:C.income, ...maskStyle }}>{fmt(Math.round(x.estIncome))}</span> : <span style={{ fontSize:11, color:C.muted }}>{tr("尚未公告")}</span>}
+              </div>
+              {x.announced && <div style={{ fontSize:11, color:C.textSub, marginTop:2 }}>{x.year}{tr("年度")}・{tr("每股")} {x.cashDivPerShare} {tr("元")}・{x.distDate || tr("分派日未定")}</div>}
+            </div>
+          ))}
+      </div>
+
+      {/* 心態回顧 */}
+      <div style={card}>
+        {title(tr("不同心態下的成績"))}
+        <div style={{ fontSize:11, color:C.muted, marginBottom:8, lineHeight:1.6 }}>{tr("買賣時標記當下心態，累積夠多筆就看得出「衝動下的單」和「計畫內的單」差多少")}</div>
+        {emotionReview.length === 0 ? empty(tr("還沒有標記過心態的交易")) : emotionReview.map((em, i) => {
+          const winRate = em.sellCount > 0 ? em.sellWin / em.sellCount * 100 : null;
+          const avgPnl = em.sellCount > 0 ? em.sellPnl / em.sellCount : null;
+          return (
+            <div key={em.key} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderTop:i>0?`1px solid ${C.border}`:"none" }}>
+              <div style={{ width:32, height:32, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{em.icon}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{em.label}</div>
+                <div style={{ fontSize:10.5, color:C.muted }}>{tr("買進")} {em.buyCount} {tr("次")}・{tr("賣出")} {em.sellCount} {tr("次")}</div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                <div style={{ fontSize:13, fontWeight:800, color:winRate == null ? C.muted : winRate >= 50 ? C.income : C.expense }}>{winRate == null ? "—" : `${tr("勝率")} ${winRate.toFixed(0)}%`}</div>
+                {avgPnl != null && <div style={{ fontSize:10.5, color:pnlColor(avgPnl, C), ...maskStyle }}>{tr("平均")} {avgPnl >= 0 ? "+" : "−"}{fmt(Math.abs(Math.round(avgPnl)))}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -2186,6 +2186,95 @@ export default function App() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
   }, [stSum]);
 
+  /* 股息相關：原本在「績效」分頁，之前某次上傳時連同畫面一起被刪掉了，這裡照原本的做法補回來 */
+  /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
+  const [dividendEst, setDividendEst] = useState([]);
+  const [loadingDiv, setLoadingDiv] = useState(false);
+  const fetchDividendEstimate = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0);
+    if (!held.length) { setDividendEst([]); return; }
+    setLoadingDiv(true);
+    try {
+      const results = await Promise.all(held.map(async s => {
+        const sym = s.market === "US" ? s.ticker : `${s.ticker}.TW`;
+        const apiUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1y&events=div`;
+        const proxies = [
+          (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+          (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+          (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        ];
+        for (const makeProxy of proxies) {
+          try {
+            const r = await fetch(makeProxy(apiUrl), { signal:AbortSignal.timeout(8000) });
+            if (!r.ok) continue;
+            const raw = await r.text();
+            let d2; try { const j = JSON.parse(raw); d2 = j.contents ? JSON.parse(j.contents) : j; } catch { continue; }
+            const divs = d2?.chart?.result?.[0]?.events?.dividends;
+            if (!divs) return { ...s, lastDiv:0, annualDiv:0 };
+            const vals = Object.values(divs).map(x => x.amount).filter(Boolean);
+            if (!vals.length) return { ...s, lastDiv:0, annualDiv:0 };
+            const lastDiv = vals[vals.length - 1];
+            const annualDiv = vals.reduce((sum, v) => sum + v, 0);
+            return { ...s, lastDiv, annualDiv: toTWD(annualDiv * s.totalSh, s.market === "US" ? "USD" : "TWD", rates) }; // 美股配的是美元，換算台幣
+          } catch { continue; }
+        }
+        return { ...s, lastDiv:0, annualDiv:0 };
+      }));
+      setDividendEst(results.filter(x => x.annualDiv > 0));
+    } catch { setDividendEst([]); }
+    finally { setLoadingDiv(false); }
+  }, [stSum, rates]);
+
+  /* ── 股利公告（TWSE OpenAPI 官方資料，非估算）── */
+  const [dividendAnnounce, setDividendAnnounce] = useState([]);
+  const [loadingDivAnn, setLoadingDivAnn] = useState(false);
+  const [divAnnFetched, setDivAnnFetched] = useState(false);
+  const fetchDividendAnnounce = useCallback(async () => {
+    const held = stSum.filter(s => s.totalSh > 0 && s.market !== "US");
+    if (!held.length) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+    setLoadingDivAnn(true);
+    const apiUrl = "https://openapi.twse.com.tw/v1/opendata/t187ap45_L";
+    const attempts = [
+      () => apiUrl,
+      () => `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`,
+      () => `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+    ];
+    try {
+      let list = null;
+      for (const makeUrl of attempts) {
+        try {
+          const r = await fetch(makeUrl(), { signal:AbortSignal.timeout(10000) });
+          if (!r.ok) continue;
+          const raw = await r.text();
+          try {
+            const j = JSON.parse(raw);
+            list = Array.isArray(j) ? j : (j.contents ? JSON.parse(j.contents) : null);
+          } catch { continue; }
+          if (Array.isArray(list)) break;
+        } catch { continue; }
+      }
+      if (!list) { setDividendAnnounce([]); setDivAnnFetched(true); return; }
+      const tickers = new Set(held.map(s => s.ticker));
+      const matched = list.filter(row => tickers.has(row["公司代號"]));
+      const results = held.map(s => {
+        const row = matched.find(r => r["公司代號"] === s.ticker);
+        if (!row) return { ticker:s.ticker, name:s.name, announced:false };
+        const cashDiv = +row["盈餘分配之現金股利(元/股)"] || +row["現金股利(元/股)"] || 0;
+        return {
+          ticker:s.ticker, name:s.name, announced:true,
+          year: row["股利所屬年度"] || "",
+          distDate: row["董事會（擬議）股利分派日"] || row["股東會日期"] || "",
+          cashDivPerShare: cashDiv,
+          estIncome: cashDiv * s.totalSh,
+        };
+      });
+      setDividendAnnounce(results);
+      setDivAnnFetched(true);
+    } catch { setDividendAnnounce([]); setDivAnnFetched(true); }
+    finally { setLoadingDivAnn(false); }
+  }, [stSum]);
+
+
   const emotionReview = useMemo(() => {
     const map = {};
     EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
@@ -2944,7 +3033,7 @@ export default function App() {
     expensePools, totExpensePools, customCE: d.customCE,
     savingsTargets, setSavingsTarget, applyGoalAllocation, resolveGoalDestinations, removeSavingsTarget, savingsProgress, curYm, nextYm, curSavingsTarget, nextSavingsTarget, curYmGoalTargets, getGoalSavingsTarget, showNextMonthReminder, financialSuggestion, guiltFreeGauge,
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
-    budget502030, createEmergencyFund, pageBack, openPage, portfolioNow, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
+    budget502030, createEmergencyFund, pageBack, openPage, portfolioNow, dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
