@@ -118,6 +118,19 @@ const CUR_SYM = { TWD:"NT$",USD:"$",EUR:"€",JPY:"¥",GBP:"£",HKD:"HK$",SGD:"S
 const CUR_NAME = { TWD:"新台幣",USD:"美金",EUR:"歐元",JPY:"日圓",GBP:"英鎊",HKD:"港幣",SGD:"新加坡幣",CNY:"人民幣",KRW:"韓元",AUD:"澳幣",CAD:"加幣",CHF:"瑞士法郎",MYR:"馬幣",THB:"泰銖",VND:"越南盾" };
 const ALL_CURS = Object.keys(DEF_RATES);
 function toTWD(n, cur, rates) { return n * (rates[cur] || 1); }
+/* ── 股票幣別與匯率：美股用美元計價，每筆買賣記下當時的匯率 fxRate（1 美元＝幾台幣），
+   台幣成本用買進當時的匯率算，市值用現在的匯率算，兩者的差就是匯率損益。
+   舊交易沒記 fxRate 的就用現在的匯率（等於看不到那幾筆的匯率損益，但數字不會錯亂） ── */
+function stockCur(s) { return s?.market === "US" ? "USD" : "TWD"; }
+function tradeFx(t, s, rates) { return stockCur(s) === "TWD" ? 1 : (+t?.fxRate > 0 ? +t.fxRate : (rates.USD || 1)); }
+/* 股票幣別的金額 amt（匯率 fx）換成帳戶 acc 的幣別：台幣帳戶買美股要扣 美元×匯率，美元交割戶就直接扣美元 */
+function stockAmtInAcc(amt, cur, fx, acc, rates) {
+  const accCur = acc?.cur || "TWD";
+  if (accCur === cur) return amt;
+  return Math.round(amt * fx / (rates[accCur] || 1) * 100) / 100;
+}
+/* 賣出損益：美股新紀錄存台幣（pnlCur:"TWD"，含匯率影響），舊紀錄是美元 */
+function tradePnlTWD(t, s, rates) { return t.pnlCur === "TWD" ? (t.pnl || 0) : toTWD(t.pnl || 0, stockCur(s), rates); }
 function fmt(n, cur = "TWD") {
   const s = CUR_SYM[cur] || cur;
   if (cur === "TWD") return `NT$${Math.round(n).toLocaleString()}`;
@@ -1444,7 +1457,11 @@ export default function App() {
     if (!buyF.ticker || !buyF.shares || !buyF.acc) return;
     const shares = +buyF.shares, totalCost = +buyF.totalCost || (shares * (+buyF.avgCost||0)) + (+buyF.fee||0);
     const linkedTxnId = buyF.fromAcc ? Date.now() : null;
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, date:TODAY, emotion:buyF.emotion||"", linkedTxnId, linkedAcc: buyF.fromAcc||null, goalId: buyF.goalId||null };
+    // 美股：記下這筆的匯率；從台幣帳戶扣款要扣「美元×匯率」，美元帳戶就直接扣美元
+    const isUS = buyF.market === "US";
+    const fx = isUS ? (+buyF.fxRate > 0 ? +buyF.fxRate : (rates.USD || 1)) : 1;
+    const accAmt = stockAmtInAcc(totalCost, isUS ? "USD" : "TWD", fx, accs.find(a => a.name === buyF.fromAcc), rates);
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price:+buyF.avgCost||0, fee:+buyF.fee||0, totalCost, ...(isUS ? { fxRate:fx } : {}), accAmt, date:TODAY, emotion:buyF.emotion||"", linkedTxnId, linkedAcc: buyF.fromAcc||null, goalId: buyF.goalId||null };
     upd("stocks", p => {
       const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
       if (ex) return p.map(s => s.id === ex.id ? { ...s, name:buyF.name||s.name, trades:[...(s.trades||[]), trade] } : s);
@@ -1452,12 +1469,12 @@ export default function App() {
     });
     if (buyF.fromAcc) {
       updMulti({
-        accs: p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - totalCost } : a),
-        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:totalCost, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, toAcc:buyF.acc, date:TODAY, tags:"#股票" }],
+        accs: p => p.map(a => a.name === buyF.fromAcc ? { ...a, bal:a.bal - accAmt } : a),
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:accAmt, desc:`買進 ${buyF.name||buyF.ticker}`, acc:buyF.fromAcc, toAcc:buyF.acc, date:TODAY, tags:"#股票" }],
       });
     }
     setBuyF(BF0); close();
-  }, [buyF, upd, updMulti]);
+  }, [buyF, upd, updMulti, accs, rates]);
 
   /* ── 股票賣出 ── */
   const doSell = useCallback(() => {
@@ -1477,18 +1494,22 @@ export default function App() {
     const brokeDiscipline = stopLoss != null ? (entryPrice > stopLoss ? sellPrice < stopLoss : sellPrice > stopLoss) : false;
     const linkedTxnId = (sellF.returnAcc && proceeds) ? Date.now() : null;
     const linkedPnlTxnId = (sellF.pnl && +sellF.pnl !== 0) ? Date.now() + 1 : null;
-    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: sellPrice, fee, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0, entryPrice, stopLoss, rValue, brokeDiscipline, linkedTxnId, linkedAcc: sellF.returnAcc||null, linkedPnlTxnId }] } : s));
+    // 美股：記下賣出當時的匯率；錢回到台幣帳戶要換成台幣，損益（pnl）存台幣、含匯率影響
+    const isUS = st?.market === "US";
+    const fx = isUS ? (+sellF.fxRate > 0 ? +sellF.fxRate : (rates.USD || 1)) : 1;
+    const accAmt = stockAmtInAcc(proceeds - fee, isUS ? "USD" : "TWD", fx, accs.find(a => a.name === sellF.returnAcc), rates);
+    upd("stocks", p => p.map(s => s.id === sellF.stockId ? { ...s, trades:[...(s.trades||[]), { id:"t"+Date.now(), type:"sell", shares, price: sellPrice, fee, ...(isUS ? { fxRate:fx, pnlCur:"TWD" } : {}), accAmt, date:TODAY, emotion:sellF.emotion||"", pnl:+sellF.pnl||0, entryPrice, stopLoss, rValue, brokeDiscipline, linkedTxnId, linkedAcc: sellF.returnAcc||null, linkedPnlTxnId }] } : s));
     if (sellF.returnAcc && proceeds) {
       updMulti({
-        accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + proceeds - fee } : a),
-        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:proceeds - fee, desc:`賣出 ${st?.ticker||""}`, acc:st?.acc||"", toAcc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
+        accs: p => p.map(a => a.name === sellF.returnAcc ? { ...a, bal:a.bal + accAmt } : a),
+        txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:accAmt, desc:`賣出 ${st?.ticker||""}`, acc:st?.acc||"", toAcc:sellF.returnAcc, date:TODAY, tags:"#股票" }],
       });
     }
     if (sellF.pnl && +sellF.pnl !== 0) {
       upd("txns", p => [...p, { id:linkedPnlTxnId, type:sellF.pnlType, cat:sellF.pnlType==="income"?"投資收益":"其他", amt:+sellF.pnl, desc:`${st?.ticker||""} 賣出損益`, acc:sellF.returnAcc||"", date:TODAY, tags:"#股票", noBalanceEffect:true }]);
     }
-    setSellF({ stockId:"",shares:"",price:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"" }); close();
-  }, [sellF, stocks, upd, updMulti]);
+    setSellF({ stockId:"",shares:"",price:"",totalProceeds:"",fee:"",pnl:"",pnlType:"income",returnAcc:"",emotion:"",fxRate:"" }); close();
+  }, [sellF, stocks, upd, updMulti, accs, rates]);
 
   /* ── 刪除交易紀錄：連動退回帳戶餘額（買進退回成本、賣出扣掉收回的錢），並清掉對應的轉帳/損益紀錄 ── */
   const deleteTrade = useCallback((stockId, tradeId) => {
@@ -1501,8 +1522,9 @@ export default function App() {
         if (!t || !t.linkedTxnId || !t.linkedAcc) return p;
         return p.map(a => {
           if (a.name !== t.linkedAcc) return a;
-          if (t.type === "buy") return { ...a, bal: a.bal + t.totalCost }; // 買進時扣了 totalCost，刪除要還回去
-          if (t.type === "sell") return { ...a, bal: a.bal - (t.totalCost != null ? t.totalCost : (t.price*t.shares - (t.fee||0))) }; // 賣出時加了 proceeds-fee，刪除要扣回去
+          // accAmt＝當初帳戶實際扣/入的金額（帳戶幣別，美股已換過匯率）；舊紀錄沒有就照原本的算法
+          if (t.type === "buy") return { ...a, bal: a.bal + (t.accAmt != null ? t.accAmt : t.totalCost) }; // 買進時扣了多少，刪除要還回去
+          if (t.type === "sell") return { ...a, bal: a.bal - (t.accAmt != null ? t.accAmt : t.totalCost != null ? t.totalCost : (t.price*t.shares - (t.fee||0))) }; // 賣出時加了多少，刪除要扣回去
           return a;
         });
       },
@@ -1896,25 +1918,36 @@ export default function App() {
     const totalCost = avgCost * totalSh; // 剩下股數對應的成本，賣光了自然變 0
     const mv  = totalSh * (st.curPrice||0);
     const upnl = mv - totalCost;
-    return {...st, totalSh, totalCost, avgCost, mv, upnl};
-  }), [stocks]);
+    // ── 台幣口徑：成本用買進當時的匯率、市值用現在的匯率（台股兩個匯率都是 1，跟原幣一樣）──
+    const fxNow = tradeFx(null, st, rates);
+    const initFx = +st.manualFxRate > 0 && st.market === "US" ? +st.manualFxRate : fxNow;
+    const everCostTWD = initCost * initFx + buys.reduce((s,t)=>s+(t.shares*t.price+(t.fee||0))*tradeFx(t, st, rates), 0);
+    const avgCostTWD = everSh > 0 ? everCostTWD / everSh : avgCost * fxNow;
+    const totalCostTWD = avgCostTWD * totalSh;
+    const mvTWD = mv * fxNow;
+    const upnlTWD = mvTWD - totalCostTWD;
+    const fxPnl = totalCost * fxNow - totalCostTWD; // 匯率損益：同樣的美元成本，現在換回台幣比當初多（少）多少
+    const realizedTWD = sells.reduce((s,t)=>s+tradePnlTWD(t, st, rates), 0);
+    return {...st, totalSh, totalCost, avgCost, mv, upnl, totalCostTWD, avgCostTWD, mvTWD, upnlTWD, fxPnl, realizedTWD};
+  }), [stocks, rates]);
 
-  // 美股的 mv/totalCost 是美元，加總前一定要先換成台幣（之前直接相加，美股部位會被當成同樣數字的台幣，總資產就少算了）
-  const stTotMv = useMemo(() => stSum.reduce((s, x) => s + toTWD(x.mv, x.market === "US" ? "USD" : "TWD", rates), 0), [stSum, rates]);
-  const stTotCost = useMemo(() => stSum.reduce((s, x) => s + toTWD(x.totalCost, x.market === "US" ? "USD" : "TWD", rates), 0), [stSum, rates]);
+  // 美股的 mv/totalCost 是美元，加總一律用台幣口徑的 mvTWD/totalCostTWD（成本用買進當時的匯率）
+  const stTotMv = useMemo(() => stSum.reduce((s, x) => s + x.mvTWD, 0), [stSum]);
+  const stTotCost = useMemo(() => stSum.reduce((s, x) => s + x.totalCostTWD, 0), [stSum]);
 
   /* ── 每日投資波動：每個交易日記一筆投資組合的快照（全部換算成台幣），用前後兩天相減畫出每天賺賠 ──
      pnl＝未實現損益＋已實現損益：只用未實現的話，賣掉賺錢的股票那天會被算成「虧了」 */
   const portfolioNow = useMemo(() => {
-    let mv = 0, cost = 0, realized = 0, ready = true, hasHoldings = false;
+    let mv = 0, cost = 0, realized = 0, fxPnl = 0, ready = true, hasHoldings = false;
     stSum.forEach(s => {
-      const cur = s.market === "US" ? "USD" : "TWD";
       if (s.totalSh > 0) { hasHoldings = true; if (!(s.curPrice > 0)) ready = false; }
-      mv += toTWD(s.mv, cur, rates);
-      cost += toTWD(s.totalCost, cur, rates);
-      (s.trades || []).forEach(t => { if (t.type === "sell") realized += toTWD((t.price - s.avgCost) * t.shares - (t.fee || 0), cur, rates); });
+      mv += s.mvTWD;
+      cost += s.totalCostTWD;
+      fxPnl += s.fxPnl;
+      // 賣得的錢用賣出當時的匯率換台幣，減掉台幣成本（買進當時的匯率）
+      (s.trades || []).forEach(t => { if (t.type === "sell") realized += (t.price * t.shares - (t.fee || 0)) * tradeFx(t, s, rates) - s.avgCostTWD * t.shares; });
     });
-    return { mv: Math.round(mv), cost: Math.round(cost), pnl: Math.round(mv - cost + realized), ready, hasHoldings };
+    return { mv: Math.round(mv), cost: Math.round(cost), pnl: Math.round(mv - cost + realized), fxPnl: Math.round(fxPnl), ready, hasHoldings };
   }, [stSum, rates]);
   /* 快照記在哪一天：報價每個交易日 13:50 更新，所以 13:50 以前看到的是前一個交易日的收盤，記在前一個交易日 */
   useEffect(() => {
@@ -1947,7 +1980,7 @@ export default function App() {
     const accBal = visA.filter(a => a.type !== "investment").reduce((s, a) => s + toTWD(a.bal, a.cur, rates), 0) - excludedBucketTotal;
     const allNames = new Set(accs.map(a => a.name)), visNames = new Set(visA.map(a => a.name));
     const stockVal = stSum.filter(st => st.totalSh > 0 && (visNames.has(st.acc) || !allNames.has(st.acc))) // 隱藏帳戶裡的不算；沒掛帳戶的照算
-      .reduce((s, st) => s + toTWD(useMvForAssets && st.mv > 0 ? st.mv : st.totalCost, st.market === "US" ? "USD" : "TWD", rates), 0);
+      .reduce((s, st) => s + (useMvForAssets && st.mv > 0 ? st.mvTWD : st.totalCostTWD), 0);
     return accBal + stockVal;
   }, [visA, rates, useMvForAssets, stSum, buckets, accs]);
 
@@ -1963,10 +1996,10 @@ export default function App() {
     stSum.filter(x=>x.totalSh>0).forEach(x => {
       const key = `${x.ticker}_${x.market}`;
       if (!map[key]) map[key] = { name:x.ticker, value:0 };
-      map[key].value += toTWD(x.totalCost, x.market === "US" ? "USD" : "TWD", rates);
+      map[key].value += x.totalCostTWD;
     });
     return Object.values(map);
-  }, [stSum, rates]);
+  }, [stSum]);
 
   /* ── 累積投入成本走勢（不是市值！市值需要每天的真實股價，這裡只有買進當下的成本，
      用「今天的市值/成本比」套用回過去每一天算出來的市值曲線只是把成本曲線等比例縮放，會很誤導人，
@@ -2088,7 +2121,8 @@ export default function App() {
   /* ── 勝率、賺賠比、平均R值 ── */
   const tradeStats = useMemo(() => {
     const sells = [];
-    stocks.forEach(s => (s.trades || []).forEach(t => { if (t.type === "sell") sells.push({ ...t, ticker:s.ticker, name:s.name }); }));
+    // pnl 統一換成台幣再算平均賺賠，美股跟台股才能放在一起比
+    stocks.forEach(s => (s.trades || []).forEach(t => { if (t.type === "sell") sells.push({ ...t, pnl:tradePnlTWD(t, s, rates), pnlCur:"TWD", ticker:s.ticker, name:s.name, market:s.market }); }));
     const wins = sells.filter(t => (t.pnl || 0) > 0);
     const losses = sells.filter(t => (t.pnl || 0) < 0);
     const winRate = sells.length ? (wins.length / sells.length * 100) : null;
@@ -2100,18 +2134,17 @@ export default function App() {
     const disciplined = sells.filter(t => t.stopLoss != null);
     const brokeStop = disciplined.filter(t => t.brokeDiscipline);
     return { totalSells:sells.length, wins:wins.length, losses:losses.length, winRate, avgWin, avgLoss, winLossRatio, avgR, rCount:rTrades.length, disciplinedCount:disciplined.length, brokeStopCount:brokeStop.length, sells };
-  }, [stocks]);
+  }, [stocks, rates]);
 
   /* ── 已實現損益總額（Dashboard 用）：把每筆賣出的損益依市場幣別換算成台幣後加總，
      跟總資產／現金水位的算法一致，避免美股跟台股的數字直接相加造成誤導 ── */
   const totalRealizedPnl = useMemo(() => {
     let sum = 0;
     stocks.forEach(s => {
-      const cur = s.market === "US" ? "USD" : "TWD";
-      (s.trades || []).forEach(t => { if (t.type === "sell") sum += toTWD(t.pnl || 0, cur, rates); });
+      (s.trades || []).forEach(t => { if (t.type === "sell") sum += tradePnlTWD(t, s, rates); });
     });
     return sum;
-  }, [stocks, rates, toTWD]);
+  }, [stocks, rates]);
 
   /* ── 與大盤（0050）績效比較 ── */
   const [benchmarkData, setBenchmarkData] = useState([]);
@@ -2208,9 +2241,9 @@ export default function App() {
   /* ── 產業/類股分佈（手動標記的 sector 優先，沒填就用全市場報價自動判斷的 autoSector）── */
   const sectorPie = useMemo(() => {
     const map = {};
-    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || s.autoSector || "未分類"; map[key] = (map[key] || 0) + toTWD(s.mv > 0 ? s.mv : s.totalCost, s.market === "US" ? "USD" : "TWD", rates); } });
+    stSum.forEach(s => { if (s.totalSh > 0) { const key = s.sector || s.autoSector || "未分類"; map[key] = (map[key] || 0) + (s.mv > 0 ? s.mvTWD : s.totalCostTWD); } });
     return Object.entries(map).map(([name, value]) => ({ name, value })).filter(x => x.value > 0);
-  }, [stSum, rates]);
+  }, [stSum]);
 
   /* 股息相關：原本在「績效」分頁，之前某次上傳時連同畫面一起被刪掉了，這裡照原本的做法補回來 */
   /* ── 股息估算（用最近一次實際配息 × 持股數，非未來預測日期）── */
@@ -2306,11 +2339,11 @@ export default function App() {
     EMOTIONS.forEach(e => { map[e.key] = { ...e, buyCount:0, buyTotal:0, sellCount:0, sellPnl:0, sellWin:0 }; });
     stocks.forEach(s => (s.trades || []).forEach(t => {
       if (!t.emotion || !map[t.emotion]) return;
-      if (t.type === "buy") { map[t.emotion].buyCount++; map[t.emotion].buyTotal += (t.totalCost || 0); }
-      else if (t.type === "sell") { map[t.emotion].sellCount++; map[t.emotion].sellPnl += (t.pnl || 0); if ((t.pnl || 0) > 0) map[t.emotion].sellWin++; }
+      if (t.type === "buy") { map[t.emotion].buyCount++; map[t.emotion].buyTotal += (t.totalCost || 0) * tradeFx(t, s, rates); }
+      else if (t.type === "sell") { const pnl = tradePnlTWD(t, s, rates); map[t.emotion].sellCount++; map[t.emotion].sellPnl += pnl; if (pnl > 0) map[t.emotion].sellWin++; }
     }));
     return Object.values(map).filter(x => x.buyCount > 0 || x.sellCount > 0);
-  }, [stocks]);
+  }, [stocks, rates]);
 
   // 賣光的股票（totalSh<=0）不再列進持股分頁——資料本身沒有刪掉，交易記錄還在，
   // 只是「目前持股」清單本來就不該再顯示已經出清的標的，不然會讓人以為還持有
@@ -2337,23 +2370,26 @@ export default function App() {
   /* 這個目標（定期定額股數模式）自己「累積買了多少股」，只算標記這個目標id的交易，不是整個帳戶/整支股票的持股——
      這樣同一個證券戶、甚至同一支股票，可以分別給不同目標各自追蹤各自買的份 */
   const goalStockShares = useCallback((g) => {
-    let shares = 0, cost = 0;
+    let shares = 0, cost = 0, costTWD = 0;
     stocks.forEach(st => {
       if (st.ticker !== g.shareTicker) return;
       (st.trades||[]).forEach(t => {
         if (t.goalId !== g.id) return;
         if (t.type === "buy") {
+          const c = (t.totalCost != null ? t.totalCost : t.shares*t.price+(t.fee||0));
           shares += t.shares;
-          cost += (t.totalCost != null ? t.totalCost : t.shares*t.price+(t.fee||0));
+          cost += c;
+          costTWD += c * tradeFx(t, st, rates); // 美股用買進當時的匯率換台幣
         } else if (t.type === "sell") {
-          const avgCost = shares > 0 ? cost / shares : 0;
+          const ratio = shares > 0 ? Math.min(1, t.shares / shares) : 0;
           shares = Math.max(0, shares - t.shares);
-          cost = Math.max(0, cost - avgCost * t.shares);
+          cost = Math.max(0, cost * (1 - ratio));
+          costTWD = Math.max(0, costTWD * (1 - ratio));
         }
       });
     });
-    return { shares, cost };
-  }, [stocks]);
+    return { shares, cost, costTWD };
+  }, [stocks, rates]);
 
   /* ── 目標目前進度金額（共用邏輯，Overview/Charts/分流引擎都用這個）── */
   const goalCurrentAmount = useCallback((g) => {
@@ -2368,8 +2404,8 @@ export default function App() {
       const accBal = visA.reduce((s,a) => {
         if (a.type === "investment") {
           const stForAcc = stSum.filter(st=>st.acc===a.name);
-          const mv = stForAcc.reduce((ss,st)=>ss+toTWD(st.mv, st.market==="US"?"USD":"TWD", rates),0);
-          const cost = stForAcc.reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
+          const mv = stForAcc.reduce((ss,st)=>ss+st.mvTWD,0);
+          const cost = stForAcc.reduce((ss,st)=>ss+st.totalCostTWD,0);
           return s + (goalUseMv ? (mv>0?mv:cost) : cost);
         }
         return s + toTWD(a.bal, a.cur, rates);
@@ -2383,12 +2419,13 @@ export default function App() {
         if (g.recurringMode === "shares" && g.shareTicker) {
           const gs = goalStockShares(g);
           const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
-          const mv = gs.shares * price;
-          return s + (goalUseMv ? (mv > 0 ? mv : gs.cost) : gs.cost);
+          const fxNow = stocks.some(st => st.ticker === g.shareTicker && st.market === "US") ? (rates.USD || 1) : 1; // 美股換台幣
+          const mv = gs.shares * price * fxNow;
+          return s + (goalUseMv ? (mv > 0 ? mv : gs.costTWD) : gs.costTWD);
         }
         const stForAcc = stSum.filter(st=>st.acc===a.name);
-        const mv = stForAcc.reduce((ss,st)=>ss+toTWD(st.mv, st.market==="US"?"USD":"TWD", rates),0);
-        const cost = stForAcc.reduce((ss,st)=>ss+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
+        const mv = stForAcc.reduce((ss,st)=>ss+st.mvTWD,0);
+        const cost = stForAcc.reduce((ss,st)=>ss+st.totalCostTWD,0);
         return s + (goalUseMv ? (mv > 0 ? mv : cost) : cost);
       }
       return s + toTWD(a.bal,a.cur,rates);
@@ -2396,7 +2433,7 @@ export default function App() {
       const acc = accs.find(a=>a.id===b.accId);
       return s + toTWD(b.allocated, acc?.cur||"TWD", rates);
     },0) + (g.includeDebts ? (totRec - totPay - totDebt) : 0);
-  }, [accs, buckets, stSum, rates, useMvForAssets, totDebt, totPay, totRec, visA, goalStockShares, priceForTicker]);
+  }, [accs, buckets, stSum, stocks, rates, useMvForAssets, totDebt, totPay, totRec, visA, goalStockShares, priceForTicker]);
 
   /* ── 同一個分類（資料夾）裡，如果好幾個目標連結到「完全一樣的帳戶/子帳戶」，代表他們共用同一筆錢，
      不該每個目標都各自顯示帳戶全額（那樣會重複算）。改成瀑布式分配：依優先級（數字小的先）依序把帳戶裡的錢
@@ -2509,18 +2546,21 @@ export default function App() {
     if (!toAcc || !fromAcc || shares <= 0) return;
     const thisYm = TODAY.slice(0,7);
     const linkedTxnId = Date.now();
-    const trade = { id:"t"+Date.now(), type:"buy", shares, price, fee:0, totalCost:cost, date:TODAY, emotion:"", linkedTxnId, linkedAcc:fromAcc.name, autoInvested:true, goalId:g.id };
+    const isUS = stocks.some(s => s.ticker === g.shareTicker && s.acc === toAcc.name && s.market === "US");
+    const fx = isUS ? (rates.USD || 1) : 1;
+    const accAmt = stockAmtInAcc(cost, isUS ? "USD" : "TWD", fx, fromAcc, rates); // 美股從台幣帳戶扣要換匯率
+    const trade = { id:"t"+Date.now(), type:"buy", shares, price, fee:0, totalCost:cost, ...(isUS ? { fxRate:fx } : {}), accAmt, date:TODAY, emotion:"", linkedTxnId, linkedAcc:fromAcc.name, autoInvested:true, goalId:g.id };
     updMulti({
       stocks: p => {
         const ex = p.find(s => s.ticker === g.shareTicker && s.acc === toAcc.name);
         if (ex) return p.map(s => s.id === ex.id ? { ...s, trades:[...(s.trades||[]), trade] } : s);
         return [...p, { id:"s"+Date.now(), acc:toAcc.name, ticker:g.shareTicker, name:g.shareTicker, market:"TW", curPrice:price, trades:[trade] }];
       },
-      accs: p => p.map(a => a.name === fromAcc.name ? { ...a, bal:a.bal - cost } : a),
-      txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:cost, desc:`🔁 定期定額：${g.name}（${g.shareTicker} ${shares}股）`, acc:fromAcc.name, toAcc:toAcc.name, date:TODAY, tags:"#股票" }],
+      accs: p => p.map(a => a.name === fromAcc.name ? { ...a, bal:a.bal - accAmt } : a),
+      txns: p => [...p, { id:linkedTxnId, type:"transfer", cat:"股票", amt:accAmt, desc:`🔁 定期定額：${g.name}（${g.shareTicker} ${shares}股）`, acc:fromAcc.name, toAcc:toAcc.name, date:TODAY, tags:"#股票" }],
     });
     upd("goalAutoInvested", p => ({ ...(p||{}), [g.id]: { ...(p?.[g.id]||{}), [thisYm]: true } }));
-  }, [accs, updMulti, upd]);
+  }, [accs, stocks, rates, updMulti, upd]);
 
   /* ── 固定投資設定（智慧分流用）── */
   const ALLOC_DEFAULT = { investAmt:0, investAccId:"", investAllocs:[], livingBucketId:"", reserveBucketId:"",
@@ -2857,7 +2897,7 @@ export default function App() {
     // 投資組合
     const stockLines = (stSum||[]).filter(s=>s.totalSh>0).map(s =>
       // 美股換成台幣，不然 AI 會把美元數字當台幣
-      `- ${s.ticker}${s.name&&s.name!==s.ticker?`(${s.name})`:""}：${s.totalSh}股，成本 ${fmt(toTWD(s.totalCost, s.market==="US"?"USD":"TWD", rates))}，市值 ${fmt(toTWD(s.mv, s.market==="US"?"USD":"TWD", rates))}${s.curPrice?`（現價 ${s.curPrice}${s.market==="US"?" 美元":" 元"}${s.lastUpdated?`，報價時間 ${s.lastUpdated}`:""}）`:""}，${s.upnl>=0?"未實現獲利":"未實現虧損"} ${fmt(Math.abs(toTWD(s.upnl, s.market==="US"?"USD":"TWD", rates)))}`
+      `- ${s.ticker}${s.name&&s.name!==s.ticker?`(${s.name})`:""}：${s.totalSh}股，成本 ${fmt(s.totalCostTWD)}，市值 ${fmt(s.mvTWD)}${s.curPrice?`（現價 ${s.curPrice}${s.market==="US"?" 美元":" 元"}${s.lastUpdated?`，報價時間 ${s.lastUpdated}`:""}）`:""}，${s.upnlTWD>=0?"未實現獲利":"未實現虧損"} ${fmt(Math.abs(s.upnlTWD))}${s.market==="US"&&Math.round(s.fxPnl)!==0?`（其中匯率${s.fxPnl>=0?"賺":"賠"} ${fmt(Math.abs(s.fxPnl))}）`:""}`
     ).join("\n");
 
     // 往來帳（應收應付）
@@ -2871,7 +2911,7 @@ export default function App() {
       "【總資產】",
       `總資產淨值：${fmt(netWorth)}（資產 ${fmt(totAssets)} − 信用卡未繳 ${fmt(totDebt)} − 代墊應付 ${fmt(totPay)} + 應收 ${fmt(totRec)}）`,
       `現金＋活存：${fmt(cashBal)}`,
-      stTotMv > 0 ? `投資市值：${fmt(stTotMv)}（成本 ${fmt(stTotCost)}，未實現損益 ${fmt(stTotMv-stTotCost)}）` : "目前沒有股票投資部位。",
+      stTotMv > 0 ? `投資市值：${fmt(stTotMv)}（成本 ${fmt(stTotCost)}，未實現損益 ${fmt(stTotMv-stTotCost)}${portfolioNow.fxPnl?`，其中美股匯率影響 ${portfolioNow.fxPnl>0?"+":"−"}${fmt(Math.abs(portfolioNow.fxPnl))}`:""}）` : "目前沒有股票投資部位。",
       "",
       `【這個月收支（${TODAY.slice(0,7)}）】`,
       `收入：${fmt(curInc)}，支出：${fmt(curExp)}，結餘：${fmt(curInc-curExp)}`,
@@ -2900,7 +2940,7 @@ export default function App() {
     ].join("\n");
   }, [goals, isGoalArchived, goalCurrentAmount, fmt, moInc, moExp, guiltFreeGauge, budget502030, curSavingsTarget,
       moTxns, subs, bills, monthlyEquiv, subsMo, billsMo, stSum, debts, netWorth, totAssets, totDebt, totPay, totRec,
-      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion, goalDisplayAmount, curMoTxns, rates]);
+      cashBal, stTotMv, stTotCost, allocSettings, yearlyGoalSchedule, goalRecurringAmount, curYm, financialSuggestion, goalDisplayAmount, curMoTxns, rates, portfolioNow]);
 
   /* AI 顧問對話：存在 localStorage，關掉 app 再打開還在，不會因為關掉聊天視窗或重新整理就消失 */
   const [advisorHistory, setAdvisorHistoryRaw] = useState(() => {

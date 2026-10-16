@@ -29,14 +29,17 @@ export default function StockModals({
 }) {
 
   // 表單重置預設值
-  const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"" };
+  const BF0 = { acc:"", ticker:"", name:"", market:"TW", shares:"", avgCost:"", totalCost:"", fee:"0", curPrice:"", fromAcc:"", fxRate:"" };
+  const usdNow = rates.USD || 1;
+  /* 從帳戶扣/入股票幣別金額時，帳戶實際會動多少（跟 App 的 stockAmtInAcc 同一套算法，表單上先給你看） */
+  const amtInAcc = (amt, cur, fx, acc) => (!acc || (acc.cur||"TWD") === cur) ? amt : Math.round(amt * fx / (rates[acc.cur||"TWD"] || 1) * 100) / 100;
 
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [editingTrade, setEditingTrade] = useState(null);
   const [peek, setPeek] = useState(false);
   const doPeek = () => { setPeek(true); setTimeout(() => setPeek(false), 3000); };
   const maskStyle = (hideAmounts && !peek) ? { filter:"blur(6px)", userSelect:"none" } : {};
-  const [tradeDraft, setTradeDraft] = useState({ shares:"", price:"", totalCost:"" });
+  const [tradeDraft, setTradeDraft] = useState({ shares:"", price:"", totalCost:"", fxRate:"" });
   const [tradeMonth, setTradeMonth] = useState(null);
   useEffect(() => { setTradeMonth(null); }, [selStock?.id]);
 
@@ -49,7 +52,8 @@ export default function StockModals({
 
   /* ── 部位大小風控：這筆買進佔總資產的比重 ── */
   const buyTotalCost = +buyF.totalCost || ((+buyF.shares||0) * (+buyF.avgCost||0)) + (+buyF.fee||0);
-  const posPct = totAssets > 0 ? (buyTotalCost / totAssets * 100) : 0;
+  const buyFx = buyF.market === "US" ? (+buyF.fxRate > 0 ? +buyF.fxRate : usdNow) : 1;
+  const posPct = totAssets > 0 ? (buyTotalCost * buyFx / totAssets * 100) : 0; // 美股換成台幣再跟總資產比
   const isOverConcentrated = posPct > 20;
 
   const handleConfirmBuy = () => {
@@ -103,8 +107,17 @@ export default function StockModals({
             })} />
             <Inp label={tr("手續費")} type="number" placeholder="0" value={buyF.fee} onChange={e => setBuyF(p => ({ ...p, fee:e.target.value, totalCost:(p.shares&&p.avgCost)?String(Math.round(+p.shares*+p.avgCost+(+e.target.value||0))):p.totalCost }))} />
           </div>
-          <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("股數、均成本、投資總成本這三個，填任兩個就會自動幫你算出第三個。")}</div>
+          <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("股數、均成本、投資總成本這三個，填任兩個就會自動幫你算出第三個。")}{buyF.market === "US" ? ` ${tr("美股請填美元。")}` : ""}</div>
+          {buyF.market === "US" && <>
+            <Inp label={tr("買進匯率（1 美元 = ? 台幣）")} type="number" placeholder={usdNow.toFixed(2)} value={buyF.fxRate || ""} onChange={e => setBuyF(p => ({ ...p, fxRate:e.target.value }))} />
+            <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("沒填就用今天的匯率")} {usdNow.toFixed(2)}{tr("，可以改成銀行或券商實際換匯的匯率。台幣成本＝美元成本 × 這個匯率，之後匯率變動的賺賠會另外算成「匯率損益」。")}{buyTotalCost > 0 ? ` ≈ ${fmt(buyTotalCost * buyFx)}` : ""}</div>
+          </>}
           <Sl label={tr("從哪個帳戶扣款（選填）")} value={buyF.fromAcc} onChange={e => setBuyF(p => ({ ...p, fromAcc:e.target.value }))}><option value="">— {tr("不扣款")} —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name} ({fmt(a.bal, a.cur)})</option>)}</Sl>
+          {(() => {
+            const fromA = accs.find(a => a.name === buyF.fromAcc), cur = buyF.market === "US" ? "USD" : "TWD";
+            if (!fromA || (fromA.cur||"TWD") === cur || !(buyTotalCost > 0)) return null;
+            return <div style={{ fontSize:11, color:C.textSub, marginTop:-4, marginBottom:8 }}>💱 {fromA.name} {tr("會扣")} <strong>{fmt(amtInAcc(buyTotalCost, cur, buyFx, fromA), fromA.cur||"TWD")}</strong>（{fmt(buyTotalCost, cur)}{cur === "USD" ? ` × ${buyFx}` : ""} {tr("換算")}）</div>;
+          })()}
           {goals.some(g => g.recurringMode==="shares" && g.shareTicker===buyF.ticker) && (
             <Sl label={tr("這筆算入哪個目標的定期定額？（選填）")} value={buyF.goalId||""} onChange={e => setBuyF(p => ({ ...p, goalId:e.target.value }))}>
               <option value="">— {tr("不算入任何目標")} —</option>
@@ -149,7 +162,7 @@ export default function StockModals({
             <Fld label={tr("選擇持股")}>
               <select value={sellF.stockId} onChange={e => {
                 const s = stSum.find(x => x.id === e.target.value);
-                if (s) setSellF(p => ({ ...p, stockId:s.id, shares:String(s.totalSh), totalProceeds:s.curPrice>0?String(Math.round(s.curPrice*s.totalSh)):"", pnl:s.curPrice>0?String(Math.round(Math.abs(s.upnl))):"", pnlType:s.upnl>=0?"income":"expense" }));
+                if (s) setSellF(p => ({ ...p, stockId:s.id, shares:String(s.totalSh), totalProceeds:s.curPrice>0?String(Math.round(s.curPrice*s.totalSh)):"", pnl:s.curPrice>0?String(Math.round(Math.abs(s.market==="US"?s.upnlTWD:s.upnl))):"", pnlType:(s.market==="US"?s.upnlTWD:s.upnl)>=0?"income":"expense", fxRate:"" }));
               }} style={iSt}>
                 {stSum.filter(s => s.totalSh > 0).map(s => (
                   <option key={s.id} value={s.id}>{s.ticker} {s.name} · {s.totalSh}{tr("股")} · {s.acc}</option>
@@ -178,6 +191,24 @@ export default function StockModals({
               return { ...p, totalProceeds:v };
             })} />
             <Inp label={tr("手續費（選填）")} type="number" placeholder="0" value={sellF.fee||""} onChange={e => setSellF(p => ({ ...p, fee:e.target.value }))} />
+            {st.market === "US" && <>
+              <Inp label={tr("賣出匯率（1 美元 = ? 台幣）")} type="number" placeholder={usdNow.toFixed(2)} value={sellF.fxRate || ""} onChange={e => setSellF(p => ({ ...p, fxRate:e.target.value }))} />
+              <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>{tr("沒填就用今天的匯率")} {usdNow.toFixed(2)}</div>
+            </>}
+            {(() => {
+              // 依目前填的數字試算損益；美股拆成「股價」和「匯率」兩塊，損益一律用台幣記（總覽的收支是台幣）
+              const sh = +sellF.shares || 0, net = (+sellF.totalProceeds || 0) - (+sellF.fee || 0);
+              if (!(sh > 0) || !(+sellF.totalProceeds > 0)) return null;
+              const fx = st.market === "US" ? (+sellF.fxRate > 0 ? +sellF.fxRate : usdNow) : 1;
+              const total = Math.round(net * fx - (st.avgCostTWD ?? st.avgCost) * sh);
+              const pricePart = Math.round((net - st.avgCost * sh) * fx), fxPart = total - pricePart;
+              const sign = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+              return <div style={{ marginBottom:12, padding:10, borderRadius:10, background:C.card, fontSize:12, color:C.textSub }}>
+                {tr("試算損益")}：<strong style={{ color:pnlColor(total, C) }}>{sign(total)}</strong>
+                {st.market === "US" && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("股價")} {sign(pricePart)} · {tr("匯率")} {sign(fxPart)}</div>}
+                {String(Math.abs(total)) !== String(sellF.pnl) && <button onClick={() => setSellF(p => ({ ...p, pnl:String(Math.abs(total)), pnlType:total >= 0 ? "income" : "expense" }))} style={{ marginTop:6, padding:"4px 10px", borderRadius:8, fontSize:11, fontWeight:700, background:`${C.accent}20`, color:C.accentL, border:"none", cursor:"pointer" }}>{tr("填入下方損益")}</button>}
+              </div>;
+            })()}
             {sellF.shares && <div style={{ marginBottom:12, padding:10, borderRadius:10, background:`${C.accent}10`, fontSize:12, color:C.textSub }}>
               {tr("賣出後剩餘")}：<strong style={{ color:C.accentL }}>{Math.max(0, st.totalSh - +sellF.shares)}{tr("股")}</strong>
             </div>}
@@ -186,10 +217,16 @@ export default function StockModals({
                 <button onClick={() => setSellF(p => ({ ...p, pnlType:"income" }))} style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, background:sellF.pnlType==="income"?`${C.income}28`:C.card, color:sellF.pnlType==="income"?C.income:C.muted, border:`1px solid ${sellF.pnlType==="income"?C.income:C.border}`, cursor:"pointer" }}>📈 {tr("獲利")}</button>
                 <button onClick={() => setSellF(p => ({ ...p, pnlType:"expense" }))} style={{ flex:1, padding:"8px", borderRadius:10, fontWeight:700, fontSize:13, background:sellF.pnlType==="expense"?`${C.expense}28`:C.card, color:sellF.pnlType==="expense"?C.expense:C.muted, border:`1px solid ${sellF.pnlType==="expense"?C.expense:C.border}`, cursor:"pointer" }}>📉 {tr("虧損")}</button>
               </div>
-              <CalcInp label={tr("損益金額")} value={sellF.pnl} onChange={v => setSellF(p => ({ ...p, pnl:v }))} />
+              <CalcInp label={st.market === "US" ? tr("損益金額（台幣，含匯率影響）") : tr("損益金額")} value={sellF.pnl} onChange={v => setSellF(p => ({ ...p, pnl:v }))} />
               <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{tr("填入後會自動在總覽產生收支記錄")}</div>
             </Fld>
             <Sl label={tr("款項回流帳戶")} value={sellF.returnAcc} onChange={e => setSellF(p => ({ ...p, returnAcc:e.target.value }))}><option value="">— {tr("選擇")} —</option>{accs.filter(a => a.type !== "credit").map(a => <option key={a.id} value={a.name}>{AT[a.type] || ""} {a.name}</option>)}</Sl>
+            {(() => {
+              const retA = accs.find(a => a.name === sellF.returnAcc), net = (+sellF.totalProceeds || 0) - (+sellF.fee || 0);
+              if (!retA || (retA.cur||"TWD") === stCur || !(net > 0)) return null;
+              const fx = st.market === "US" ? (+sellF.fxRate > 0 ? +sellF.fxRate : usdNow) : 1;
+              return <div style={{ fontSize:11, color:C.textSub, marginTop:-4, marginBottom:8 }}>💱 {retA.name} {tr("會入帳")} <strong>{fmt(amtInAcc(net, stCur, fx, retA), retA.cur||"TWD")}</strong>（{fmt(net, stCur)}{stCur === "USD" ? ` × ${fx}` : ""} {tr("換算")}）</div>;
+            })()}
             <Fld label={tr("這筆是什麼心態下賣的？（選填，事後回顧用）")}>
               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                 {EMOTIONS.map(em => <button key={em.key} onClick={() => setSellF(p => ({ ...p, emotion:p.emotion===em.key?"":em.key }))} style={{ padding:"6px 10px", borderRadius:10, fontSize:12, fontWeight:700, background:sellF.emotion===em.key?`${em.color}28`:C.card, color:sellF.emotion===em.key?em.color:C.muted, border:`1px solid ${sellF.emotion===em.key?em.color:C.border}`, cursor:"pointer" }}>{em.icon} {em.label}</button>)}
@@ -236,9 +273,14 @@ export default function StockModals({
             if (p.avgCost && +p.avgCost > 0) return { ...p, totalCost:v, shares:String(Math.round(+v/+p.avgCost)) };
             return { ...p, totalCost:v };
           })} />
+          {buyF.market === "US" && <>
+            <Inp label="當初買進的平均匯率（選填，1 美元 = ? 台幣）" type="number" placeholder={usdNow.toFixed(2)} value={buyF.fxRate || ""} onChange={e => setBuyF(p => ({ ...p, fxRate:e.target.value }))} />
+            <div style={{ fontSize:10, color:C.muted, marginTop:-4, marginBottom:8 }}>美股成本請填美元。填了匯率才算得出台幣成本和匯率損益；沒填就用今天的匯率 {usdNow.toFixed(2)}。</div>
+          </>}
           <div style={{ display:"flex", gap:8, marginTop:8 }}>
             <Btn style={{ flex:1 }} onClick={() => {
               if (!buyF.ticker || !buyF.shares) return;
+              const manualFxRate = buyF.market === "US" && +buyF.fxRate > 0 ? +buyF.fxRate : null;
               upd("stocks", p => {
                 const ex = p.find(s => s.ticker === buyF.ticker && s.acc === buyF.acc);
                 if (ex) {
@@ -248,6 +290,7 @@ export default function StockModals({
                     manualShares: +buyF.shares,
                     manualAvgCost: buyF.avgCost ? +buyF.avgCost : s.manualAvgCost,
                     manualTotalCost: buyF.totalCost ? +buyF.totalCost : s.manualTotalCost,
+                    manualFxRate: manualFxRate ?? s.manualFxRate ?? null,
                   } : s);
                 }
                 return [...p, {
@@ -257,6 +300,7 @@ export default function StockModals({
                   manualShares: +buyF.shares,
                   manualAvgCost: buyF.avgCost ? +buyF.avgCost : null,
                   manualTotalCost: buyF.totalCost ? +buyF.totalCost : null,
+                  manualFxRate,
                   trades: [],
                 }];
               });
@@ -296,10 +340,22 @@ export default function StockModals({
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("未實現損益")}</div>
-                  <div style={{ fontWeight:900, fontSize:16, color:pnlColor(pnl, C), ...maskStyle }}>{pnl >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(pnl))}</div>
+                  <div style={{ fontWeight:900, fontSize:16, color:pnlColor(pnl, C), ...maskStyle }}>{pnl >= 0 ? "▲ +" : "▼ "}{fmt(Math.abs(pnl), stCur)}</div>
                   <div style={{ fontSize:11, fontWeight:700, color:pnlColor(pnl, C), ...maskStyle }}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%</div>
                 </div>
               </div>}
+              {st.market === "US" && hasPrice && st.totalSh > 0 && (() => {
+                // 台幣口徑：成本用買進當時的匯率，市值用今天的匯率；台幣損益＝股價損益＋匯率損益
+                const pricePart = st.upnlTWD - st.fxPnl;
+                const sign = (v) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
+                const avgFx = st.totalCost > 0 ? st.totalCostTWD / st.totalCost : usdNow;
+                return <div style={{ padding:"8px 0 0", borderTop:`1px solid ${C.border}`, fontSize:11, color:C.textSub, ...maskStyle }}>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}><span>{tr("台幣成本")}（{tr("平均匯率")} {avgFx.toFixed(2)}）</span><span>{fmt(st.totalCostTWD)}</span></div>
+                  <div style={{ display:"flex", justifyContent:"space-between" }}><span>{tr("台幣市值")}（{tr("今日匯率")} {usdNow.toFixed(2)}）</span><span>{fmt(st.mvTWD)}</span></div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, color:pnlColor(st.upnlTWD, C) }}><span>{tr("台幣損益")}</span><span>{sign(st.upnlTWD)}</span></div>
+                  <div style={{ display:"flex", justifyContent:"space-between", color:C.muted }}><span>· {tr("股價")} {sign(pricePart)}</span><span>· {tr("匯率")} {sign(st.fxPnl)}</span></div>
+                </div>;
+              })()}
               {st.lastUpdated && <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>{tr("更新")}：{st.lastUpdated}</div>}
               <a href={`https://news.google.com/search?q=${encodeURIComponent(st.ticker + " " + (st.name||""))}`} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.accent}18`, border:`1px solid ${C.accent}44`, color:C.accentL, fontWeight:700, fontSize:11, textDecoration:"none" }}>📰 {tr("查這支股票的新聞")} →</a>
             </Card>
@@ -410,12 +466,18 @@ export default function StockModals({
                         })} style={{ ...iSt, padding:"6px 8px" }} />
                         <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>{tr("直接改這裡只會更新總成本，股數/單價不會跟著變")}</div>
                       </div>}
+                      {stCur === "USD" && <div style={{ marginBottom:6 }}>
+                        <div style={{ fontSize:10, color:C.textSub, marginBottom:2 }}>{tr("匯率（1 美元 = ? 台幣）")}</div>
+                        <input type="number" value={tradeDraft.fxRate} placeholder={usdNow.toFixed(2)} onChange={e => setTradeDraft(d => ({ ...d, fxRate:e.target.value }))} style={{ ...iSt, padding:"6px 8px" }} />
+                        <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>{tr("舊紀錄沒有匯率的可以在這裡補，才算得出這筆的匯率損益（不會改動帳戶餘額）")}</div>
+                      </div>}
                       <div style={{ display:"flex", gap:6 }}>
                         <button onClick={() => {
                           const newShares = +tradeDraft.shares||0, newPrice = +tradeDraft.price||0, newTotalCost = +tradeDraft.totalCost||0;
-                          if (newShares === t.shares && newPrice === t.price && (t.type!=="buy" || newTotalCost === (t.totalCost||0))) { setEditingTrade(null); return; }
+                          const newFx = stCur === "USD" && +tradeDraft.fxRate > 0 ? +tradeDraft.fxRate : (t.fxRate ?? null);
+                          if (newShares === t.shares && newPrice === t.price && (t.type!=="buy" || newTotalCost === (t.totalCost||0)) && newFx === (t.fxRate ?? null)) { setEditingTrade(null); return; }
                           confirm(`${tr("確定修改這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？會影響這檔股票的總股數/成本/總資產顯示")}`, () => {
-                            upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newTotalCost : x.totalCost } : x) } : s));
+                            upd("stocks", p => p.map(s => s.id===st.id ? { ...s, trades:s.trades.map(x => x.id===t.id ? { ...x, shares:newShares, price:newPrice, totalCost: x.type==="buy" ? newTotalCost : x.totalCost, ...(newFx != null ? { fxRate:newFx } : {}) } : x) } : s));
                             setEditingTrade(null);
                           }, "確認編輯");
                         }} style={{ flex:1, padding:8, borderRadius:8, background:C.accent, color:"#fff", border:"none", fontWeight:700, fontSize:12, cursor:"pointer" }}>{tr("完成")}</button>
@@ -423,16 +485,16 @@ export default function StockModals({
                       </div>
                     </div>
                   ) : (
-                    <SwipeRow onDelete={() => confirm(t.linkedTxnId ? `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？帳戶餘額會一併退回")}` : `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？（這筆是舊資料，沒有連動帳戶，不會自動退回帳戶餘額）")}`, () => deleteTrade(st.id, t.id))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price), totalCost:String(t.totalCost || Math.round(t.shares*t.price+(t.fee||0))) }); }}>
+                    <SwipeRow onDelete={() => confirm(t.linkedTxnId ? `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？帳戶餘額會一併退回")}` : `${tr("刪除這筆")}${t.type==="buy"?tr("買進"):tr("賣出")}${tr("紀錄？（這筆是舊資料，沒有連動帳戶，不會自動退回帳戶餘額）")}`, () => deleteTrade(st.id, t.id))} onClick={() => { setEditingTrade(t.id); setTradeDraft({ shares:String(t.shares), price:String(t.price), totalCost:String(t.totalCost || Math.round(t.shares*t.price+(t.fee||0))), fxRate:t.fxRate ? String(t.fxRate) : "" }); }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", borderTop:i>0?`1px solid ${C.border}`:undefined }}>
                         <div style={{ width:32, height:32, borderRadius:9, background:t.type==="buy"?`${C.income}15`:`${C.expense}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:900, color:t.type==="buy"?C.income:C.expense, flexShrink:0 }}>{t.type==="buy"?tr("買"):tr("賣")}</div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:12, color:C.text, fontWeight:700 }}>{t.shares} {tr("股")} ＠ {fmtPrice(t.price, stCur)}</div>
-                          <div style={{ fontSize:11, color:C.muted }}>{t.date}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
+                          <div style={{ fontSize:11, color:C.muted }}>{t.date}{stCur === "USD" && t.fxRate ? ` · ${tr("匯率")} ${t.fxRate}` : ""}{t.emotion ? `・${EMOTIONS.find(e=>e.key===t.emotion)?.icon||""}${EMOTIONS.find(e=>e.key===t.emotion)?.label||""}` : ""}</div>
                         </div>
                         <div style={{ textAlign:"right", flexShrink:0 }}>
                           <div style={{ fontWeight:900, fontSize:13, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), stCur)}</div>
-                          {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl))}</div>}
+                          {t.type==="sell" && t.pnl != null && <div style={{ fontSize:11, color:pnlColor(t.pnl,C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl), t.pnlCur || stCur)}</div>}
                         </div>
                         <span style={{ color:C.muted, fontSize:12 }}>✏️</span>
                       </div>
@@ -447,8 +509,9 @@ export default function StockModals({
             <div style={{ display:"flex", gap:8, marginTop:12 }}>
               <Btn v="warn" style={{ flex:1 }} onClick={() => {
                 const proceeds=hasPrice?String(Math.round(st.curPrice*st.totalSh)):"";
-                const autoPnl=hasPrice?String(Math.round(Math.abs(pnl))):"";
-                setSellF({stockId:st.id,shares:String(st.totalSh),totalProceeds:proceeds,fee:"",pnl:autoPnl,pnlType:pnl>=0?"income":"expense",returnAcc:""});
+                const pnlTWD=st.market==="US"?(hasPrice?st.upnlTWD:0):pnl; // 美股損益用台幣記（含匯率影響）
+                const autoPnl=hasPrice?String(Math.round(Math.abs(pnlTWD))):"";
+                setSellF({stockId:st.id,shares:String(st.totalSh),totalProceeds:proceeds,fee:"",pnl:autoPnl,pnlType:pnlTWD>=0?"income":"expense",returnAcc:"",fxRate:""});
                 setModal("sellStock");
               }}>{tr("賣出")} {st.ticker}</Btn>
             </div>

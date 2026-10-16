@@ -49,7 +49,7 @@ export default function InvestPage({
               const st = held[0];
               if (!st) return;
               const hasPrice = st.curPrice > 0;
-              setSellF({ stockId:st.id, shares:String(st.totalSh), totalProceeds:hasPrice?String(Math.round(st.curPrice*st.totalSh)):"", fee:"", pnl:hasPrice?String(Math.round(Math.abs(st.upnl))):"", pnlType:st.upnl>=0?"income":"expense", returnAcc:"" });
+              setSellF({ stockId:st.id, shares:String(st.totalSh), totalProceeds:hasPrice?String(Math.round(st.curPrice*st.totalSh)):"", fee:"", pnl:hasPrice?String(Math.round(Math.abs(st.market==="US"?st.upnlTWD:st.upnl))):"", pnlType:(st.market==="US"?st.upnlTWD:st.upnl)>=0?"income":"expense", returnAcc:"", fxRate:"" });
               setModal("sellStock");
             };
             const actBtn = { flex:1, padding:"12px 0", borderRadius:14, fontSize:14, fontWeight:800, cursor:"pointer", border:"none" };
@@ -94,6 +94,9 @@ export default function InvestPage({
                             {upnl >= 0 ? "▲ +" : "▼ −"}{fmt(Math.abs(upnl))}<span style={{ fontWeight:700, marginLeft:6 }}>{upnl >= 0 ? "+" : ""}{(upnl / cost * 100).toFixed(2)}%</span>
                           </div>
                         )}
+                        {mv > 0 && cost > 0 && portfolioNow?.fxPnl ? (
+                          <div style={{ fontSize:11, color:C.muted, marginTop:2, ...maskStyle }}>{tr("其中美股匯率影響")} <span style={{ color:pnlColor(portfolioNow.fxPnl, C), fontWeight:700 }}>{portfolioNow.fxPnl > 0 ? "+" : "−"}{fmt(Math.abs(portfolioNow.fxPnl))}</span></div>
+                        ) : null}
                       </div>
                       <button onClick={async (e) => { e.stopPropagation(); setLoadingHoldings(true); try { await Promise.all([fetchAllPrices(undefined, { live:true }), refreshWatchStocks({ live:true })]); } finally { setLoadingHoldings(false); } }}
                         style={{ flexShrink:0, padding:"6px 10px", borderRadius:10, background:C.bg, border:"none", color:C.accentL, fontSize:11, fontWeight:700, cursor:"pointer" }}>
@@ -239,8 +242,9 @@ export default function InvestPage({
               </div>
 
               {Object.entries(stByAcc).map(([accN, stks]) => {
-                const accMv   = stks.reduce((s, x) => s + (x.mv > 0 ? x.mv : x.totalCost), 0);
-                const accCost = stks.reduce((s, x) => s + x.totalCost, 0);
+                // 同一個帳戶可能台股美股都有，一律用台幣口徑加總
+                const accMv   = stks.reduce((s, x) => s + (x.mv > 0 ? x.mvTWD : x.totalCostTWD), 0);
+                const accCost = stks.reduce((s, x) => s + x.totalCostTWD, 0);
                 const accPnl  = accMv - accCost;
                 const hasPrices = stks.some(x => x.curPrice > 0);
                 const isCollapsed = collapsed[`inv_${accN}`];
@@ -290,6 +294,12 @@ export default function InvestPage({
                                   <span>{st.totalSh}股 · 均 {fmtPrice(st.avgCost || 0, stCur)}/股</span>
                                   {hasPrice ? <span style={{ color:C.textSub }}>市價 {fmtPrice(st.curPrice, stCur)}{st.lastUpdated ? ` · ${st.lastUpdated}` : ""}</span> : <span>成本 {fmt(st.totalCost, stCur)}</span>}
                                 </div>
+                                {st.market === "US" && hasPrice && (
+                                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:2, ...maskStyle }}>
+                                    <span>≈ {fmt(st.mvTWD)} · {tr("台幣損益")} <span style={{ color:pnlColor(st.upnlTWD, C), fontWeight:700 }}>{st.upnlTWD >= 0 ? "+" : "−"}{fmt(Math.abs(st.upnlTWD))}</span></span>
+                                    {Math.round(st.fxPnl) !== 0 && <span>{tr("匯率")} {st.fxPnl >= 0 ? "+" : "−"}{fmt(Math.abs(st.fxPnl))}</span>}
+                                  </div>
+                                )}
                               </div>
                             </SwipeRow>
                           );
@@ -315,7 +325,7 @@ export default function InvestPage({
                         {closed.map((st, i) => {
                           const stCur = st.market === "US" ? "USD" : "TWD";
                           const sells = (st.trades||[]).filter(t => t.type === "sell");
-                          const realized = sells.reduce((s,t) => s + (t.pnl||0), 0);
+                          const realized = st.market === "US" ? st.realizedTWD : sells.reduce((s,t) => s + (t.pnl||0), 0); // 美股換成台幣（含匯率）
                           return (
                             <div key={st.id} onClick={() => { setSelStock(st); setModal("stockDetail"); }} style={{ padding:"12px 16px", borderTop:i > 0 ? `1px solid ${C.border}` : undefined, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                               <div>
@@ -326,7 +336,7 @@ export default function InvestPage({
                                 </div>
                                 <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{tr("已出清")}，{sells.length} {tr("次賣出")}</div>
                               </div>
-                              {sells.length > 0 && <div style={{ fontWeight:900, fontSize:13, color:pnlColor(realized, C) }}>{realized>=0?"+":""}{fmt(Math.round(realized), stCur)}</div>}
+                              {sells.length > 0 && <div style={{ fontWeight:900, fontSize:13, color:pnlColor(realized, C) }}>{realized>=0?"+":""}{fmt(Math.round(realized))}</div>}
                             </div>
                           );
                         })}
@@ -402,7 +412,7 @@ export default function InvestPage({
                             </div>
                             <div style={{ textAlign:"right", flexShrink:0 }}>
                               <div style={{ fontWeight:900, fontSize:12, color:C.text }}>{fmt(Math.round(t.type==="buy" ? (t.totalCost||(t.shares*t.price+(t.fee||0))) : (t.shares*t.price-(t.fee||0))), t.market === "US" ? "USD" : "TWD")}</div>
-                              {t.type === "sell" && t.pnl != null && <div style={{ fontSize:10, fontWeight:700, color:pnlColor(t.pnl, C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl), t.market === "US" ? "USD" : "TWD")}</div>}
+                              {t.type === "sell" && t.pnl != null && <div style={{ fontSize:10, fontWeight:700, color:pnlColor(t.pnl, C) }}>{t.pnl>=0?"+":""}{fmt(Math.round(t.pnl), t.pnlCur || (t.market === "US" ? "USD" : "TWD"))}</div>}
                             </div>
                           </div>
                         ))}

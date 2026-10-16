@@ -107,10 +107,10 @@ export default function WalletPage({
               const accDisplayVal = (a) => {
                 if (a.type !== "investment") return a.bal;
                 const stForAcc = stByAcc[a.name] || [];
-                return stForAcc.reduce((s,st)=>s+st.totalCost,0);
+                return stForAcc.reduce((s,st)=>s+st.totalCostTWD,0) / (rates[a.cur||"TWD"] || 1); // 台幣成本換回帳戶幣別
               };
               // 持股成本每檔依市場換台幣（美股是美元），跟總資產淨值的算法一致
-              const accTwd = (a) => a.type !== "investment" ? toTWD(a.bal, a.cur, rates) : (stByAcc[a.name] || []).reduce((s,st)=>s+toTWD(st.totalCost, st.market==="US"?"USD":"TWD", rates),0);
+              const accTwd = (a) => a.type !== "investment" ? toTWD(a.bal, a.cur, rates) : (stByAcc[a.name] || []).reduce((s,st)=>s+st.totalCostTWD,0); // 美股成本用買進當時的匯率
               const total = items.filter(a=>a.vis).reduce((s, a) => s + accTwd(a), 0);
               if (!all.length) return null;
               const moveAcc = (id, dir) => {

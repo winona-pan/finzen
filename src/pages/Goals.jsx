@@ -3,7 +3,7 @@ import { getRuntimeLang } from "../i18nRuntime";
 
 export default function GoalsPage({
   C, tab, setTab, fmt, upd, setModal, confirm, TODAY,
-  accs, buckets, goals, useMvForAssets, stTotMv,
+  accs, buckets, goals, useMvForAssets, stTotMv, stocks, rates,
   setEditGoal, goalCurrentAmount, isGoalArchived, isGoalComplete, setGoalArchived, setOffsetGoal, setDepositGoal,
   curSavingsTarget, savingsProgress, curYm, getGoalSavingsTarget, allocSettings, setAllocSettings, yearlyGoalSchedule, goalRecurringAmount, goalStockShares, priceForTicker, goalDisplayAmount,
   pendingAutoInvest, confirmAutoInvest, iSt, createEmergencyFund,
@@ -59,7 +59,9 @@ export default function GoalsPage({
           const gs = goalStockShares(g);
           if (!(gs.shares > 0)) return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>還沒有透過這個目標買進任何 {g.shareTicker}，進度會在確認買進後開始累加</div>;
           const price = g.sharePriceOverride > 0 ? +g.sharePriceOverride : priceForTicker(g.shareTicker);
-          return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>算法：{gs.shares} 股 × {goalUseMv ? `目前股價 ${fmt(price)}` : `平均成本 ${fmt(gs.shares>0?gs.cost/gs.shares:0)}`} = {fmt(current)}</div>;
+          const isUS = stocks.some(st => st.ticker === g.shareTicker && st.market === "US");
+          const fxNote = isUS && goalUseMv ? ` × 匯率 ${(rates.USD||1).toFixed(2)}` : "";
+          return <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>算法：{gs.shares} 股 × {goalUseMv ? `目前股價 ${fmt(price, isUS ? "USD" : "TWD")}${fxNote}` : `平均成本 ${fmt(gs.shares>0?(gs.costTWD ?? gs.cost)/gs.shares:0)}`} = {fmt(current)}</div>;
         })()}
         {remaining > 0 && !g.wishPurchased && <div style={{ marginTop:6, fontSize:compact?11:12, color:C.muted, textAlign:"center" }}>還差 <strong style={{ color:pct>=100?C.teal:col }}>{fmt(remaining)}</strong></div>}
         {g.wishPurchased ? (

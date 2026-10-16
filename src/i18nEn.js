@@ -188,6 +188,15 @@ export const EN = {
   // ── 賣出 ──
   "賣出股票":"Sell stock", "選擇持股":"Holding", "持股":"Holdings", "均成本":"Avg cost", "現價":"Price",
   "賣出股數":"Shares to sell", "賣出價格（每股）":"Sell price per share", "賣出總金額":"Total proceeds", "手續費（選填）":"Fee (optional)",
+  // ── 美股匯率 ──
+  "美股請填美元。":"Enter US stocks in USD.", "買進匯率（1 美元 = ? 台幣）":"Exchange rate at purchase (TWD per 1 USD)",
+  "賣出匯率（1 美元 = ? 台幣）":"Exchange rate at sale (TWD per 1 USD)", "沒填就用今天的匯率":"Leave blank to use today's rate",
+  "，可以改成銀行或券商實際換匯的匯率。台幣成本＝美元成本 × 這個匯率，之後匯率變動的賺賠會另外算成「匯率損益」。":". You can change it to the rate your bank or broker actually gave you. TWD cost = USD cost × this rate; later currency moves are tracked separately as FX gain/loss.",
+  "匯率（1 美元 = ? 台幣）":"Exchange rate (TWD per 1 USD)", "舊紀錄沒有匯率的可以在這裡補，才算得出這筆的匯率損益（不會改動帳戶餘額）":"Add the rate for older entries so this trade's FX gain/loss can be worked out (account balances are not changed)",
+  "會扣":"will be charged", "會入帳":"will receive", "換算":"converted", "試算損益":"Estimated P/L", "匯率":"FX",
+  "填入下方損益":"Use this P/L", "損益金額（台幣，含匯率影響）":"P/L amount (TWD, incl. FX)", "台幣成本":"TWD cost", "台幣市值":"TWD value",
+  "平均匯率":"avg rate", "今日匯率":"today's rate", "台幣損益":"TWD P/L", "其中美股匯率影響":"of which US-stock FX",
+  "當初買進的平均匯率（選填，1 美元 = ? 台幣）":"Average exchange rate when bought (optional, TWD per 1 USD)",
   "賣出後剩餘":"Remaining after sale", "損益記錄（手動）":"Profit / loss (manual)", "損益金額":"Profit / loss amount",
   "填入後會自動在總覽產生收支記錄":"An income or expense entry is added to Overview automatically", "款項回流帳戶":"Deposit proceeds to",
   "這筆是什麼心態下賣的？（選填，事後回顧用）":"What was your mindset for this sale? (optional, for later review)", "確認賣出":"Confirm sale",
