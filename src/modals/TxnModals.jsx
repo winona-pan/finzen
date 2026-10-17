@@ -717,6 +717,10 @@ function AllocEngineSheet({ allocSettings, setAllocSettings, startNextMonthPlan,
       confirm(`${tr("確定把這份分流建議套用到")} ${applyMonths.join("、")}？${tr("只會設定各目標的存錢目標提醒，不會自動轉帳；年度現金流預測會直接採用這裡套用的數字")}`, () => {
         const livingSet = livingBudgetFor(planStartYm);
         if (livingSet != null) applyMonths.forEach(ym => setLivingBudgetForMonth(ym, livingSet)); // 一起套用的月份，生活費也設成一樣
+        /* 連續達標用：記下套用當下實際採用的生活費。沒自訂、直接用建議值也要記，不然那個月結束後判斷不了有沒有達標。
+           另外存一份，不寫進 livingBudgetByMonth，不然畫面會變成「已自訂」、之後也不會再跟著建議值更新 */
+        const appliedLiving = livingSet ?? alloc.livingAmt;
+        if (appliedLiving > 0) setAllocSettings({ appliedLivingByMonth: { ...(allocSettings.appliedLivingByMonth || {}), ...Object.fromEntries(applyMonths.map(ym => [ym, Math.round(appliedLiving)])) } });
         applyMonths.forEach(ym => {
           [...alloc.goalAllocs, ...alloc.wishlistAllocs].forEach(g => {
             // 一個目標可能同時分給好幾個子帳戶（g.splits），resolveGoalDestinations 會依比例／固定金額拆好；
