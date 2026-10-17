@@ -103,13 +103,74 @@ function SimpleMarkdown({ text, C }) {
   return <div>{blocks}</div>;
 }
 
+/* ── 收藏的回答：最新存的排最上面；平常只露出前 3 行，點一下展開完整回答。存的是原文，不能編輯，只能複製或刪除 ── */
+function SavedAnswers({ C, tr, advisorSaved, removeAdvisorSaved, confirm }) {
+  const [openId, setOpenId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  const list = [...advisorSaved].reverse();
+
+  const copy = async (s) => {
+    const src = (s.sources || []).map(x => `- ${x.title || x.uri}：${x.uri}`).join("\n");
+    const plain = `${tr("問")}：${s.q}\n\n${s.text}${src ? `\n\n${tr("參考來源")}：\n${src}` : ""}`;
+    try { await navigator.clipboard.writeText(plain); setCopiedId(s.id); setTimeout(() => setCopiedId(c => c === s.id ? null : c), 1500); }
+    catch { alert(plain); }
+  };
+
+  if (!list.length) {
+    return (
+      <div style={{ padding:"40px 24px", textAlign:"center", fontSize:12, color:C.muted, lineHeight:1.8 }}>
+        {tr("還沒有收藏的回答。在對話裡按回答下面的「☆ 加入收藏」，就會存到這裡，清空對話也不會消失。")}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:"12px 16px", paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))", display:"flex", flexDirection:"column", gap:10 }}>
+      {list.map(s => {
+        // 短回答本來就不到 3 行，不用顯示「展開」也不用截
+        const long = s.text.split("\n").filter(l => l.trim()).length > 3 || s.text.length > 120;
+        const open = !long || openId === s.id;
+        return (
+          <div key={s.id} style={{ padding:"12px 14px", borderRadius:14, background:C.card, border:`1px solid ${C.border}` }}>
+            <div onClick={() => long && setOpenId(open ? null : s.id)} style={{ cursor:long?"pointer":"default" }}>
+              <div style={{ fontWeight:900, fontSize:13, color:C.text, lineHeight:1.5 }}>{s.q || tr("（沒有問題）")}</div>
+              <div style={{ fontSize:10, color:C.muted, marginTop:2, marginBottom:6 }}>{s.savedAt}</div>
+              {/* 收合時用高度截掉，大約露出 3 行（13px × 行高 1.6）；底部漸層蓋掉被切一半的那行 */}
+              <div style={{ position:"relative", fontSize:13, lineHeight:1.6, color:C.text, ...(open ? {} : { maxHeight:"4.8em", overflow:"hidden" }) }}>
+                <SimpleMarkdown text={s.text} C={C} />
+                {!open && <div style={{ position:"absolute", left:0, right:0, bottom:0, height:"1.6em", background:`linear-gradient(transparent, ${C.card})` }} />}
+              </div>
+              {!open && <div style={{ fontSize:11, color:C.accentL, marginTop:4 }}>{tr("展開")} ▾</div>}
+            </div>
+            {open && s.sources && s.sources.length > 0 && (
+              <div style={{ marginTop:6, display:"flex", flexDirection:"column", gap:4 }}>
+                <div style={{ fontSize:10, color:C.muted }}>🔍 {tr("參考來源")}：</div>
+                {s.sources.map((x, xi) => (
+                  <a key={xi} href={x.uri} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:C.accentL, textDecoration:"none", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>🔗 {x.title || x.uri}</a>
+                ))}
+              </div>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:14, marginTop:8 }}>
+              {long && open && <button onClick={() => setOpenId(null)} style={{ marginRight:"auto", fontSize:11, color:C.accentL, background:"none", border:"none", cursor:"pointer", padding:0 }}>{tr("收合")} ▴</button>}
+              <button onClick={() => copy(s)} style={{ fontSize:11, color:C.muted, background:"none", border:"none", cursor:"pointer", padding:0 }}>{copiedId === s.id ? `✅ ${tr("已複製")}` : `📋 ${tr("複製")}`}</button>
+              <button onClick={() => confirm(tr("確定刪除這則收藏？"), () => removeAdvisorSaved(s.id))} style={{ fontSize:11, color:C.danger, background:"none", border:"none", cursor:"pointer", padding:0 }}>🗑 {tr("刪除")}</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── AI 理財顧問：獨立一頁，跟目標、訂閱一樣是底部導覽切換的頁面，不是彈窗；
    用 Firebase AI Logic（Gemini）回答問題，會自動帶入目前的財務快照當背景資料；
    「查新聞」開關打開時，會改用有連上 Google 搜尋的模型，適合問股價漲跌、財經新聞這種即時性問題 ── */
 export default function AdvisorPage({
   tab, setTab, C, iSt, Btn, tr,
   aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
+  advisorSaved, toggleAdvisorSaved, removeAdvisorSaved, confirm,
 }) {
+  const [view, setView] = useState("chat"); // "chat" 對話 / "saved" 收藏
   const [draft, setDraft] = useState("");
   const [grounded, setGrounded] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
@@ -127,7 +188,7 @@ export default function AdvisorPage({
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ block:"end" });
-  }, [advisorHistory, advisorLoading]);
+  }, [advisorHistory, advisorLoading, view]);
 
   /* 輸入框跟著打字內容變高（最多到一個高度就自己捲動），不要一行長長的 */
   const autoGrow = () => {
@@ -159,9 +220,18 @@ export default function AdvisorPage({
             <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>{tr("會參考你完整的資產、收支、投資、目標資料回答；免費額度大約一天20次左右，用完要等隔天")}</div>
           </div>
         </div>
+        {/* 對話／收藏切換：收藏的回答放同一頁，不另開頁面 */}
+        <div style={{ display:"flex", gap:4, marginTop:10, padding:3, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>
+          {[{ k:"chat", l:`💬 ${tr("對話")}` }, { k:"saved", l:`⭐ ${tr("收藏")}${advisorSaved.length ? ` (${advisorSaved.length})` : ""}` }].map(o => (
+            <button key={o.k} onClick={() => setView(o.k)} style={{ flex:1, padding:"6px 0", borderRadius:9, border:"none", cursor:"pointer", fontSize:12, fontWeight:700,
+              background:view===o.k?C.accent:"transparent", color:view===o.k?"#fff":C.muted }}>{o.l}</button>
+          ))}
+        </div>
       </div>
 
-      {!aiEnabled ? (
+      {view === "saved" ? (
+        <SavedAnswers C={C} tr={tr} advisorSaved={advisorSaved} removeAdvisorSaved={removeAdvisorSaved} confirm={confirm} />
+      ) : !aiEnabled ? (
         <div style={{ padding:"40px 24px", textAlign:"center" }}>
           <div style={{ fontSize:32, marginBottom:12 }}>🤖</div>
           <div style={{ fontSize:13, color:C.text, fontWeight:700, marginBottom:8 }}>{tr("AI 顧問還沒設定好")}</div>
@@ -206,6 +276,16 @@ export default function AdvisorPage({
                       ))}
                     </div>
                   )}
+                  {m.role === "model" && (() => {
+                    // 這則回答對應的問題：就是它前一則使用者訊息
+                    const q = advisorHistory[i - 1]?.role === "user" ? advisorHistory[i - 1].text : "";
+                    const saved = advisorSaved.some(s => s.q === q && s.text === m.text);
+                    return (
+                      <button onClick={() => toggleAdvisorSaved(q, m)} style={{ marginTop:4, padding:"2px 0", background:"none", border:"none", cursor:"pointer", fontSize:11, fontWeight:700, color:saved?C.accentL:C.muted }}>
+                        {saved ? `⭐ ${tr("已收藏")}` : `☆ ${tr("加入收藏")}`}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             ))}
