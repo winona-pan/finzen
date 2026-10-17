@@ -2720,16 +2720,22 @@ export default function App() {
      以及史上最長連續紀錄（longest，用來解鎖獎勵徽章，中斷過也不會消失）。
      每個月的「生活水位」用跟 financialSuggestion 一樣的邏輯（該月之前3個月平均實際支出）往回算，
      這樣才公平比較「那個當下」的水位，而不是拿現在的水位去套過去。有設定手動覆寫的話，過去的月份也一律用覆寫值。
-     從「第一次在智慧分流設定生活費的那個月」開始算：在那之前根本還沒有生活費目標，那些月份不算，也不影響最長紀錄和徽章；
+     從「第一次在智慧分流設定或套用生活費的那個月」開始算：在那之前根本還沒有生活費目標，那些月份不算，也不影響最長紀錄和徽章；
      一次都還沒設定過就不顯示連續達標。 ── */
   const livingStreak = useMemo(() => {
-    const startYm = Object.keys(allocSettings.livingBudgetByMonth || {}).filter(ym => livingBudgetFor(ym) != null).sort()[0];
+    const appliedLivingFor = (ym) => { const v = (allocSettings.appliedLivingByMonth || {})[ym]; return v > 0 ? +v : null; };
+    const startYm = [
+      ...Object.keys(allocSettings.livingBudgetByMonth || {}).filter(ym => livingBudgetFor(ym) != null),
+      ...Object.keys(allocSettings.appliedLivingByMonth || {}).filter(ym => appliedLivingFor(ym) != null),
+    ].sort()[0];
     if (!startYm) return { current:0, longest:0, months:[] };
     const allYms = [...new Set(txns.map(t => t.date.slice(0,7)))].filter(ym => ym >= startYm && ym < curYm).sort();
     const monthly = allYms.map(ym => {
       let budget;
       if (livingBudgetFor(ym) != null) {
         budget = livingBudgetFor(ym); // 那個月在智慧分流裡設定過生活費，就用那個月自己的
+      } else if (appliedLivingFor(ym) != null) {
+        budget = appliedLivingFor(ym); // 沒自訂、直接套用建議值的月份：用套用當下的金額
       } else if (allocSettings.livingBudgetOverride) {
         budget = allocSettings.livingBudgetOverride;
       } else {
