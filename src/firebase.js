@@ -10,7 +10,7 @@
    ══════════════════════════════════════════════════════ */
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, GoogleAuthProvider, OAuthProvider, signInAnonymously, signInWithRedirect, signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, runTransaction, onSnapshot } from "firebase/firestore";
+import { initializeFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, runTransaction, onSnapshot } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
 // TODO：把這裡換成你自己 Firebase 專案設定頁複製出來的物件
@@ -32,7 +32,8 @@ if (isConfigured) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    // 資料裡偶爾會有 undefined 欄位（例如沒填的選填欄位），Firestore 預設遇到就整包拒收、每次同步都失敗；這裡讓它直接略過那些欄位
+    db = initializeFirestore(app, { ignoreUndefinedProperties: true });
     // 只在本機開發測試時（npm run dev 加上 VITE_FIREBASE_EMULATOR=1）連到本機模擬器，正式網站不會用到
     if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATOR) {
       connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });

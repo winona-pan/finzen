@@ -65,3 +65,21 @@ export function mergeAppData(base, local, remote) {
   if (!local) return remote;
   return mergeValue(base || {}, local, remote);
 }
+
+/* 登入讀到雲端資料（雲端已經有資料）時，決定這台裝置最後要用哪一份。
+   回傳 { data, upload, backupReason }：data 是要用的資料；upload 為 true 代表結果跟雲端不同、要傳上去；
+   backupReason 有值代表本機資料會被換掉或合併，套用前要先備份。
+   以前是「沒有待上傳標記就直接用雲端整包蓋掉本機」——打開 App 時雲端還在讀、或沒登入時記的帳都沒有標記，就這樣不見。現在：
+   - 這台裝置沒有自己的資料，或資料屬於別的帳號 → 用雲端的（別的帳號的資料不能混進來）
+   - 有上次同步的版本當基準 → 三方合併，兩邊各自改的都留下
+   - 沒有基準（這台裝置沒跟這個帳號同步過）→ 清單兩邊都留，同一個欄位兩邊不一樣時以雲端為準
+     （本機那份可能是從預設值開始記的，例如帳戶餘額，不能拿來蓋掉雲端的） */
+export function reconcileOnLogin({ local, hasLocal, owner, uid, base, cloud }) {
+  if (!hasLocal || (owner && owner !== uid)) {
+    return { data: cloud, upload: false, backupReason: hasLocal ? "換成另一個帳號的雲端資料前" : null };
+  }
+  const merged = base ? mergeAppData(base, local, cloud) : mergeAppData(null, cloud, local);
+  // 結果跟雲端一樣：有基準時代表本機改的都已經在雲端了，不用備份；沒基準時本機某些欄位會被雲端的值取代，先備份
+  if (same(merged, cloud)) return { data: cloud, upload: false, backupReason: base || same(local, cloud) ? null : "登入時換成雲端資料前" };
+  return { data: merged, upload: true, backupReason: "登入時跟雲端合併前" };
+}
