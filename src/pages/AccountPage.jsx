@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 /* ── 帳戶：獨立一頁，跟目標、訂閱一樣是底部導覽切換的頁面，不是彈窗 ── */
 export default function AccountPage({
   tab, setTab, C, iSt, Btn, confirm, upd, TODAY,
-  firebaseEnabled, cloudUser, authLoading, syncStatus,
+  firebaseEnabled, cloudUser, authLoading, syncStatus, syncError, listBackups, restoreBackup, dataSizeBytes,
   doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
   hideAmounts, toggleHideAmounts, tr,
   doEmailRegister, doEmailLogin, doPasswordReset,
@@ -33,7 +33,7 @@ export default function AccountPage({
           ) : authLoading ? (
             <div style={{ fontSize:12, color:C.muted }}>檢查登入狀態中…</div>
           ) : cloudUser ? (
-            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} tr={tr} />
+            <LoggedInView cloudUser={cloudUser} syncStatus={syncStatus} syncError={syncError} dataSizeBytes={dataSizeBytes} doCloudLogout={doCloudLogout} doUpdateNickname={doUpdateNickname} doDeleteCloudData={doDeleteCloudData} confirm={confirm} C={C} iSt={iSt} Btn={Btn} tr={tr} />
           ) : (
             <LoggedOutView doCloudLogin={doCloudLogin} doAppleLogin={doAppleLogin} doAnonLogin={doAnonLogin} doEmailRegister={doEmailRegister} doEmailLogin={doEmailLogin} doPasswordReset={doPasswordReset} confirm={confirm} C={C} iSt={iSt} Btn={Btn} tr={tr} />
           )}
@@ -87,6 +87,7 @@ export default function AccountPage({
               }} v="danger" sz="sm">🗑 清空</Btn>
             </div>
             <div style={{ fontSize:11, color:C.muted }}>資料存在本機瀏覽器，建議定期匯出備份。</div>
+            {firebaseEnabled && <AutoBackups listBackups={listBackups} restoreBackup={restoreBackup} confirm={confirm} C={C} />}
           </div>
       </div>
     </div>
@@ -124,7 +125,7 @@ function LoggedOutView({ doCloudLogin, doAppleLogin, doAnonLogin, doEmailRegiste
         <div style={{ width:56, height:56, borderRadius:16, margin:"0 auto 12px", background:`linear-gradient(135deg,${C.accent},${C.accentD||C.accent})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, boxShadow:`0 8px 24px ${C.accent}44` }}>💰</div>
         <div style={{ fontSize:16, fontWeight:900, color:C.text, marginBottom:4 }}>歡迎回來</div>
         <div style={{ fontSize:12, color:C.muted, lineHeight:1.6, padding:"0 8px" }}>
-          登入後可以在多個裝置之間同步資料。第一次登入會把這台裝置目前的資料上傳成雲端的起始版本；之後每台登入同一個帳號的裝置都會用雲端最新的資料。
+          登入後可以在多個裝置之間同步資料。第一次登入會把這台裝置目前的資料上傳成雲端的起始版本；之後登入時，這台裝置上的資料會跟雲端合併，兩邊記的都會留下。
         </div>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -208,8 +209,37 @@ function EmailLoginPanel({ doEmailRegister, doEmailLogin, doPasswordReset, C, iS
   );
 }
 
+/* ── 自動備份：雲端同步要換掉或合併這台裝置的資料之前自動存的快照（最近 3 份），同步出狀況時可以從這裡救回來 ── */
+function AutoBackups({ listBackups, restoreBackup, confirm, C }) {
+  const [list, setList] = useState(null);
+  const reload = () => listBackups().then(setList);
+  useEffect(() => { reload(); }, []);
+  if (!list) return null;
+  const fmtAt = (at) => {
+    const t = new Date(at);
+    return `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  };
+  return (
+    <div style={{ marginTop:14 }}>
+      <div style={{ fontSize:11, fontWeight:700, color:C.textSub, marginBottom:6 }}>🛟 自動備份（同步前自動存的，最近 3 份）</div>
+      {!list.length ? (
+        <div style={{ fontSize:11, color:C.muted }}>還沒有自動備份。雲端同步要換掉或合併這台裝置的資料之前，會自動先存一份。</div>
+      ) : list.map(b => (
+        <div key={b.at} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", marginBottom:6, borderRadius:10, background:C.card, border:`1px solid ${C.border}` }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.text }}>{fmtAt(b.at)}</div>
+            <div style={{ fontSize:10, color:C.muted }}>{b.reason}・{(b.data?.txns || []).length} 筆交易</div>
+          </div>
+          <button onClick={() => confirm(`確定還原到 ${fmtAt(b.at)} 的版本嗎？現在的資料會先另外備份一份。`, async () => { await restoreBackup(b); reload(); alert("✅ 已還原"); }, "還原", true)}
+            style={{ padding:"5px 12px", borderRadius:8, background:C.accent, border:"none", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>還原</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── 已登入畫面：個人資料、同步狀態、登出、清除雲端備份——三個動作分開放，標示清楚各自的影響範圍 ── */
-function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn, tr }) {
+function LoggedInView({ cloudUser, syncStatus, syncError, dataSizeBytes, doCloudLogout, doUpdateNickname, doDeleteCloudData, confirm, C, iSt, Btn, tr }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(cloudUser.displayName || "");
   const [saving, setSaving] = useState(false);
@@ -234,9 +264,18 @@ function LoggedInView({ cloudUser, syncStatus, doCloudLogout, doUpdateNickname, 
           <div style={{ fontSize:11, color:C.muted }}>{isAnon ? "匿名帳號（沒有信箱，換裝置無法登入回來）" : cloudUser.email}</div>
         </div>
       </div>
-      <div style={{ fontSize:11, color:syncStatus==="error"?C.expense:C.teal, marginBottom:16 }}>
-        {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? "⚠️ 同步失敗，稍後會自動重試" : "✅ 已同步到雲端"}
+      <div style={{ fontSize:11, color:syncStatus==="error"||syncStatus==="offline"?C.expense:C.teal, marginBottom:6, lineHeight:1.6 }}>
+        {syncStatus === "pending" ? "⏳ 同步中…" : syncStatus === "error" ? `⚠️ 同步失敗：${syncError || "不明原因"}。稍後會自動重試` : syncStatus === "offline" ? "⚠️ 讀不到雲端資料，暫停同步，重新整理頁面會再試一次" : "✅ 已同步到雲端"}
       </div>
+      {/* 雲端一份資料最多 1MB，超過就存不上去；快滿時提早提醒 */}
+      {dataSizeBytes > 0 && (() => {
+        const kb = Math.round(dataSizeBytes / 1024), near = dataSizeBytes > 800 * 1024;
+        return (
+          <div style={{ fontSize:11, color:near?C.warn:C.muted, marginBottom:16, lineHeight:1.6 }}>
+            ☁️ 雲端資料 {kb}KB / 1024KB{near ? "：快到雲端上限了，超過就無法同步，跟開發者說一聲" : ""}
+          </div>
+        );
+      })()}
 
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ padding:12, borderRadius:12, background:C.card, border:`1px solid ${C.border}` }}>

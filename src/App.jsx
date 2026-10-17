@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ComposedChart, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { mergeAppData } from "./syncMerge";
+import { mergeAppData, reconcileOnLogin } from "./syncMerge";
+import { saveBackup, listBackups, clearBackups } from "./backup";
 import { getBulkQuotes } from "./bulkQuotes";
 import { firebaseEnabled, loginWithGoogle, loginWithApple, loginAnonymously, logoutFirebase, watchAuth, checkRedirectResult, loadCloudData, saveCloudData, saveCloudDataIfUnchanged, watchCloudData, deleteCloudData, updateCloudProfile, aiEnabled, aiGroundedEnabled, askAdvisor, registerWithEmail, loginWithEmail, resetPassword } from "./firebase";
 import { LANGUAGES, makeT } from "./i18n";
@@ -201,6 +202,19 @@ const CLOUD_DIRTY_KEY = "finzen_cloudDirty";
 const cloudBaseKey = (uid) => `finzen_cloudBase_${uid}`;
 function loadCloudBase(uid) { try { const v = JSON.parse(localStorage.getItem(cloudBaseKey(uid)) || "null"); return v && v.data ? v : { data:null, at:0 }; } catch { return { data:null, at:0 }; } }
 function saveCloudBase(uid, data, at) { try { localStorage.setItem(cloudBaseKey(uid), JSON.stringify({ data, at })); } catch {} }
+/* 這台裝置上的資料屬於哪個帳號：登入時用來判斷能不能跟雲端合併（別的帳號的資料不能混進來） */
+const DATA_OWNER_KEY = "finzen_dataOwner";
+/* 同步失敗的原因翻成看得懂的話，不要只顯示「同步失敗」 */
+function describeSyncError(e) {
+  const code = (e?.code || "").replace(/^firestore\//, "");
+  const msg = e?.message || String(e || "");
+  if (code === "invalid-argument" && /size|exceed|too large|bytes/i.test(msg)) return "資料太大，超過雲端一份資料 1MB 的上限，存不上去";
+  if (code === "invalid-argument") return `資料格式有問題，雲端不接受（${msg}）`;
+  if (code === "permission-denied" || code === "unauthenticated") return "沒有寫入權限，可能是登入過期了，登出再登入一次試試";
+  if (code === "resource-exhausted") return "超過 Firebase 免費額度，晚一點會自動再試";
+  if (code === "unavailable" || code === "deadline-exceeded" || /network|offline|failed to fetch|load failed/i.test(msg)) return "網路連不上，連上後會自動重試";
+  return msg || "不明原因";
+}
 function checkVer() {
   const prev = localStorage.getItem(VER_KEY);
   if (prev !== APP_VER) { localStorage.setItem(VER_KEY, APP_VER); return prev ? "✨ 新功能：計算機 🧮、底部導航改中文、現有持股登錄功能！" : null; }
@@ -658,12 +672,29 @@ export default function App() {
   /* ── 雲端同步（Firebase，選用）：本機 localStorage 永遠是主要儲存，登入後額外把資料備份/同步到雲端 ── */
   const [cloudUser, setCloudUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(firebaseEnabled);
-  const [syncStatus, setSyncStatus] = useState("idle"); // idle | pending | synced | error
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | pending | synced | error | offline
+  const [syncError, setSyncError] = useState(""); // 最近一次同步失敗的原因（看得懂的版本）
+  /* 打開 App 時雲端資料還沒讀完，先不讓人記帳（不然記的會被讀回來的雲端資料蓋掉）；
+     但網路很差時不能一直卡著，等超過 10 秒就放行，之後讀到雲端時會合併，不會蓋掉 */
+  const [loadSlow, setLoadSlow] = useState(false);
+  useEffect(() => {
+    if (!authLoading) return;
+    const t = setTimeout(() => setLoadSlow(true), 10000);
+    return () => clearTimeout(t);
+  }, [authLoading]);
+  /* 本機資料要被雲端換掉或合併之前，先存一份到 IndexedDB 備份；
+     別台裝置同步過來這種常常發生的情況，10 分鐘最多備份一次，不然 3 份很快就被洗掉 */
+  const lastBackupRef = useRef(0);
+  const backupLocal = (reason, throttle) => {
+    if (throttle && Date.now() - lastBackupRef.current < 10 * 60 * 1000) return;
+    lastBackupRef.current = Date.now();
+    saveBackup(dRef.current, reason);
+  };
   const uidRef = useRef(null);
   const dRef = useRef(d);
   useEffect(() => { dRef.current = d; }, [d]);
   /* 雲端同步。曾經掉資料的兩個原因與對應做法：
-     A. 改完要等 1.5 秒才上傳，期間關掉 App 就沒傳上去，下次打開又被雲端舊資料蓋掉
+     A. 改完要等一段時間才上傳，期間關掉 App 就沒傳上去，下次打開又被雲端舊資料蓋掉
         → 有沒傳的修改就記「髒」標記；切背景／關頁面／登出時立刻上傳；下次登入看到髒標記就合併，不直接蓋掉
      B. 兩台裝置都開著時，資料比較舊的那台一有變動（連自動更新股價都算），就把整包舊資料傳上去，蓋掉另一台剛記的
         → 上傳時用 transaction 確認雲端還是上次同步那一版，被別台改過就先「三方合併」（syncMerge.js）再上傳；
@@ -690,16 +721,19 @@ export default function App() {
         if (res.ok) { setBase(uid, toSave, res.updatedAt); break; }
         // 雲端被別台裝置改過：拿上次同步的版本當基準，把兩邊的修改合併後再傳
         const merged = mergeAppData(baseRef.current.data, dRef.current, res.remote.data);
+        backupLocal("合併其他裝置的修改前", true);
         setBase(uid, res.remote.data, res.remote.updatedAt);
         applyLocal(merged);
         if (attempt >= 4) throw new Error("一直跟其他裝置同時寫入，稍後再試");
       }
+      setSyncError("");
       if (!pendingSyncRef.current) { localStorage.removeItem(CLOUD_DIRTY_KEY); setSyncStatus("synced"); }
       else syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 300); // 傳的期間又有新修改
     } catch (e) {
       console.error("寫入雲端資料失敗，10 秒後重試", e);
       pendingSyncRef.current = true;
       setSyncStatus("error");
+      setSyncError(describeSyncError(e));
       if (!syncTimerRef.current) syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 10000);
     } finally {
       syncingRef.current = false;
@@ -713,7 +747,8 @@ export default function App() {
     pendingSyncRef.current = true;
     setSyncStatus("pending");
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 1500);
+    // 記完就馬上傳（只留一點點時間把連續幾個修改湊成一次）：iPhone 把 App 往上滑掉會直接被關，等太久就來不及傳
+    syncTimerRef.current = setTimeout(() => flushCloudSyncRef.current(), 300);
   }, []);
   /* 手機切到別的 App、關分頁、鎖螢幕時，立刻把還沒傳的資料送出去 */
   useEffect(() => {
@@ -727,6 +762,7 @@ export default function App() {
   const onRemoteChange = useCallback((uid, remote) => {
     if (uidRef.current !== uid || remote.updatedAt <= baseRef.current.at) return; // 比較舊的，不用理
     if (JSON.stringify(remote.data) === JSON.stringify(dRef.current)) { setBase(uid, remote.data, remote.updatedAt); return; } // 自己剛傳上去的那一版
+    backupLocal("其他裝置同步過來前", true);
     if (pendingSyncRef.current || syncingRef.current) {
       const merged = mergeAppData(baseRef.current.data, dRef.current, remote.data);
       setBase(uid, remote.data, remote.updatedAt);
@@ -766,24 +802,22 @@ export default function App() {
         } else {
           uidRef.current = u.uid;
           baseRef.current = loadCloudBase(u.uid);
-          const localDirty = localStorage.getItem(CLOUD_DIRTY_KEY) === u.uid;
+          const owner = localStorage.getItem(DATA_OWNER_KEY);
+          const hasLocal = localStorage.getItem(DATA_KEY) != null;
           if (!cloud.data) {
             // 第一次登入、雲端還沒有資料：把這台裝置的資料當作雲端起始版本
             baseRef.current = { data:null, at:0 };
             queueCloudSync(dRef.current);
             await flushCloudSyncRef.current();
-          } else if (localDirty) {
-            // 這台裝置上次有修改還沒傳上去：跟雲端合併（兩邊新記的都會留下），再把合併結果傳上去
-            const merged = cloud.updatedAt === baseRef.current.at ? dRef.current : mergeAppData(baseRef.current.data, dRef.current, cloud.data);
-            setBase(u.uid, cloud.data, cloud.updatedAt);
-            applyLocal(merged);
-            queueCloudSync(merged);
-            await flushCloudSyncRef.current();
           } else {
+            const r = reconcileOnLogin({ local:dRef.current, hasLocal, owner, uid:u.uid, base:baseRef.current.data, cloud:cloud.data });
+            if (r.backupReason) backupLocal(r.backupReason);
             setBase(u.uid, cloud.data, cloud.updatedAt);
-            applyLocal(cloud.data);
-            setSyncStatus("synced");
+            applyLocal(r.data);
+            if (r.upload) { queueCloudSync(r.data); await flushCloudSyncRef.current(); }
+            else setSyncStatus("synced");
           }
+          localStorage.setItem(DATA_OWNER_KEY, u.uid);
           cloudUnsubRef.current = watchCloudData(u.uid, (remote) => onRemoteChange(u.uid, remote));
         }
         setCloudUser(u);
@@ -825,6 +859,13 @@ export default function App() {
     const at = await saveCloudData(uidRef.current, dRef.current); // 刪除後立刻用本機現況重新當作雲端起始版本，避免下次登入變成空的
     setBase(uidRef.current, dRef.current, at);
   }, []);
+  /* 從本機備份還原：還原前先把現在的資料也備份一份（還原錯了還能再換回來）；有登入的話還原結果也傳到雲端 */
+  const restoreBackup = useCallback(async (snap) => {
+    await saveBackup(dRef.current, "還原前");
+    const data = { ...DEF, ...snap.data }; // 補上預設欄位，舊版備份少了哪個清單也不會讓畫面壞掉
+    applyLocal(data);
+    queueCloudSync(data);
+  }, [queueCloudSync]);
   /* 「清空所有資料」專用：只砍掉雲端那份，不要像上面那個一樣又把（還沒清空的）本機資料重新傳回去，不然清空等於沒清 */
   const wipeAllData = useCallback(async () => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
@@ -834,6 +875,8 @@ export default function App() {
     if (uidRef.current) localStorage.removeItem(cloudBaseKey(uidRef.current));
     if (uidRef.current) await deleteCloudData(uidRef.current);
     localStorage.removeItem(DATA_KEY);
+    localStorage.removeItem(DATA_OWNER_KEY);
+    await clearBackups();
     alert("資料已完全清除");
     window.location.reload();
   }, []);
@@ -3102,6 +3145,15 @@ export default function App() {
   const nextMo = () => setMonth(({ y, m }) => m === 12 ? { y:y + 1, m:1 } : { y, m:m + 1 });
 
   /* ── 統一組裝共用 props，傳給所有頁面與彈窗元件 ── */
+  /* 雲端資料大小（帳戶頁才算，JSON 字串的位元組數，跟 Firestore 實際算法差不多） */
+  const dataSizeBytes = useMemo(() => tab === "account" ? new Blob([JSON.stringify(d)]).size : 0, [d, tab]);
+  /* 左下角的同步狀態小圖示：有登入才顯示，點一下看詳細 */
+  const syncBadge = !firebaseEnabled || (!cloudUser && !authLoading) ? null
+    : authLoading ? (loadSlow ? { icon:"⚠️ 離線", text:"目前離線：雲端資料還沒讀到，記的帳先存在這台裝置，連上後會合併上傳" } : { icon:"☁️⏳", text:"正在從雲端讀取資料…" })
+    : syncStatus === "pending" ? { icon:"☁️⏳", text:"同步中…" }
+    : syncStatus === "error" ? { icon:"⚠️ 同步失敗", text:`同步失敗：${syncError || "不明原因"}。稍後會自動重試，資料先存在這台裝置。` }
+    : syncStatus === "offline" ? { icon:"⚠️ 離線", text:"目前離線：讀不到雲端資料，這次先只存在這台裝置，重新整理頁面會再試一次，到時會合併上傳" }
+    : { icon:"☁️✅", text:"已同步到雲端" };
   const p = {
     C, tab, setTab, iSt, fmt, fmtPrice, toTWD, pnlColor, upd, setModal, modal, close, confirm, TODAY,
     accs, txns, debts, subs, bills, stocks, pools, cats, rates, goals, policies,
@@ -3124,7 +3176,7 @@ export default function App() {
     showGoalEP, setShowGoalEP, LEARN_DATA, MANUAL_DATA,
     APP_VER, changeTheme, THEMES, showHDP, setShowHDP,
     lang, changeLang, tr, LANGUAGES,
-    firebaseEnabled, cloudUser, authLoading, syncStatus, doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
+    firebaseEnabled, cloudUser, authLoading, syncStatus, syncError, listBackups, restoreBackup, dataSizeBytes, doCloudLogin, doAppleLogin, doAnonLogin, doCloudLogout, doUpdateNickname, doDeleteCloudData, wipeAllData,
     doEmailRegister, doEmailLogin, doPasswordReset,
     hideAmounts, toggleHideAmounts,
     nS, setNS, S0, saveSub, addSub, toggleSub, deleteSub, nB, setNB, B0, saveBill, addBill, toggleBill, deleteBill,
@@ -3175,6 +3227,23 @@ export default function App() {
           {tab === "theme" && <ThemePage {...p} />}
           {tab === "strategies" && <StrategiesPage {...p} />}
         </div>
+
+        {/* 同步狀態小圖示：放左下角、導覽列上方（跟右下角記帳鈕對稱；右上角會擋到各頁的按鈕），記完帳看到 ✅ 才代表真的存到雲端了 */}
+        {syncBadge && (
+          <button onClick={() => alert(syncBadge.text)} title={syncBadge.text}
+            style={{ position:"absolute", bottom:"calc(80px + env(safe-area-inset-bottom,0px))", left:12, zIndex:25, padding:"2px 6px", borderRadius:10, background:`${C.surface}cc`, border:`1px solid ${C.border}`, color:C.warn, fontSize:11, fontWeight:700, lineHeight:1.4, cursor:"pointer" }}>
+            {syncBadge.icon}
+          </button>
+        )}
+
+        {/* 雲端資料還在讀取時先蓋住整個畫面不給操作：這段時間記的帳以前會被讀回來的雲端資料蓋掉；超過 10 秒就放行 */}
+        {firebaseEnabled && authLoading && !loadSlow && (
+          <div style={{ position:"absolute", inset:0, zIndex:60, background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <div style={{ fontSize:28 }}>⏳</div>
+            <div style={{ fontSize:13, fontWeight:700, color:C.text }}>同步中，請稍候</div>
+            <div style={{ fontSize:11, color:C.muted }}>正在從雲端讀取最新的資料</div>
+          </div>
+        )}
 
         {/* 記帳快速懸浮鈕：用 absolute 相對於上面這個已經置中、有最大寬度的外框定位，寬螢幕（平板/電腦）才不會飄到瀏覽器最右邊 */}
         {tab === "overview" && (
