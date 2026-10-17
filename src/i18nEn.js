@@ -101,7 +101,7 @@ export const EN = {
   "問股價、新聞相關的問題…":"Ask about stock prices or news…", "問點什麼…":"Ask something…", "送出":"Send",
   // ── AI 顧問收藏 ──
   "對話":"Chat", "收藏":"Saved", "加入收藏":"Save", "已收藏":"Saved", "展開":"Show more", "收合":"Show less",
-  "複製":"Copy", "已複製":"Copied", "問":"Q", "（沒有問題）":"(No question)", "確定刪除這則收藏？":"Delete this saved answer?",
+  "複製":"Copy", "已複製":"Copied", "（沒有問題）":"(No question)", "確定刪除這則收藏？":"Delete this saved answer?",
   "還沒有收藏的回答。在對話裡按回答下面的「☆ 加入收藏」，就會存到這裡，清空對話也不會消失。":"No saved answers yet. Tap \"☆ Save\" under an answer in the chat to keep it here — it stays even if you clear the chat.",
 
   // ── 往來帳表單 ──

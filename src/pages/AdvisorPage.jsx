@@ -103,6 +103,59 @@ function SimpleMarkdown({ text, C }) {
   return <div>{blocks}</div>;
 }
 
+/* ── 複製用：把 AI 回答的 Markdown 轉成「有格式的 HTML」跟「乾淨的純文字」兩份。
+   貼到備忘錄、Notion、Email 這類支援格式的地方會吃 HTML（保留粗體、標題、清單、表格），
+   不支援格式的地方（LINE 之類）會拿純文字，不會出現 ** #### 這些符號。
+   不帶顏色等樣式，貼到淺色背景的地方才不會變成看不到的白字 ── */
+const escHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const inlineHtml = (s) => escHtml(stripLatex(s)).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+const inlinePlain = (s) => stripLatex(s).replace(/\*\*([^*]+)\*\*/g, "$1");
+function markdownToRich(text) {
+  const lines = text.split("\n");
+  const html = [], plain = [];
+  let list = [];
+  const flushList = () => { if (list.length) { html.push(`<ul>${list.join("")}</ul>`); list = []; } };
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    if (trimmed === "") { flushList(); plain.push(""); i++; continue; }
+    if (/^---+$/.test(trimmed)) { flushList(); html.push("<hr>"); plain.push("────────"); i++; continue; }
+    if (trimmed.includes("|") && i + 1 < lines.length && isTableSepRow(lines[i + 1])) {
+      flushList();
+      const header = splitTableRow(trimmed);
+      const rows = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim() !== "" && lines[j].trim().includes("|")) { rows.push(splitTableRow(lines[j])); j++; }
+      html.push(`<table border="1" cellpadding="4" style="border-collapse:collapse"><tr>${header.map(h => `<th>${inlineHtml(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${inlineHtml(c)}</td>`).join("")}</tr>`).join("")}</table>`);
+      plain.push(header.map(inlinePlain).join("｜"), ...rows.map(r => r.map(inlinePlain).join("｜")));
+      i = j;
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      flushList();
+      const tag = heading[1].length <= 2 ? "h2" : "h3";
+      html.push(`<${tag}>${inlineHtml(heading[2])}</${tag}>`);
+      plain.push(inlinePlain(heading[2]));
+      i++;
+      continue;
+    }
+    const bullet = trimmed.match(/^[*-]\s+(.*)$/);
+    if (bullet) {
+      list.push(`<li>${inlineHtml(bullet[1])}</li>`);
+      plain.push(`• ${inlinePlain(bullet[1])}`);
+      i++;
+      continue;
+    }
+    flushList();
+    html.push(`<p>${inlineHtml(trimmed)}</p>`);
+    plain.push(inlinePlain(trimmed));
+    i++;
+  }
+  flushList();
+  return { html: html.join(""), plain: plain.join("\n").replace(/\n{3,}/g, "\n\n").trim() };
+}
+
 /* ── 收藏的回答：最新存的排最上面；平常只露出前 3 行，點一下展開完整回答。存的是原文，不能編輯，只能複製或刪除 ── */
 function SavedAnswers({ C, tr, advisorSaved, removeAdvisorSaved, confirm }) {
   const [openId, setOpenId] = useState(null);
@@ -110,10 +163,25 @@ function SavedAnswers({ C, tr, advisorSaved, removeAdvisorSaved, confirm }) {
   const list = [...advisorSaved].reverse();
 
   const copy = async (s) => {
-    const src = (s.sources || []).map(x => `- ${x.title || x.uri}：${x.uri}`).join("\n");
-    const plain = `${tr("問")}：${s.q}\n\n${s.text}${src ? `\n\n${tr("參考來源")}：\n${src}` : ""}`;
-    try { await navigator.clipboard.writeText(plain); setCopiedId(s.id); setTimeout(() => setCopiedId(c => c === s.id ? null : c), 1500); }
-    catch { alert(plain); }
+    const body = markdownToRich(s.text);
+    const srcs = s.sources || [];
+    const html = `<h2>${escHtml(s.q)}</h2>${body.html}`
+      + (srcs.length ? `<p><b>${escHtml(tr("參考來源"))}：</b></p><ul>${srcs.map(x => `<li><a href="${escHtml(x.uri)}">${escHtml(x.title || x.uri)}</a></li>`).join("")}</ul>` : "");
+    const plain = `${s.q}\n\n${body.plain}`
+      + (srcs.length ? `\n\n${tr("參考來源")}：\n${srcs.map(x => `• ${x.title || x.uri}：${x.uri}`).join("\n")}` : "");
+    const done = () => { setCopiedId(s.id); setTimeout(() => setCopiedId(c => c === s.id ? null : c), 1500); };
+    try {
+      // 同時放 HTML 跟純文字，貼到哪裡由那個 App 自己挑能用的格式；舊瀏覽器沒有 ClipboardItem 就只放純文字
+      if (window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type:"text/html" }),
+          "text/plain": new Blob([plain], { type:"text/plain" }),
+        })]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
+      done();
+    } catch { alert(plain); }
   };
 
   if (!list.length) {
