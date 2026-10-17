@@ -3003,6 +3003,18 @@ export default function App() {
     }
   }, [advisorHistory, advisorContext, lang]);
   const clearAdvisorHistory = useCallback(() => { setAdvisorHistory([]); setAdvisorError(null); }, []);
+  /* AI 顧問收藏：使用者自己挑出來存的回答，放在主資料裡（會跟著雲端同步），清空對話也不會消失；存原文，不能編輯。
+     用「問題＋回答」比對是不是已經存過，舊的對話紀錄沒有 id 也對得上 */
+  const advisorSaved = d.advisorSaved || [];
+  const toggleAdvisorSaved = useCallback((q, msg) => {
+    upd("advisorSaved", p => {
+      const list = p || [];
+      const hit = list.find(s => s.q === q && s.text === msg.text);
+      if (hit) return list.filter(s => s.id !== hit.id);
+      return [...list, { id:"as" + Date.now(), q, text:msg.text, sources:msg.sources || [], savedAt:TODAY }];
+    });
+  }, [upd]);
+  const removeAdvisorSaved = useCallback((id) => upd("advisorSaved", p => (p || []).filter(s => s.id !== id)), [upd]);
 
   /* ── 年度現金流預測：4大元素（①總流入 ②剛性扣除 ③專案存錢池［含各專案細分］ ④自由溢流願望/剩餘資金）── */
   const yearlyForecastTable = useMemo(() => {
@@ -3125,6 +3137,7 @@ export default function App() {
     livingStreak, STREAK_MILESTONES, DEFAULT_STREAK_REWARDS, setStreakReward,
     budget502030, createEmergencyFund, pageBack, openPage, portfolioNow, dividendEst, loadingDiv, fetchDividendEstimate, dividendAnnounce, loadingDivAnn, divAnnFetched, fetchDividendAnnounce, portfolioHistory: d.portfolioHistory || [], livingBudgetFor, setLivingBudgetForMonth,
     aiEnabled, aiGroundedEnabled, advisorHistory, advisorLoading, advisorError, sendAdvisorMessage, clearAdvisorHistory, advisorCooldownUntil,
+    advisorSaved, toggleAdvisorSaved, removeAdvisorSaved,
     getSweptAmount, addSweptAmount,
     incomeSchedule, setIncomeSchedule, setRigidOverride, startNextMonthPlan, yearlySchedule, yearlyGoalSchedule, yearlyForecastTable,
     getIncomeItems, setIncomeItems, setDefaultIncomeItems,

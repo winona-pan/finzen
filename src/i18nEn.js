@@ -99,6 +99,10 @@ export const EN = {
   "🔍 參考來源：":"🔍 Sources:", "搜尋中…":"Searching…", "思考中…":"Thinking…", "🔍 查新聞":"🔍 Web search",
   "：開（問股價/新聞用這個）":": on (use for prices and news)", "：關":": off",
   "問股價、新聞相關的問題…":"Ask about stock prices or news…", "問點什麼…":"Ask something…", "送出":"Send",
+  // ── AI 顧問收藏 ──
+  "對話":"Chat", "收藏":"Saved", "加入收藏":"Save", "已收藏":"Saved", "展開":"Show more", "收合":"Show less",
+  "複製":"Copy", "已複製":"Copied", "（沒有問題）":"(No question)", "確定刪除這則收藏？":"Delete this saved answer?",
+  "還沒有收藏的回答。在對話裡按回答下面的「☆ 加入收藏」，就會存到這裡，清空對話也不會消失。":"No saved answers yet. Tap \"☆ Save\" under an answer in the chat to keep it here — it stays even if you clear the chat.",
 
   // ── 往來帳表單 ──
   "新增往來帳":"New IOU", "別人欠我":"Owed to me", "我欠別人":"I owe", "對象":"Person", "媽媽":"Mom",
