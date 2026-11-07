@@ -1675,6 +1675,10 @@ export default function App() {
      這樣記的帳就是根據「最終底定」的資料，不會被蓋掉。 */
   useEffect(() => {
     if (!d || !d.subs || authLoading) return;
+    /* 這台裝置綁定過雲端帳號、但這次沒成功跟雲端同步（離線讀不到、或登入被 iPhone 清掉）時先不自動記帳：
+       手上的是舊資料，另一台裝置可能已經記過這期，在這裡再記一次就會重複，連錢包也被多扣一次。等成功同步後再跑 */
+    const tiedToCloud = localStorage.getItem(DATA_OWNER_KEY) || Object.keys(localStorage).some(k => k.startsWith("finzen_cloudBase_"));
+    if (tiedToCloud && !uidRef.current) return;
     const getDueDates = (item, lastDate) => {
       const dates = [];
       const today = new Date(TODAY + "T00:00:00");
@@ -1705,19 +1709,20 @@ export default function App() {
       const lastDate = s.lastBilled || null; const dues = getDueDates(s, lastDate);
       dues.forEach(date => {
         if (s.deferExpense && s.freq === "year") {
-          const originId = Date.now() + Math.random();
+          // id 用「哪個訂閱＋哪一天」組成，兩台裝置記到同一期會是同一個 id，同步合併時當成同一筆，不會變兩筆
+          const originId = `auto_${s.id}_${date}`;
           const poolId = "ep" + originId;
           newTxns.push({ id: originId, type: "transfer", cat: "帳戶調整", amt: s.amt, desc: `年繳分攤：${s.name}（共 ${s.amt}）`, acc: s.acc || "", date, tags: "#分攤認列", autoSrc: s.id });
           newPools.push({ id: poolId, desc: s.name, cat: s.cat || "訂閱", totalAmt: s.amt, monthlyAmt: Math.round(s.amt / 12), recognized: 0, startDate: date, acc: s.acc || "", subId: s.id, originTxnId: originId });
         } else {
-          newTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: s.cat || "訂閱", amt: s.amt, desc: s.name, acc: s.acc || "", date, tags: "#自動記帳", autoSrc: s.id });
+          newTxns.push({ id: `auto_${s.id}_${date}`, type: "expense", cat: s.cat || "訂閱", amt: s.amt, desc: s.name, acc: s.acc || "", date, tags: "#自動記帳", autoSrc: s.id });
         }
       });
       if (dues.length > 0) upd("subs", p => p.map(x => x.id === s.id ? { ...x, lastBilled: dues[dues.length - 1] } : x));
     });
     (d.bills || []).filter(b => b.active).forEach(b => {
       const lastDate = b.lastBilled || null; const dues = getDueDates(b, lastDate);
-      dues.forEach(date => { newTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: b.cat || "家居", amt: b.amt, desc: b.name, acc: b.acc || "", date, tags: "#自動記帳", autoSrc: b.id }); });
+      dues.forEach(date => { newTxns.push({ id: `auto_${b.id}_${date}`, type: "expense", cat: b.cat || "家居", amt: b.amt, desc: b.name, acc: b.acc || "", date, tags: "#自動記帳", autoSrc: b.id }); });
       if (dues.length > 0) upd("bills", p => p.map(x => x.id === b.id ? { ...x, lastBilled: dues[dues.length - 1] } : x));
     });
     if (newTxns.length > 0) {
@@ -1768,7 +1773,7 @@ export default function App() {
         if (skipped.includes(ym)) continue; // 使用者手動刪過這個月的認列，不要自動補回來
         const already = existingTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym) || recogTxns.some(t => t.poolId === pool.id && t.date.slice(0, 7) === ym);
         if (already) { recognized += amt; continue; }
-        recogTxns.push({ id: Date.now() + Math.random(), type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: ym + "-" + String(start.getDate()).padStart(2,"0"), tags: "#分攤認列", autoSrc: pool.subId, noBalanceEffect:true, poolId: pool.id, poolType:"expense" });
+        recogTxns.push({ id: `rec_${pool.id}_${ym}`, type: "expense", cat: pool.cat, amt, desc: `分攤：${pool.desc}`, acc: pool.acc || "", date: ym + "-" + String(start.getDate()).padStart(2,"0"), tags: "#分攤認列", autoSrc: pool.subId, noBalanceEffect:true, poolId: pool.id, poolType:"expense" });
         recognized += amt;
       }
       if (recognized !== pool.recognized) poolUpdates.push({ id: pool.id, recognized });
